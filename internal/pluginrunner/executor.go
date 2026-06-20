@@ -57,6 +57,9 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 		return nil, fmt.Errorf("executor: stdout pipe 失败: %w", err)
 	}
 
+	// 平台安全加固（seccomp/NO_NEW_PRIVS/进程组隔离）
+	sanitizeChildProcess(cmd)
+
 	// 启动子进程
 	startTime := time.Now()
 	if err := cmd.Start(); err != nil {

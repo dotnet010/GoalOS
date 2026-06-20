@@ -2,12 +2,17 @@
 
 package pluginrunner
 
-import "os/exec"
+import (
+	"os/exec"
+	"syscall"
+)
 
-// sanitizeChildProcess 在子进程启动前应用平台安全加固（macOS）。
-// macOS 使用 Seatbelt (sandbox-exec) 而非 seccomp。
-// 当前设置为基本防护；完整 sandbox 需创建 .sb profile 文件。
+// sanitizeChildProcess 在子进程启动前设置 macOS 安全加固。
+// macOS 使用 Seatbelt (sandbox-exec) 而非 Linux seccomp。
+// MVP 阶段：子进程进入独立进程组，防止终端信号传播。
+// 完整 sandbox 需创建 .sb profile 文件并使用 sandbox-exec 包装（v2）。
 func sanitizeChildProcess(cmd *exec.Cmd) {
-	// macOS 基本防护：子进程继承 daemon 的沙箱（如果 daemon 自身在沙箱中运行）
-	// 完整实现：使用 sandbox-exec 工具包装子进程
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
 }

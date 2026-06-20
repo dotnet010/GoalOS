@@ -1,5 +1,7 @@
 // Package pluginrunner — seccomp 系统调用过滤配置。
-// W3: 配置定义。W4: golang.org/x/sys/unix 实际加载。
+// Linux: executor_linux.go 中 sanitizeChildProcess 通过 PR_SET_NO_NEW_PRIVS +
+//   CLONE_NEWNET 网络隔离 + seccomp BPF 提供三层防护。
+// macOS: executor_darwin.go 中通过独立进程组隔离。
 // 设计依据：08 沙箱规范 §4、R137。
 package pluginrunner
 
