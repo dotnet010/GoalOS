@@ -1,0 +1,73 @@
+// Package client implements the GoalOS daemon HTTP client.
+// Used by CLI and Web UI. All state is in the daemon — client is stateless.
+package client
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+const defaultTimeout = 30 * time.Second
+
+// Client communicates with the GoalOS daemon via HTTP.
+type Client struct {
+	baseURL string
+	http    *http.Client
+}
+
+// New creates a new Client.
+func New(baseURL string) *Client {
+	return &Client{
+		baseURL: baseURL,
+		http:    &http.Client{Timeout: defaultTimeout},
+	}
+}
+
+// Health checks if the daemon is running.
+func (c *Client) Health() (bool, error) {
+	resp, err := c.http.Get(c.baseURL + "/api/health")
+	if err != nil {
+		return false, fmt.Errorf("client: health check: %w", err)
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK, nil
+}
+
+// CreateGoalResponse is the response from POST /api/goals.
+type CreateGoalResponse struct {
+	GoalID string `json:"goal_id"`
+	Status string `json:"status"`
+}
+
+// CreateGoal sends a new Goal to the daemon.
+func (c *Client) CreateGoal(goalText string) (*CreateGoalResponse, error) {
+	body := struct {
+		Goal string `json:"goal"`
+	}{Goal: goalText}
+
+	data, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("client: marshal goal: %w", err)
+	}
+
+	resp, err := c.http.Post(c.baseURL+"/api/goals", "application/json", bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("client: create goal: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("client: create goal failed (%d): %s", resp.StatusCode, string(b))
+	}
+
+	var result CreateGoalResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("client: decode response: %w", err)
+	}
+	return &result, nil
+}

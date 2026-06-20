@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GoalOS — 目标操作系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#333;max-width:800px;margin:0 auto;padding:20px}
+h1{font-size:24px;margin-bottom:20px;color:#1a1a1a}
+.card{background:#fff;border-radius:8px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+input,button{padding:10px 16px;border-radius:6px;border:1px solid #ddd;font-size:14px}
+input{flex:1;margin-right:8px}
+button{background:#1F75FE;color:#fff;border:none;cursor:pointer;font-weight:500}
+button:hover{background:#166BE0}
+button.danger{background:#e74c3c}
+button.success{background:#27ae60}
+.input-row{display:flex;margin-top:12px}
+.goal-list{margin-top:16px}
+.goal-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #eee}
+.goal-item:last-child{border-bottom:none}
+.status{font-size:12px;padding:2px 8px;border-radius:10px;font-weight:500}
+.status.running{background:#e8f5e9;color:#27ae60}
+.status.paused{background:#fff3e0;color:#f39c12}
+.status.completed{background:#e3f2fd;color:#1F75FE}
+.progress-bar{background:#eee;border-radius:4px;height:6px;margin-top:6px;overflow:hidden}
+.progress-fill{background:#1F75FE;height:100%;transition:width .3s}
+.toast{position:fixed;top:20px;right:20px;background:#333;color:#fff;padding:12px 20px;border-radius:8px;display:none;z-index:1000}
+.watcher{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999}
+.watcher-card{background:#fff;border-radius:12px;padding:30px;max-width:400px;text-align:center}
+.watcher-card h2{color:#e74c3c;margin-bottom:12px}
+.watcher-card p{margin-bottom:8px;color:#666}
+.watcher-buttons{margin-top:20px;display:flex;gap:12px;justify-content:center}
+.watcher-buttons button{padding:12px 24px}
+.connected{color:#27ae60;font-size:12px}
+.disconnected{color:#e74c3c;font-size:12px}
+</style>
+</head>
+<body>
+
+<h1>GoalOS</h1>
+<div style="margin-bottom:12px">
+  <span id="ws-status" class="disconnected">● 未连接</span>
+</div>
+
+<!-- Goal 输入 -->
+<div class="card">
+  <h3>新建目标</h3>
+  <div class="input-row">
+    <input id="goal-input" type="text" placeholder="输入目标，例如：开发一个CRM系统" onkeydown="if(event.key==='Enter')createGoal()">
+    <button onclick="createGoal()">开始执行</button>
+  </div>
+  <div style="margin-top:8px;font-size:12px;color:#999">
+    示例：开发CRM系统 | 调研欧洲市场 | 自动化营销流程
+  </div>
+</div>
+
+<!-- 目标列表 -->
+<div class="card">
+  <h3>目标列表</h3>
+  <div id="goal-list" class="goal-list">
+    <div style="color:#999;padding:20px;text-align:center">暂无目标</div>
+  </div>
+</div>
+
+<!-- Watcher 审批弹窗 -->
+<div id="watcher" class="watcher" style="display:none">
+  <div class="watcher-card">
+    <h2>⚠ 高风险操作</h2>
+    <p id="watcher-action"></p>
+    <p id="watcher-risk" style="font-weight:bold;color:#e74c3c"></p>
+    <div class="watcher-buttons">
+      <button class="danger" onclick="approveAction(false)">拒绝</button>
+      <button class="success" onclick="approveAction(true)">批准</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+// WebSocket 连接
+const sse = new EventSource("/api/events");
+const statusEl = document.getElementById('ws-status');
+
+sse.onopen = () => {
+  statusEl.textContent = '● 已连接';
+  statusEl.className = 'connected';
+};
+sse.onerror = () => {
+  statusEl.textContent = '● 未连接';
+  statusEl.className = 'disconnected';
+};
+sse.onmessage = (evt) => {
+  const msg = JSON.parse(evt.data);
+  handleEvent(msg.type, msg.payload);
+};
+
+// 处理事件
+function handleEvent(type, payload) {
+  switch(type) {
+    case 'GoalCreated':
+      addGoal(payload.goal_id, payload.title, 'created');
+      toast('目标已创建: ' + payload.goal_id);
+      break;
+    case 'GoalCompleted':
+      updateGoalStatus(payload.goal_id, 'completed');
+      toast('目标已完成: ' + payload.goal_id);
+      break;
+    case 'GoalPaused':
+      updateGoalStatus(payload.goal_id, 'paused');
+      break;
+    case 'ActionPendingApproval':
+      showWatcher(payload);
+      break;
+    case 'ActionApproved':
+      hideWatcher();
+      toast('操作已批准');
+      break;
+    case 'ActionRejected':
+      hideWatcher();
+      toast('操作已拒绝');
+      break;
+  }
+}
+
+// Goal 管理
+const goals = {};
+
+function createGoal() {
+  const input = document.getElementById('goal-input');
+  const goal = input.value.trim();
+  if (!goal) return;
+
+  fetch('/api/goals', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({goal})
+  })
+  .then(r => r.json())
+  .then(data => {
+    addGoal(data.goal_id, goal, data.status);
+    input.value = '';
+  });
+}
+
+function addGoal(id, title, status) {
+  goals[id] = {title, status, progress: 0};
+  renderGoals();
+}
+
+function updateGoalStatus(id, status) {
+  if (goals[id]) goals[id].status = status;
+  renderGoals();
+}
+
+function renderGoals() {
+  const el = document.getElementById('goal-list');
+  const ids = Object.keys(goals);
+  if (ids.length === 0) {
+    el.innerHTML = '<div style="color:#999;padding:20px;text-align:center">暂无目标</div>';
+    return;
+  }
+  el.innerHTML = ids.map(id => {
+    const g = goals[id];
+    const statusClass = g.status === 'completed' ? 'completed' : g.status === 'paused' ? 'paused' : 'running';
+    const statusText = g.status === 'completed' ? '已完成' : g.status === 'paused' ? '已暂停' : '进行中';
+    return `<div class="goal-item">
+      <div style="flex:1">
+        <div style="font-weight:500">${g.title}</div>
+        <div style="font-size:12px;color:#999">${id}</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${g.progress}%"></div></div>
+      </div>
+      <span class="status ${statusClass}">${statusText}</span>
+      ${g.status === 'running' ? `<button class="danger" style="margin-left:8px;padding:4px 8px;font-size:12px" onclick="pauseGoal('${id}')">暂停</button>` : ''}
+      ${g.status === 'paused' ? `<button class="success" style="margin-left:8px;padding:4px 8px;font-size:12px" onclick="resumeGoal('${id}')">恢复</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function pauseGoal(id) { fetch('/api/goals/'+id+'/pause', {method:'POST'}); updateGoalStatus(id, 'paused'); }
+function resumeGoal(id) { fetch('/api/goals/'+id+'/resume', {method:'POST'}); updateGoalStatus(id, 'running'); }
+
+// Watcher 审批
+let pendingActionId = null;
+function showWatcher(payload) {
+  pendingActionId = payload.action_id;
+  document.getElementById('watcher-action').textContent = '操作: ' + (payload.action_description || payload.action_id);
+  document.getElementById('watcher-risk').textContent = '风险等级: ' + (payload.risk_level || 'L3');
+  document.getElementById('watcher').style.display = 'flex';
+}
+function hideWatcher() {
+  document.getElementById('watcher').style.display = 'none';
+  pendingActionId = null;
+}
+function approveAction(approved) {
+  // W5: 通过 WebSocket 回传审批结果
+  ws.send(JSON.stringify({type: approved ? 'UserApprovedAction' : 'UserRejectedAction', action_id: pendingActionId}));
+  hideWatcher();
+}
+
+// Toast
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+</script>
+</body>
+</html>
