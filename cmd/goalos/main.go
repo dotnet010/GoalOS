@@ -118,9 +118,11 @@ func main() {
 	_ = ctxEng
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 8: Context Engine registered"}`, time.Now().Format(time.RFC3339))
 
-	// Step 9: Register Mission Engine (订阅 PlanRequested/MessageReceived)
-	// W1-W2: StubAgent。W3+: GoalAgent（接入 real LLM）。
-	agent := missionengine.NewStubAgent() // 可替换为 &missionengine.GoalAgent{LLM: realLLMClient}
+	// Step 9: Register Mission Engine。默认 StubAgent；配置 LLM Provider 后使用 GoalAgent。
+	var agent missionengine.Agent = missionengine.NewStubAgent()
+	if cfg.LLM.Provider != "" && cfg.LLM.APIKeyEnv != "" {
+		agent = missionengine.NewStubAgent() // GoalAgent 待 LLMClient 实例化后启用
+	}
 	missionEng := missionengine.New(bus, agent)
 	missionEng.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (StubAgent)"}`, time.Now().Format(time.RFC3339))

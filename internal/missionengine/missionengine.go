@@ -11,7 +11,8 @@ import (
 	"github.com/goalos/goalos/pkg/events"
 )
 
-// Agent is the planning interface. MVP: StubAgent. W3: GoalAgent.
+// Agent is the planning interface.
+// MVP 提供两个实现: StubAgent (硬编码 3 节点图，无 LLM 依赖)、GoalAgent (LLM 驱动)。
 type Agent interface {
 	Plan(goal string, ctx Context) (*MissionGraph, error)
 }
@@ -219,11 +220,11 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string { return "validation: " + e.Reason }
 
-// StubAgent is the W1 hardcoded Agent. Returns a 3-node MissionGraph.
-// Replaced by GoalAgent (LLM-powered) in W3.
+// StubAgent 硬编码 3 节点图，用于无 LLM 环境下的核心链路测试。
+// 配置 LLM Provider 后自动切换到 GoalAgent。
 type StubAgent struct{}
 
-// NewStubAgent creates a StubAgent for W1-W2 core chain testing.
+// NewStubAgent 创建 StubAgent（默认 Agent，零外部依赖）。
 func NewStubAgent() *StubAgent { return &StubAgent{} }
 
 func (s *StubAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {

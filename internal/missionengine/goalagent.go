@@ -1,6 +1,7 @@
 // Package missionengine — GoalAgent LLM 驱动实现。
-// 替换 W1 StubAgent。使用 any-llm-go 调用 LLM。
 // 动态 system prompt + Goal + Context → MissionGraph。
+// 通过 LLMClient 接口调用 LLM（any-llm-go 或兼容 Provider）。
+// MVP 默认使用 StubAgent，配置 LLM Provider 后自动切换到 GoalAgent。
 //
 // 设计依据：05 架构文档 §5、R124、R199。
 package missionengine

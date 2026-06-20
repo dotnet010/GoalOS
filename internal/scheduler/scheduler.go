@@ -141,7 +141,7 @@ func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 	s.mu.Unlock()
 	log.Printf("[Scheduler] MissionGenerated: %s (nodes=%d)", evt.GoalID, int(nodeCount))
 
-	// W1: auto-confirm. Transition Planned → Running（publish 在锁外——可能触发 Scheduler 自身 handler）
+	// MVP 行为：自动确认 MissionGraph。完整审批流由 Watcher UI (W5-W6) 提供。
 	s.publish(events.Event{
 		Type:   events.TypeUserConfirmed,
 		GoalID: evt.GoalID,
