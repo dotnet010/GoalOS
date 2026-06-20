@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	goalErr "github.com/goalos/goalos/pkg/errors"
@@ -293,11 +294,11 @@ func (h *Handler) HandleSystemStatus(w http.ResponseWriter, r *http.Request) {
 
 // ─── 内部 ───
 
-var goalCounter int
+var goalCounter atomic.Int64
 
 func generateGoalID() string {
-	goalCounter++
-	return "goal_" + padInt(goalCounter)
+	n := goalCounter.Add(1)
+	return "goal_" + padInt(int(n))
 }
 
 func padInt(n int) string {

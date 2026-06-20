@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/goalos/goalos/internal/eventbus"
@@ -316,9 +317,9 @@ func (s *Scheduler) publish(evt events.Event) {
 	s.bus.Publish(evt)
 }
 
-var actionCounter int
+var actionCounter atomic.Int64
 
 func generateActionID(goalID string, idx int) string {
-	actionCounter++
+	actionCounter.Add(1)
 	return fmt.Sprintf("%s_act_%02d", goalID, idx)
 }
