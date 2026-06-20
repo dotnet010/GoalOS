@@ -10,7 +10,8 @@ import (
 
 func TestGovernance_LowRiskActionApproved(t *testing.T) {
 	bus := eventbus.New()
-	eng := governance.New(bus)
+	eng := governance.New(bus, nil)
+	eng.RegisterCapabilities("test-plugin", []string{"fs.read", "fs.write", "browser.open", "browser.click", "shell.execute", "fs.delete"})
 	eng.Start()
 
 	approved := make(chan events.Event, 1)
@@ -43,7 +44,8 @@ func TestGovernance_LowRiskActionApproved(t *testing.T) {
 
 func TestGovernance_HighRiskActionPendingApproval(t *testing.T) {
 	bus := eventbus.New()
-	eng := governance.New(bus)
+	eng := governance.New(bus, nil)
+	eng.RegisterCapabilities("test-plugin", []string{"shell.execute"})
 	eng.Start()
 
 	pending := make(chan events.Event, 1)
@@ -88,9 +90,9 @@ func TestGovernance_RiskScoring(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		// Fresh bus per test case to avoid handler accumulation
 		bus := eventbus.New()
-		eng := governance.New(bus)
+		eng := governance.New(bus, nil)
+		eng.RegisterCapabilities("test-plugin", []string{"fs.read", "fs.write", "browser.open", "browser.click", "shell.execute", "fs.delete", "database.delete", "payment.initiate"})
 		eng.Start()
 
 		pending := make(chan events.Event, 1)

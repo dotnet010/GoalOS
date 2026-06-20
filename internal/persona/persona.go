@@ -42,7 +42,7 @@ var Concise = Persona{
 		case "ActionPendingApproval":
 			desc, _ := payload["action_description"].(string)
 			risk, _ := payload["risk_level"].(string)
-			return "⚠ 高风险操作 (" + risk + "): " + desc + "\n选项: [批准] [拒绝]"
+			return "高风险操作 (" + risk + "): " + desc + "\n选项: [批准] [拒绝]"
 		case "ActionApproved":
 			return "已批准。"
 		case "ActionRejected":

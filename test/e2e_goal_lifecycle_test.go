@@ -27,10 +27,11 @@ func TestE2EGoalLifecycle(t *testing.T) {
 	store := statestore.New(dir)
 
 	// Wire all modules (same as main.go)
-	sched := scheduler.New(bus, store)
+	sched := scheduler.New(bus, store, scheduler.NewGoalAnchorTracker(20))
 	sched.Start()
 
-	gov := governance.New(bus)
+	gov := governance.New(bus, nil)
+	gov.RegisterCapabilities("test-plugin", []string{"fs.read", "fs.write", "shell.execute", "browser.open", "browser.click"})
 	gov.Start()
 
 	stub := &missionengine.StubAgent{}
@@ -106,8 +107,10 @@ func TestE2EHTTPAPI(t *testing.T) {
 	store := statestore.New(dir)
 
 	// Wire modules
-	scheduler.New(bus, store).Start()
-	governance.New(bus).Start()
+	scheduler.New(bus, store, scheduler.NewGoalAnchorTracker(20)).Start()
+	gov2 := governance.New(bus, nil)
+	gov2.RegisterCapabilities("test-plugin", []string{"fs.read", "fs.write", "shell.execute", "browser.open", "browser.click"})
+	gov2.Start()
 	missionengine.New(bus, &missionengine.StubAgent{}).Start()
 	pluginrunner.New(bus).Start()
 

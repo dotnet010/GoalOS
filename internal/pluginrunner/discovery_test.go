@@ -19,7 +19,7 @@ func TestDiscover(t *testing.T) {
 		"name": "shell-executor",
 		"type": "capability",
 		"version": "1.0.0",
-		"signature": "sha256:abc123",
+		"signature": "",
 		"binary": "./shell-executor",
 		"declared_capabilities": ["shell.execute"],
 		"description": "Shell 命令执行器"

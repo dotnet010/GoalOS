@@ -128,8 +128,77 @@ func (e *Engine) validate(g *MissionGraph) error {
 	if len(g.Nodes) == 0 {
 		return errEmptyGraph
 	}
-	// W1: basic validation. Full validation per R227.
+
+	// 构建节点索引
+	nodeIDs := make(map[string]bool)
+	for _, n := range g.Nodes {
+		if n.ID == "" {
+			return &ValidationError{"节点 ID 不能为空"}
+		}
+		if n.Description == "" {
+			return &ValidationError{"节点描述不能为空: " + n.ID}
+		}
+		nodeIDs[n.ID] = true
+	}
+
+	// 验证边的 from/to 引用存在性 + 边类型合法性
+	validEdgeTypes := map[string]bool{"sequential": true, "parallel": true, "conditional": true, "on_completion": true, "on_failure": true}
+	for _, edge := range g.Edges {
+		if !nodeIDs[edge.From] {
+			return &ValidationError{"边引用了不存在的源节点: " + edge.From}
+		}
+		if !nodeIDs[edge.To] {
+			return &ValidationError{"边引用了不存在的目标节点: " + edge.To}
+		}
+		if edge.From == edge.To {
+			return &ValidationError{"自循环边: " + edge.From}
+		}
+		if !validEdgeTypes[edge.Type] {
+			return &ValidationError{"无效的边类型: " + edge.Type}
+		}
+	}
+
+	// 拓扑排序检测循环依赖
+	if hasCycle(g.Nodes, g.Edges) {
+		return &ValidationError{"MissionGraph 包含循环依赖"}
+	}
+
 	return nil
+}
+
+// hasCycle 使用拓扑排序（Kahn's algorithm）检测图是否有环。
+func hasCycle(nodes []GraphNode, edges []GraphEdge) bool {
+	indegree := make(map[string]int)
+	graph := make(map[string][]string)
+	for _, n := range nodes {
+		indegree[n.ID] = 0
+	}
+	for _, e := range edges {
+		graph[e.From] = append(graph[e.From], e.To)
+		indegree[e.To]++
+	}
+
+	queue := []string{}
+	for id, deg := range indegree {
+		if deg == 0 {
+			queue = append(queue, id)
+		}
+	}
+
+	visited := 0
+	for len(queue) > 0 {
+		node := queue[0]
+		queue = queue[1:]
+		visited++
+		for _, neighbor := range graph[node] {
+			indegree[neighbor]--
+			if indegree[neighbor] == 0 {
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+
+	return visited != len(nodes) // 有剩余节点 → 存在环
 }
 
 func (e *Engine) publish(evt events.Event) {
@@ -153,6 +222,9 @@ func (e *ValidationError) Error() string { return "validation: " + e.Reason }
 // StubAgent is the W1 hardcoded Agent. Returns a 3-node MissionGraph.
 // Replaced by GoalAgent (LLM-powered) in W3.
 type StubAgent struct{}
+
+// NewStubAgent creates a StubAgent for W1-W2 core chain testing.
+func NewStubAgent() *StubAgent { return &StubAgent{} }
 
 func (s *StubAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
 	return &MissionGraph{

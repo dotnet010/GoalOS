@@ -1,6 +1,6 @@
 // Package config 实现 GoalOS 配置系统。
 // 优先级：环境变量 > daemon.yaml > 默认值。
-// 修改 daemon.yaml 后发送 SIGHUP 热加载（W2）。
+// 修改 daemon.yaml 后发送 SIGHUP 热加载。
 //
 // 设计依据：05 架构文档 §10、附录 B.6、R176、R203。
 package config
@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Config 是 GoalOS 完整配置。
@@ -93,14 +95,47 @@ func applyEnv(cfg *Config) {
 	}
 }
 
-// loadYAML 从 YAML 文件加载配置。W2: 简化实现。W3: 完整 YAML 解析。
+// loadYAML 从 YAML 文件加载配置，将文件值合并到 cfg 上（文件值覆盖默认值）。
 func loadYAML(path string, cfg *Config) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	// W2: YAML 解析需要依赖 gopkg.in/yaml.v3。
-	// MVP 阶段使用环境变量 + 默认值。
-	_ = data
+	// 解析到临时结构，防止零值覆盖 cfg 已有默认值
+	var fileCfg Config
+	if err := yaml.Unmarshal(data, &fileCfg); err != nil {
+		return fmt.Errorf("yaml parse: %w", err)
+	}
+	// 仅覆盖非零值字段
+	if fileCfg.Daemon.Port != 0 {
+		cfg.Daemon.Port = fileCfg.Daemon.Port
+	}
+	if fileCfg.Daemon.AutonomyLevel != "" {
+		cfg.Daemon.AutonomyLevel = fileCfg.Daemon.AutonomyLevel
+	}
+	if fileCfg.Daemon.IdleTimeout != 0 {
+		cfg.Daemon.IdleTimeout = fileCfg.Daemon.IdleTimeout
+	}
+	if fileCfg.Daemon.ShutdownTimeout != 0 {
+		cfg.Daemon.ShutdownTimeout = fileCfg.Daemon.ShutdownTimeout
+	}
+	if fileCfg.LLM.Provider != "" {
+		cfg.LLM.Provider = fileCfg.LLM.Provider
+	}
+	if fileCfg.LLM.Model != "" {
+		cfg.LLM.Model = fileCfg.LLM.Model
+	}
+	if fileCfg.LLM.APIKeyEnv != "" {
+		cfg.LLM.APIKeyEnv = fileCfg.LLM.APIKeyEnv
+	}
+	if fileCfg.LLM.MaxTokens != 0 {
+		cfg.LLM.MaxTokens = fileCfg.LLM.MaxTokens
+	}
+	if fileCfg.LLM.Timeout != 0 {
+		cfg.LLM.Timeout = fileCfg.LLM.Timeout
+	}
+	if fileCfg.Persona != "" {
+		cfg.Persona = fileCfg.Persona
+	}
 	return nil
 }

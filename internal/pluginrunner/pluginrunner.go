@@ -7,6 +7,7 @@ package pluginrunner
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/goalos/goalos/internal/eventbus"
@@ -15,19 +16,39 @@ import (
 
 // Runner manages Plugin subprocess lifecycle.
 type Runner struct {
-	bus      *eventbus.EventBus
-	seq      int
+	bus       *eventbus.EventBus
+	discovery *PluginDiscovery
+	seq       int
 }
 
-// New creates a Plugin Runner.
+// New creates a Plugin Runner with the given plugins directory.
 func New(bus *eventbus.EventBus) *Runner {
-	return &Runner{bus: bus}
+	home, _ := osUserHomeDir()
+	pluginsDir := home + "/.goalos/plugins"
+	return &Runner{
+		bus:       bus,
+		discovery: NewPluginDiscovery(pluginsDir),
+	}
 }
 
-// Start subscribes to ActionApproved and begins execution.
+// Start subscribes to ActionApproved, discovers and loads Plugins.
 func (r *Runner) Start() {
 	r.bus.Subscribe(events.TypeActionApproved, r.handleActionApproved)
-	log.Println("[PluginRunner] started, subscribed to ActionApproved")
+
+	// 扫描 plugins/ 目录，发现已安装的 Plugin
+	if err := r.discovery.Refresh(); err != nil {
+		log.Printf("[PluginRunner] discovery refresh: %v", err)
+	}
+	plugins := r.discovery.List()
+	log.Printf("[PluginRunner] started, discovered %d plugins", len(plugins))
+	for _, p := range plugins {
+		log.Printf("[PluginRunner]   %s/%s (v%s) — %v", p.Manifest.Type, p.Manifest.Name, p.Manifest.Version, p.Manifest.DeclaredCapabilities)
+	}
+}
+
+// DiscoveredPlugins returns the list of discovered plugins (for capability registration).
+func (r *Runner) DiscoveredPlugins() []DiscoveredPlugin {
+	return r.discovery.List()
 }
 
 func (r *Runner) handleActionApproved(evt events.Event) error {
@@ -36,10 +57,10 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 
 	log.Printf("[PluginRunner] executing: %s (%s)", actionID, actionType)
 
-	// W3: 尝试真实子进程执行。失败→回退 stub
+	// 尝试真实子进程执行。失败→回退 stub（MVP）。
 	result, err := r.executeAction(evt)
 	if err != nil {
-		log.Printf("[PluginRunner] 子进程执行失败: %v。使用 stub", err)
+		log.Printf("[PluginRunner] subprocess execution failed: %v — falling back to stub", err)
 		result = r.stubExecute(actionID, actionType)
 	}
 
@@ -65,21 +86,24 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 	actionID, _ := evt.Payload["action_id"].(string)
 	actionType, _ := evt.Payload["action_type"].(string)
+	target, _ := evt.Payload["target"].(string)
+	params, _ := evt.Payload["params"].(map[string]interface{})
 
-	// W3: 扫描 plugins/ 目录查找匹配的 Plugin 二进制
-	binaryPath := r.findPluginBinary(actionType)
-	if binaryPath == "" {
-		return execResult{}, fmt.Errorf("未找到 %s 的 Plugin 二进制", actionType)
+	// 查找匹配的 Plugin
+	plugin := r.discovery.Find(actionType)
+	if plugin == nil {
+		return execResult{}, fmt.Errorf("no plugin found for action type: %s", actionType)
 	}
 
-	// os/exec 启动子进程。IPC 协议通信。
 	cfg := ExecConfig{
-		BinaryPath: binaryPath,
+		BinaryPath: plugin.BinaryPath,
 		Timeout:    30 * time.Second,
 	}
 	action := ActionRequest{
 		ActionID:   actionID,
 		ActionType: actionType,
+		Target:     target,
+		Params:     params,
 	}
 
 	result, err := Execute(cfg, action)
@@ -99,14 +123,6 @@ func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 	}, nil
 }
 
-func (r *Runner) findPluginBinary(actionType string) string {
-	// W3: 扫描 ~/.goalos/plugins/ 查找匹配的 Plugin。
-	// 简化实现：W3 仅支持 shell executor Plugin。
-	// W4: 完整 Plugin 发现机制。
-	_ = actionType
-	return "" // W3: 返回空→回退 stub
-}
-
 type execResult struct {
 	eventType  string
 	status     string
@@ -118,7 +134,7 @@ func (r *Runner) stubExecute(actionID, actionType string) execResult {
 	return execResult{
 		eventType:  events.TypeActionCompleted,
 		status:     "success",
-		output:     fmt.Sprintf("W3 stub: %s completed", actionType),
+		output:     fmt.Sprintf("completed: %s (stub)", actionType),
 		durationMs: 10,
 	}
 }
@@ -128,3 +144,7 @@ func (r *Runner) publish(evt events.Event) {
 	evt.Seq = r.seq
 	r.bus.Publish(evt)
 }
+
+// ─── OS Helper ───
+
+var osUserHomeDir = os.UserHomeDir

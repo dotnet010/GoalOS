@@ -6,8 +6,11 @@
 package pluginrunner
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,17 +34,16 @@ type DiscoveredPlugin struct {
 	PluginDir  string // Plugin 目录
 }
 
-// Discover 扫描 pluginsDir 下所有子目录，读取 plugin.json，返回已发现的 Plugin 列表。
-// 不验证签名（W5）。不启动子进程——仅发现。
+// Discover 扫描 pluginsDir 下所有子目录，读取 plugin.json，验证 SHA256 签名。
+// 签名不匹配的 Plugin 被跳过并记录安全事件。不启动子进程——仅发现。
 func Discover(pluginsDir string) ([]DiscoveredPlugin, error) {
 	var plugins []DiscoveredPlugin
 
-	// 扫描 capability/、agent/、channel/ 三个子目录
 	for _, typ := range []string{"capability", "agent", "channel"} {
 		typeDir := filepath.Join(pluginsDir, typ)
 		entries, err := os.ReadDir(typeDir)
 		if err != nil {
-			continue // 目录不存在——正常
+			continue
 		}
 
 		for _, entry := range entries {
@@ -53,22 +55,29 @@ func Discover(pluginsDir string) ([]DiscoveredPlugin, error) {
 
 			data, err := os.ReadFile(manifestPath)
 			if err != nil {
-				continue // 缺少 manifest——跳过
+				continue
 			}
 
 			var manifest PluginManifest
 			if err := json.Unmarshal(data, &manifest); err != nil {
-				continue // manifest 格式错误——跳过
+				continue
 			}
 
-			// 验证必填字段
 			if manifest.Name == "" || manifest.Type == "" || manifest.Binary == "" {
 				continue
 			}
 
 			binaryPath := filepath.Join(pluginDir, manifest.Binary)
 			if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-				continue // 二进制文件不存在——跳过
+				continue
+			}
+
+			// 验证 SHA256 签名
+			if manifest.Signature != "" {
+				if err := verifySignature(binaryPath, manifest.Signature); err != nil {
+					log.Printf("[PluginRunner] SECURITY: signature verification failed for %s: %v", manifest.Name, err)
+					continue // 签名不匹配→拒绝加载
+				}
 			}
 
 			plugins = append(plugins, DiscoveredPlugin{
@@ -80,6 +89,20 @@ func Discover(pluginsDir string) ([]DiscoveredPlugin, error) {
 	}
 
 	return plugins, nil
+}
+
+// verifySignature 验证 binary 文件的 SHA256 签名。
+func verifySignature(binaryPath, expected string) error {
+	data, err := os.ReadFile(binaryPath)
+	if err != nil {
+		return fmt.Errorf("read binary: %w", err)
+	}
+	hash := sha256.Sum256(data)
+	actual := "sha256:" + hex.EncodeToString(hash[:])
+	if actual != expected {
+		return fmt.Errorf("signature mismatch: expected %s, got %s", expected, actual)
+	}
+	return nil
 }
 
 // FindByCapability 在已发现的 Plugin 中查找提供指定 capability 的 Plugin。

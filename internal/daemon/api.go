@@ -8,19 +8,29 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	goalErr "github.com/goalos/goalos/pkg/errors"
 	"github.com/goalos/goalos/pkg/events"
+	"github.com/goalos/goalos/internal/statestore"
 )
 
 // Handler 包含所有 HTTP 端点处理逻辑。
 type Handler struct {
-	Goals      map[string]*GoalRecord // W1: 内存存储。W3: State Store
+	Goals      map[string]*GoalRecord
 	mu         sync.RWMutex
-	onShutdown func() // 关闭回调。daemon main 设置
+	port       int
+	startTime  time.Time
+	onShutdown func()
 }
 
-// SetShutdownHook 设置关闭回调。W4：由 daemon main 在启动时调用。
+// SetPort 设置 daemon 端口号。
+func (h *Handler) SetPort(port int) { h.port = port }
+
+// SetStartTime 设置 daemon 启动时间（用于计算 uptime）。
+func (h *Handler) SetStartTime(t time.Time) { h.startTime = t }
+
+// SetShutdownHook 设置关闭回调。
 func (h *Handler) SetShutdownHook(fn func()) {
 	h.onShutdown = fn
 }
@@ -53,9 +63,11 @@ func writeError(w http.ResponseWriter, status int, code goalErr.Code, msg string
 
 // HandleHealth 健康检查。GET /api/health。
 func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	uptime := time.Since(h.startTime).String()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status": "ok",
 		"pid":    os.Getpid(),
+		"uptime": uptime,
 	})
 }
 
@@ -84,7 +96,7 @@ func (h *Handler) HandleCreateGoal(w http.ResponseWriter, r *http.Request) {
 	}
 	h.mu.Unlock()
 
-	// 发布 GoalCreated 事件到 Event Bus（由 daemon main 在启动时通过 SetEventBus 注入）
+	// 发布 GoalCreated 事件
 	if eventBus != nil {
 		eventBus.Publish(events.NewEvent(events.TypeGoalCreated, goalID, "daemon").WithPayload(map[string]interface{}{
 			"title":       body.Goal,
@@ -180,33 +192,82 @@ func (h *Handler) HandleStopGoal(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "stopped"})
 }
 
-// HandleGoalLog 审计日志。GET /api/goals/:id/log。
+// HandleGoalLog 审计日志摘要。GET /api/goals/:id/log。
 func (h *Handler) HandleGoalLog(w http.ResponseWriter, r *http.Request) {
 	goalID := r.PathValue("id")
 	if goalID == "" {
 		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "缺少 goal id")
 		return
 	}
-	// W2: 返回空日志。W3: State Store 查询
-	writeJSON(w, http.StatusOK, []map[string]string{})
+	logs := []map[string]interface{}{}
+	if stateStore != nil {
+		rawEvents, err := stateStore.Replay(goalID, 0)
+		if err == nil {
+			for _, raw := range rawEvents {
+				var evt events.Event
+				if json.Unmarshal(raw, &evt) != nil {
+					continue
+				}
+				logs = append(logs, map[string]interface{}{
+					"seq":       evt.Seq,
+					"type":      evt.Type,
+					"timestamp": evt.Timestamp.Format(time.RFC3339),
+					"summary":   fmtSummary(evt),
+				})
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, logs)
 }
 
-// HandleGoalEvents 事件导出。GET /api/goals/:id/events。
+// HandleGoalEvents 事件导出。GET /api/goals/:id/events (JSONL 流)。
 func (h *Handler) HandleGoalEvents(w http.ResponseWriter, r *http.Request) {
 	goalID := r.PathValue("id")
 	if goalID == "" {
 		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "缺少 goal id")
 		return
 	}
-	// W2: 返回空事件流。W3: State Store 查询
 	w.Header().Set("Content-Type", "application/x-jsonlines")
 	w.WriteHeader(http.StatusOK)
+	if stateStore != nil {
+		rawEvents, err := stateStore.Replay(goalID, 0)
+		if err == nil {
+			enc := json.NewEncoder(w)
+			for _, raw := range rawEvents {
+				var evt events.Event
+				if json.Unmarshal(raw, &evt) == nil {
+					enc.Encode(evt)
+				}
+			}
+		}
+	}
+}
+
+// fmtSummary 生成事件的人类可读摘要。
+func fmtSummary(evt events.Event) string {
+	switch evt.Type {
+	case events.TypeGoalCreated:
+		return "目标已创建"
+	case events.TypeMissionGenerated:
+		return "任务图已生成"
+	case events.TypeActionScheduled:
+		return "Action 已调度"
+	case events.TypeActionApproved:
+		return "Action 已批准"
+	case events.TypeActionCompleted:
+		return "Action 已完成"
+	case events.TypeActionFailed:
+		return "Action 失败"
+	case events.TypeGoalCompleted:
+		return "目标已完成"
+	default:
+		return evt.Type
+	}
 }
 
 // HandleDaemonStop 停止 Daemon。POST /api/system/stop。
 func (h *Handler) HandleDaemonStop(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "stopping"})
-	// 触发优雅关闭——由 main() 的 signal handler 处理
 	if h.onShutdown != nil {
 		h.onShutdown()
 	}
@@ -224,6 +285,8 @@ func (h *Handler) HandleDaemonRestart(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) HandleSystemStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"pid":          os.Getpid(),
+		"port":         h.port,
+		"uptime":       time.Since(h.startTime).String(),
 		"active_goals": len(h.Goals),
 	})
 }
@@ -253,13 +316,22 @@ func padInt(n int) string {
 	return s
 }
 
-// eventBus 是注入的 EventBus（由 daemon main 在启动时设置）。
-// W1: 通过全局变量注入。W3: 依赖注入。
+// ─── 全局注入（由 daemon main 在启动时设置）───
+
 var eventBus interface {
 	Publish(events.Event)
+}
+
+var stateStore interface {
+	Replay(goalID string, fromSeq int) ([]json.RawMessage, error)
 }
 
 // SetEventBus 注入 EventBus。
 func SetEventBus(bus interface{ Publish(events.Event) }) {
 	eventBus = bus
+}
+
+// SetStateStore 注入 StateStore。
+func SetStateStore(store *statestore.Store) {
+	stateStore = store
 }

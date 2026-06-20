@@ -15,8 +15,8 @@ import (
 // 行为：L3+ Action→ActionPendingApproval→UserApprovedAction→ActionApproved。
 func TestGovernance_AsyncApprovalFlow(t *testing.T) {
 	bus := eventbus.New()
-	gov := governance.New(bus)
-	gov.Start()
+	gov := governance.New(bus, nil)
+	gov.RegisterCapabilities("test-plugin", []string{"fs.read", "fs.write", "shell.execute"}); gov.Start()
 
 	// Step 1: 发布 L3+ Action → 应收到 ActionPendingApproval
 	pending := make(chan events.Event, 1)
@@ -77,8 +77,8 @@ func TestGovernance_AsyncApprovalFlow(t *testing.T) {
 // 行为：L0 Action → ActionApproved 直接发布。不经过 ActionPendingApproval。
 func TestGovernance_L0AutoApprove(t *testing.T) {
 	bus := eventbus.New()
-	gov := governance.New(bus)
-	gov.Start()
+	gov := governance.New(bus, nil)
+	gov.RegisterCapabilities("test-plugin", []string{"fs.read", "fs.write", "shell.execute"}); gov.Start()
 
 	pendingReceived := false
 	bus.Subscribe(events.TypeActionPendingApproval, func(evt events.Event) error {

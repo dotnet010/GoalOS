@@ -20,7 +20,7 @@ func TestSchedulerChain_GoalCreatedToPlanRequested(t *testing.T) {
 	bus := eventbus.New()
 	store := statestore.New(dir)
 
-	sched := scheduler.New(bus, store)
+	sched := scheduler.New(bus, store, scheduler.NewGoalAnchorTracker(20))
 	sched.Start()
 
 	planRequested := make(chan events.Event, 1)
@@ -57,7 +57,7 @@ func TestSchedulerChain_ActionFailedTriggersRetry(t *testing.T) {
 	bus := eventbus.New()
 	store := statestore.New(dir)
 
-	sched := scheduler.New(bus, store)
+	sched := scheduler.New(bus, store, scheduler.NewGoalAnchorTracker(20))
 	sched.Start()
 
 	// 先走一遍正常链路到达 Running 状态
