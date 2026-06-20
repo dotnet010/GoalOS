@@ -12,6 +12,7 @@ import (
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/governance"
 	"github.com/goalos/goalos/internal/missionengine"
+	"github.com/goalos/goalos/internal/pluginrunner"
 	"github.com/goalos/goalos/internal/scheduler"
 	"github.com/goalos/goalos/internal/statestore"
 	"github.com/goalos/goalos/pkg/events"
@@ -35,6 +36,10 @@ func TestE2EGoalLifecycle(t *testing.T) {
 	stub := &missionengine.StubAgent{}
 	missionEng := missionengine.New(bus, stub)
 	missionEng.Start()
+
+	// PluginRunner — 真实执行 Action
+	runner := pluginrunner.New(bus)
+	runner.Start()
 
 	// Track received events (use counters, EventBus.Publish is synchronous)
 	received := make(map[string]int)
@@ -104,6 +109,7 @@ func TestE2EHTTPAPI(t *testing.T) {
 	scheduler.New(bus, store).Start()
 	governance.New(bus).Start()
 	missionengine.New(bus, &missionengine.StubAgent{}).Start()
+	pluginrunner.New(bus).Start()
 
 	// Create HTTP handler (same as main.go goalsHandler)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

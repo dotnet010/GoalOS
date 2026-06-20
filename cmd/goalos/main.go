@@ -15,10 +15,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/goalos/goalos/internal/contextengine"
 	"github.com/goalos/goalos/internal/daemon"
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/governance"
 	"github.com/goalos/goalos/internal/missionengine"
+	"github.com/goalos/goalos/internal/pluginrunner"
 	"github.com/goalos/goalos/internal/scheduler"
 	"github.com/goalos/goalos/internal/statestore"
 	"github.com/goalos/goalos/pkg/events"
@@ -93,14 +95,20 @@ func main() {
 	gov.Start()
 	log.Println("[Daemon] Step 7: Governance registered")
 
-	// Step 8: Register Context Engine (W1 stub)
-	log.Println("[Daemon] Step 8: Context Engine (W9-W10)")
+	// Step 8: Register Context Engine
+	_ = contextengine.New(home+"/Goals", home+"/.goalos/memory")
+	log.Printf("[Daemon] Step 8: Context Engine registered")
 
-	// Step 9: Register Mission Engine (with W1 StubAgent)
+	// Step 9: Register Mission Engine
 	stub := &missionengine.StubAgent{}
 	missionEng := missionengine.New(bus, stub)
 	missionEng.Start()
 	log.Println("[Daemon] Step 9: Mission Engine registered (StubAgent)")
+
+	// Step 10: Register Plugin Runner — 真实子进程执行
+	runner := pluginrunner.New(bus)
+	runner.Start()
+	log.Println("[Daemon] Step 10: Plugin Runner registered")
 
 	// Step 10: Register Plugin Runner (W1 stub)
 	log.Println("[Daemon] Step 10: Plugin Runner (W3-W4)")

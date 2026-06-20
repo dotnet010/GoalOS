@@ -16,13 +16,20 @@ import (
 // Scheduler is the W1 Skeleton Scheduler.
 // 设计依据：05 架构文档 §3、R153、R229。
 type Scheduler struct {
-	bus   *eventbus.EventBus
-	store *statestore.Store
+	bus              *eventbus.EventBus
+	store            *statestore.Store
+	completedActions map[string]int // goalID → 已完成 Action 数
+	totalActions     map[string]int // goalID → 总 Action 数
 }
 
 // New creates a Scheduler.
 func New(bus *eventbus.EventBus, store *statestore.Store) *Scheduler {
-	return &Scheduler{bus: bus, store: store}
+	return &Scheduler{
+		bus:              bus,
+		store:            store,
+		completedActions: make(map[string]int),
+		totalActions:     make(map[string]int),
+	}
 }
 
 // Start subscribes to core events and begins driving the state machine.
@@ -89,7 +96,7 @@ func (s *Scheduler) handleGoalCreated(evt events.Event) error {
 }
 
 func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
-	nodeCount, _ := evt.Payload["node_count"].(float64)
+	nodeCount, _ := evt.Payload["node_count"].(float64); s.totalActions[evt.GoalID] = int(nodeCount)
 	log.Printf("[Scheduler] MissionGenerated: %s (nodes=%d)", evt.GoalID, int(nodeCount))
 
 	// W1: auto-confirm. Transition Planned → Running
@@ -119,33 +126,16 @@ func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 }
 
 func (s *Scheduler) handleActionApproved(evt events.Event) error {
-	log.Printf("[Scheduler] ActionApproved: %s", evt.GoalID)
-
-	// W1 stub: immediately complete the action
-	actionID, _ := evt.Payload["action_id"].(string)
-	s.publish(events.Event{
-		Type:   events.TypeActionCompleted,
-		GoalID: evt.GoalID,
-		Source: "scheduler",
-		Payload: map[string]interface{}{
-			"action_id": actionID,
-			"result": map[string]interface{}{
-				"status": "success",
-				"output": "W1 stub execution complete",
-			},
-			"artifacts_produced": []interface{}{},
-			"cost": map[string]interface{}{
-				"duration_ms": 10,
-			},
-		},
-	})
+	log.Printf("[Scheduler] ActionApproved: %s — PluginRunner will execute", evt.GoalID)
+	// PluginRunner 订阅 ActionApproved → 启动子进程 → 发布 ActionCompleted
+	// Scheduler 不再伪造执行结果
 	return nil
 }
 
 func (s *Scheduler) handleActionCompleted(evt events.Event) error {
 	// W1: after all actions, auto-complete goal
 	// In W3+, Scheduler tracks action count and emits GoalCompleted when all done
-	log.Printf("[Scheduler] ActionCompleted: %s", evt.GoalID)
+	s.completedActions[evt.GoalID]++; total := s.totalActions[evt.GoalID]; if total > 0 && s.completedActions[evt.GoalID] >= total { log.Printf("[Scheduler] GoalCompleted: %s", evt.GoalID); s.publish(events.Event{Type: events.TypeGoalCompleted, GoalID: evt.GoalID, Source: "scheduler"}); }
 	return nil
 }
 
