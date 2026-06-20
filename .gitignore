@@ -31,3 +31,4 @@ coverage.txt
 # 用户数据（不提交到 git）
 ~/.goalos/
 ~/Goals/
+goalos-cli

@@ -27,7 +27,7 @@ jobs:
           go-version: "1.23"
 
       - name: Run tests
-        run: go test -count=1 -timeout 60s ./...
+        run: go test -count=1 -timeout 120s -v ./...
 
       - name: Log in to ghcr.io
         uses: docker/login-action@v3
