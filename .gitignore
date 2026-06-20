@@ -1,0 +1,33 @@
+# GoalOS gitignore
+
+# 编译产物
+goalos-daemon
+goalos
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 临时文件
+/tmp/
+*.tmp
+*.log
+
+# Go
+vendor/
+
+# 测试
+*.test
+*.out
+coverage.txt
+
+# 用户数据（不提交到 git）
+~/.goalos/
+~/Goals/
