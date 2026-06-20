@@ -1,11 +1,12 @@
-# GoalOS Docker 镜像
+# GoalOS Docker 镜像 — ghcr.io
 # 多阶段构建：编译 → 最小运行时
 FROM golang:1.23-alpine AS builder
 WORKDIR /build
-COPY go.mod ./
+COPY go.mod go.sum* ./
+RUN go mod download 2>/dev/null || true
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o goalos-daemon ./cmd/goalos/
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o goalos ./cmd/goalos-cli/
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o goalos-daemon ./cmd/goalos/
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o goalos ./cmd/goalos-cli/
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates curl
