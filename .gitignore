@@ -32,3 +32,8 @@ coverage.txt
 ~/.goalos/
 ~/Goals/
 goalos-cli
+
+# 内部文档
+发布规范.md
+开发日志.md
+验收规范.md

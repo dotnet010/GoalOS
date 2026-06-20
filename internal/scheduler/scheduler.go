@@ -7,6 +7,7 @@ package scheduler
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/goalos/goalos/internal/eventbus"
@@ -20,10 +21,11 @@ type Scheduler struct {
 	bus              *eventbus.EventBus
 	store            *statestore.Store
 	goalAnchor       *GoalAnchorTracker
-	completedActions map[string]int   // goalID → 已完成 Action 数
-	totalActions     map[string]int   // goalID → 总 Action 数
+	mu               sync.Mutex
+	completedActions map[string]int        // goalID → 已完成 Action 数
+	totalActions     map[string]int        // goalID → 总 Action 数
 	actionStates     map[string]ActionStatus // actionID → 当前 Action 状态
-	verificationAttempts map[string]int // actionID → 验证重试次数 (max 3)
+	verificationAttempts map[string]int    // actionID → 验证重试次数 (max 3)
 }
 
 // New creates a Scheduler.
@@ -60,8 +62,9 @@ func (s *Scheduler) handleActionFailed(evt events.Event) error {
 	errorType, _ := evt.Payload["error_type"].(string)
 	log.Printf("[Scheduler] ActionFailed: %s (recoverable=%v, error_type=%s)", actionID, recoverable, errorType)
 
-	// 更新 Action 状态
+	s.mu.Lock()
 	s.actionStates[actionID] = ActionFailed
+	s.mu.Unlock()
 
 	// seccomp 违规 → 直接 HumanIntervention。不重试（安全事件必须人工审查）。
 	if errorType == "seccomp_violation" {
@@ -81,7 +84,9 @@ func (s *Scheduler) handleActionFailed(evt events.Event) error {
 	}
 
 	if recoverable {
+		s.mu.Lock()
 		s.actionStates[actionID] = ActionRecovering
+		s.mu.Unlock()
 		// Recovery: Retry（指数退避由定时事件实现）
 		s.publish(events.Event{
 			Type:   events.TypeActionRetrying,
@@ -129,10 +134,13 @@ func (s *Scheduler) handleGoalCreated(evt events.Event) error {
 }
 
 func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
-	nodeCount, _ := evt.Payload["node_count"].(float64); s.totalActions[evt.GoalID] = int(nodeCount)
+	nodeCount, _ := evt.Payload["node_count"].(float64)
+	s.mu.Lock()
+	s.totalActions[evt.GoalID] = int(nodeCount)
+	s.mu.Unlock()
 	log.Printf("[Scheduler] MissionGenerated: %s (nodes=%d)", evt.GoalID, int(nodeCount))
 
-	// W1: auto-confirm. Transition Planned → Running
+	// W1: auto-confirm. Transition Planned → Running（publish 在锁外——可能触发 Scheduler 自身 handler）
 	s.publish(events.Event{
 		Type:   events.TypeUserConfirmed,
 		GoalID: evt.GoalID,
@@ -161,34 +169,38 @@ func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 func (s *Scheduler) handleActionApproved(evt events.Event) error {
 	actionID, _ := evt.Payload["action_id"].(string)
 	log.Printf("[Scheduler] ActionApproved: %s — PluginRunner will execute", actionID)
+	s.mu.Lock()
 	s.actionStates[actionID] = ActionApproved
-	// PluginRunner 订阅 ActionApproved → 启动子进程 → 发布 ActionCompleted
+	s.mu.Unlock()
 	return nil
 }
 
-// handleActionScheduled 记录 Action 被调度，追踪 Action 状态机。
 func (s *Scheduler) handleActionScheduled(evt events.Event) error {
 	actionID, _ := evt.Payload["action_id"].(string)
+	s.mu.Lock()
 	s.actionStates[actionID] = ActionScheduled
+	s.mu.Unlock()
 	log.Printf("[Scheduler] ActionScheduled: %s state=Scheduled", actionID)
 	return nil
 }
 
-// handleVerificationResult 处理验证结果（验证循环核心）。
 func (s *Scheduler) handleVerificationResult(evt events.Event) error {
 	actionID, _ := evt.Payload["action_id"].(string)
 	status, _ := evt.Payload["status"].(string)
 	log.Printf("[Scheduler] VerificationResult: %s status=%s", actionID, status)
 
 	if status == "verified" {
+		s.mu.Lock()
 		s.actionStates[actionID] = ActionCompleted
+		s.mu.Unlock()
 		return nil
 	}
 
-	// FAIL: 自修正逻辑
+	s.mu.Lock()
 	s.actionStates[actionID] = ActionVerifying
 	attempts := s.verificationAttempts[actionID] + 1
 	s.verificationAttempts[actionID] = attempts
+	s.mu.Unlock()
 
 	if attempts > 3 {
 		s.publish(events.Event{
@@ -223,49 +235,63 @@ func (s *Scheduler) handleVerificationResult(evt events.Event) error {
 // handlePauseRequested 处理用户暂停请求（异步审批竞态处理）。
 func (s *Scheduler) handlePauseRequested(evt events.Event) error {
 	log.Printf("[Scheduler] PauseRequested: %s — cancelling pending approvals", evt.GoalID)
-	// 发布 ActionCancelled 取消所有 pending 审批
+	// 锁定后收集待取消的 actionID，解锁后再 publish（避免 publish 触发同 Scheduler handler 导致死锁）
+	s.mu.Lock()
+	var toCancel []string
 	for actionID, state := range s.actionStates {
 		if state == ActionScheduled || state == ActionApproved {
-			s.publish(events.Event{
-				Type:   events.TypeActionCancelled,
-				GoalID: evt.GoalID,
-				Source: "scheduler",
-				Payload: map[string]interface{}{
-					"action_id": actionID,
-					"reason":    "user_paused",
-				},
-			})
+			toCancel = append(toCancel, actionID)
 		}
+	}
+	s.mu.Unlock()
+	for _, actionID := range toCancel {
+		s.publish(events.Event{
+			Type:   events.TypeActionCancelled,
+			GoalID: evt.GoalID,
+			Source: "scheduler",
+			Payload: map[string]interface{}{
+				"action_id": actionID,
+				"reason":    "user_paused",
+			},
+		})
 	}
 	return nil
 }
 
-// handleRollbackRequested 处理用户回滚请求（异步审批竞态处理）。
 func (s *Scheduler) handleRollbackRequested(evt events.Event) error {
 	log.Printf("[Scheduler] RollbackRequested: %s — cancelling all pending actions", evt.GoalID)
-	// 回滚取消所有并行 pending 审批
+	s.mu.Lock()
+	var toCancel []string
 	for actionID, state := range s.actionStates {
 		if state == ActionScheduled || state == ActionApproved {
-			s.publish(events.Event{
-				Type:   events.TypeActionCancelled,
-				GoalID: evt.GoalID,
-				Source: "scheduler",
-				Payload: map[string]interface{}{
-					"action_id": actionID,
-					"reason":    "user_rollback",
-				},
-			})
+			toCancel = append(toCancel, actionID)
 		}
+	}
+	s.mu.Unlock()
+	for _, actionID := range toCancel {
+		s.publish(events.Event{
+			Type:   events.TypeActionCancelled,
+			GoalID: evt.GoalID,
+			Source: "scheduler",
+			Payload: map[string]interface{}{
+				"action_id": actionID,
+				"reason":    "user_rollback",
+			},
+		})
 	}
 	return nil
 }
 
 func (s *Scheduler) handleActionCompleted(evt events.Event) error {
 	actionID, _ := evt.Payload["action_id"].(string)
+	s.mu.Lock()
 	s.actionStates[actionID] = ActionCompleted
 	s.completedActions[evt.GoalID]++
 	total := s.totalActions[evt.GoalID]
-	if total > 0 && s.completedActions[evt.GoalID] >= total {
+	allDone := total > 0 && s.completedActions[evt.GoalID] >= total
+	s.mu.Unlock()
+
+	if allDone {
 		log.Printf("[Scheduler] GoalCompleted: %s (all %d actions done)", evt.GoalID, total)
 		s.publish(events.Event{Type: events.TypeGoalCompleted, GoalID: evt.GoalID, Source: "scheduler",
 			Payload: map[string]interface{}{

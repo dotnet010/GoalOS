@@ -128,7 +128,14 @@ func main() {
 	// Step 10: Register Plugin Runner (扫描 plugins/ 目录，加载 Plugins)
 	runner := pluginrunner.New(bus)
 	runner.Start()
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 10: Plugin Runner registered"}`, time.Now().Format(time.RFC3339))
+
+	// 将发现的 Plugin 能力注册到 Governance（Capability Engine 授权检查的前提）
+	for _, p := range runner.DiscoveredPlugins() {
+		gov.RegisterCapabilities(p.Manifest.Name, p.Manifest.DeclaredCapabilities)
+	}
+	// 注册内置能力（MVP 无真实 Plugin 二进制时保证核心链路可用）
+	gov.RegisterCapabilities("builtin", []string{"fs.read", "fs.write", "shell.execute", "browser.open", "browser.click"})
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 10: Plugin Runner registered (%d plugins + builtin caps)"}`, time.Now().Format(time.RFC3339), len(runner.DiscoveredPlugins()))
 
 	// Step 11: Snapshot 冷启动恢复
 	recovered, err := store.RecoverAll()

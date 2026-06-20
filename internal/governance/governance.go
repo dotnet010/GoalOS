@@ -219,6 +219,10 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 	}
 
 	decision.Approval = "AUTO"
+	// 自动放行路径也签发 Token
+	if tokenID, tokenStr := e.issueToken(evt.GoalID, actionID, evt); tokenStr != "" {
+		decision.TokenID = tokenID
+	}
 	e.publishApproved(evt, decision)
 	e.recordAudit(auditEntry{
 		Timestamp: time.Now().Format(time.RFC3339), GoalID: evt.GoalID, ActionID: actionID,
