@@ -14,8 +14,9 @@ func TestPluginRunner_ActionApproved(t *testing.T) {
 	runner := pluginrunner.New(bus)
 	runner.Start()
 
+	// 无真实 Plugin 二进制 → stubExecute 发布 ActionFailed
 	done := make(chan events.Event, 1)
-	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
+	bus.Subscribe(events.TypeActionFailed, func(evt events.Event) error {
 		done <- evt
 		return nil
 	})
@@ -37,11 +38,11 @@ func TestPluginRunner_ActionApproved(t *testing.T) {
 			t.Errorf("expected act_001, got %s", actionID)
 		}
 		result, _ := evt.Payload["result"].(map[string]interface{})
-		if result["status"] != "success" {
-			t.Errorf("expected success, got %s", result["status"])
+		if result["status"] != "failure" {
+			t.Errorf("expected failure (no plugin binary), got %s", result["status"])
 		}
 	case <-time.After(time.Second):
-		t.Fatal("ActionCompleted was not published within 1s")
+		t.Fatal("ActionFailed was not published within 1s")
 	}
 }
 
@@ -52,7 +53,8 @@ func TestPluginRunner_MultipleActions(t *testing.T) {
 
 	count := 0
 	done := make(chan struct{})
-	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
+	// 无真实 Plugin → stubExecute 发布 ActionFailed（非 ActionCompleted）
+	bus.Subscribe(events.TypeActionFailed, func(evt events.Event) error {
 		count++
 		if count >= 5 {
 			close(done)
@@ -75,9 +77,9 @@ func TestPluginRunner_MultipleActions(t *testing.T) {
 	select {
 	case <-done:
 		if count != 5 {
-			t.Errorf("expected 5 completions, got %d", count)
+			t.Errorf("expected 5 failures (no plugin binaries), got %d", count)
 		}
 	case <-time.After(time.Second):
-		t.Fatalf("only %d/5 completions received", count)
+		t.Fatalf("only %d/5 failures received", count)
 	}
 }

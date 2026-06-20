@@ -77,9 +77,10 @@ type Engine struct {
 }
 
 type pendingApproval struct {
-	goalID    string
-	actionID  string
-	timer     *time.Timer
+	goalID     string
+	actionID   string
+	actionType string
+	timer      *time.Timer
 }
 
 // New creates a Governance Engine with default policies.
@@ -207,8 +208,9 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 		// 启动审批超时计时器（300s → ActionRejected("approval_timeout")）
 		e.pendingMu.Lock()
 		e.pendingApprovals[actionID] = pendingApproval{
-			goalID:   evt.GoalID,
-			actionID: actionID,
+			goalID:     evt.GoalID,
+			actionID:   actionID,
+			actionType: actionType,
 			timer: time.AfterFunc(300*time.Second, func() {
 				e.handleApprovalTimeout(evt.GoalID, actionID, decision)
 			}),
@@ -220,7 +222,8 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 
 	decision.Approval = "AUTO"
 	// 自动放行路径也签发 Token
-	if tokenID, tokenStr := e.issueToken(evt.GoalID, actionID, evt); tokenStr != "" {
+	timeoutSec, _ := evt.Payload["timeout_seconds"].(float64)
+	if tokenID, tokenStr := e.issueToken(evt.GoalID, actionID, actionType, int64(timeoutSec)); tokenStr != "" {
 		decision.TokenID = tokenID
 	}
 	e.publishApproved(evt, decision)
@@ -259,12 +262,20 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 	}
 
 	// 签发 Capability Token
-	tokenID, tokenStr := e.issueToken(pending.goalID, actionID, evt)
+	tokenID, tokenStr := e.issueToken(pending.goalID, actionID, pending.actionType, 30)
 	if tokenStr != "" {
 		decision.TokenID = tokenID
 	}
 
-	e.publishApproved(evt, decision)
+	// 构造包含 action_type 的事件用于 publishApproved
+	approvedEvt := events.Event{
+		GoalID: evt.GoalID,
+		Payload: map[string]interface{}{
+			"action_id":   actionID,
+			"action_type": pending.actionType,
+		},
+	}
+	e.publishApproved(approvedEvt, decision)
 	e.recordAudit(auditEntry{
 		Timestamp: time.Now().Format(time.RFC3339), GoalID: evt.GoalID, ActionID: actionID,
 		ActionType: "", Decision: decision, Result: "APPROVED",
@@ -452,26 +463,25 @@ func (e *Engine) evaluateRisk(actionType string) string {
 // ─── Token ───
 
 // issueToken 签发 Capability Token（类 JWT，HMAC-SHA256）。
-func (e *Engine) issueToken(goalID, actionID string, evt events.Event) (tokenID string, tokenStr string) {
+func (e *Engine) issueToken(goalID, actionID, actionType string, timeoutSec int64) (tokenID string, tokenStr string) {
 	if len(e.secretKey) == 0 {
 		return "", ""
 	}
 	now := time.Now().Unix()
-	timeoutSec, _ := evt.Payload["timeout_seconds"].(float64)
 	if timeoutSec <= 0 {
 		timeoutSec = 30
 	}
-	ttl := int64(timeoutSec * 2) // TTL = action.timeout × 2
+	ttl := timeoutSec * 2 // TTL = action.timeout × 2
 
 	header := map[string]string{"alg": "HMAC-SHA256", "typ": "GLS-Token"}
 	payload := map[string]interface{}{
-		"goal_id":       goalID,
-		"action_id":     actionID,
-		"capability":    evt.Payload["action_type"],
-		"scope":         "single",
-		"issuer":        "capability-engine",
-		"iat":           now,
-		"exp":           now + ttl,
+		"goal_id":    goalID,
+		"action_id":  actionID,
+		"capability": actionType,
+		"scope":      "single",
+		"issuer":     "capability-engine",
+		"iat":        now,
+		"exp":        now + ttl,
 	}
 
 	h, _ := json.Marshal(header)

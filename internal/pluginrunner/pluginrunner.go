@@ -132,10 +132,10 @@ type execResult struct {
 
 func (r *Runner) stubExecute(actionID, actionType string) execResult {
 	return execResult{
-		eventType:  events.TypeActionCompleted,
-		status:     "success",
-		output:     fmt.Sprintf("completed: %s (stub)", actionType),
-		durationMs: 10,
+		eventType:  events.TypeActionFailed,
+		status:     "failure",
+		output:     fmt.Sprintf("no plugin binary for: %s", actionType),
+		durationMs: 0,
 	}
 }
 

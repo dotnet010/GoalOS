@@ -1,0 +1,9 @@
+{
+  "name": "shell-executor",
+  "type": "capability",
+  "version": "1.0.0",
+  "signature": "",
+  "binary": "./plugin-shell",
+  "declared_capabilities": ["shell.execute", "shell.run"],
+  "description": "Shell 命令执行器 — 在独立 OS 子进程中运行 shell 命令"
+}

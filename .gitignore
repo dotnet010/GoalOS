@@ -40,3 +40,7 @@ goalos-cli
 
 # 密钥与本地环境
 .env
+
+# Plugin 二进制（仅根目录）
+/plugin-shell
+/plugins/capability/*/plugin-shell
