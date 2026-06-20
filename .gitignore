@@ -1,8 +1,8 @@
 # GoalOS gitignore
 
-# 编译产物
-goalos-daemon
-goalos
+# 编译产物（仅根目录下的二进制）
+/goalos-daemon
+/goalos
 *.exe
 
 # IDE

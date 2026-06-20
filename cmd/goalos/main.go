@@ -105,8 +105,8 @@ func main() {
 	// Step 10: Register Plugin Runner (W1 stub)
 	log.Println("[Daemon] Step 10: Plugin Runner (W3-W4)")
 
-	// Step 11: Scan events/ → recover unfinished Goals (W1 stub)
-	log.Println("[Daemon] Step 11: recovery scan (no unfinished goals)")
+	// Step 11: Snapshot 冷启动恢复
+	results, err := store.RecoverAll(); if err != nil { log.Printf("[Daemon] Step 11: recovery error: %v", err) } else { log.Printf("[Daemon] Step 11: recovered %d goals", len(results)) }
 
 	// Step 12: PID file lock
 	pidFile := goalOSDir + "/goalos.pid"
