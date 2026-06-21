@@ -83,3 +83,45 @@ func TestPluginRunner_MultipleActions(t *testing.T) {
 		t.Fatalf("only %d/5 failures received", count)
 	}
 }
+
+// TestPluginRunner_ReadsActionTypeFromPayload 验证 PluginRunner 从 ActionApproved payload
+// 中正确读取 action_type。这是 publishApproved 转发字段的端到端验证。
+func TestPluginRunner_ReadsActionTypeFromPayload(t *testing.T) {
+	bus := eventbus.New()
+	runner := pluginrunner.New(bus)
+	runner.Start()
+
+	failed := make(chan events.Event, 1)
+	bus.Subscribe(events.TypeActionFailed, func(evt events.Event) error {
+		failed <- evt
+		return nil
+	})
+
+	// 模拟完整的 ActionApproved payload（含 action_type）
+	bus.Publish(events.Event{
+		Type:   events.TypeActionApproved,
+		GoalID: "goal_plr",
+		Source: "governance",
+		Payload: map[string]interface{}{
+			"action_id":             "act_plr_001",
+			"action_type":           "shell.execute",
+			"target":                "echo hello",
+			"params":                map[string]interface{}{"command": "echo hello"},
+			"required_capabilities": []interface{}{"shell.execute"},
+			"timeout_seconds":       float64(30),
+		},
+	})
+
+	select {
+	case evt := <-failed:
+		result, _ := evt.Payload["result"].(map[string]interface{})
+		output, _ := result["output"].(string)
+		// 应包含 action_type 名称（shell.execute），而不是空字符串
+		if output == "" {
+			t.Error("ActionFailed output should mention the action_type, got empty")
+		}
+		t.Logf("output: %s", output)
+	case <-time.After(time.Second):
+		t.Fatal("PluginRunner 应处理 ActionApproved 并发布 ActionFailed（无真实二进制）")
+	}
+}

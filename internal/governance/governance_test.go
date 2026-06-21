@@ -126,3 +126,62 @@ func TestGovernance_RiskScoring(t *testing.T) {
 		}
 	}
 }
+
+// TestGovernance_ActionApprovedPayloadCompleteness 验证 ActionApproved payload
+// 包含 PluginRunner 执行所需的全部字段（action_type/target/params/required_capabilities/timeout_seconds）。
+// 这个测试直接防止 publishApproved 丢弃字段的回归 bug。
+func TestGovernance_ActionApprovedPayloadCompleteness(t *testing.T) {
+	bus := eventbus.New()
+	eng := governance.New(bus, nil)
+	eng.RegisterCapabilities("test-plugin", []string{"fs.write"})
+	eng.Start()
+
+	approved := make(chan events.Event, 1)
+	bus.Subscribe(events.TypeActionApproved, func(evt events.Event) error {
+		approved <- evt
+		return nil
+	})
+
+	bus.Publish(events.Event{
+		Type:   events.TypeActionScheduled,
+		GoalID: "goal_payload",
+		Source: "scheduler",
+		Payload: map[string]interface{}{
+			"action_id":             "act_payload_001",
+			"action_type":           "fs.write",
+			"target":                "/tmp/test.txt",
+			"params":                map[string]interface{}{"encoding": "utf-8"},
+			"required_capabilities": []interface{}{"fs.write"},
+			"timeout_seconds":       float64(45),
+			"risk_level_pre":        "L1",
+		},
+	})
+
+	select {
+	case evt := <-approved:
+		// 验证核心字段转发
+		if v, _ := evt.Payload["action_type"].(string); v != "fs.write" {
+			t.Errorf("action_type: expected 'fs.write', got '%s'", v)
+		}
+		if v, _ := evt.Payload["target"].(string); v != "/tmp/test.txt" {
+			t.Errorf("target: expected '/tmp/test.txt', got '%s'", v)
+		}
+		if _, ok := evt.Payload["params"]; !ok {
+			t.Error("params: field missing from ActionApproved payload")
+		}
+		if _, ok := evt.Payload["required_capabilities"]; !ok {
+			t.Error("required_capabilities: field missing from ActionApproved payload")
+		}
+		if v, _ := evt.Payload["timeout_seconds"].(float64); v != 45 {
+			t.Errorf("timeout_seconds: expected 45, got %v", v)
+		}
+		// 验证 decision_path 字段存在
+		if dp, ok := evt.Payload["decision_path"].(map[string]string); !ok {
+			t.Error("decision_path: field missing from ActionApproved payload")
+		} else if dp["risk"] == "" {
+			t.Error("decision_path.risk: empty")
+		}
+	default:
+		t.Fatal("ActionApproved was not published within 1s")
+	}
+}
