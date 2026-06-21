@@ -136,7 +136,7 @@ func main() {
 		gov.RegisterCapabilities(p.Manifest.Name, p.Manifest.DeclaredCapabilities)
 	}
 	// 注册内置能力（MVP 无真实 Plugin 二进制时保证核心链路可用）
-	gov.RegisterCapabilities("builtin", []string{"fs.read", "fs.write", "shell.execute", "browser.open", "browser.click"})
+	gov.RegisterCapabilities("builtin", []string{"fs.read", "fs.write", "shell.execute", "browser.open", "browser.click", "web.search"})
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 10: Plugin Runner registered (%d plugins + builtin caps)"}`, time.Now().Format(time.RFC3339), len(runner.DiscoveredPlugins()))
 
 	// Step 11: Snapshot 冷启动恢复
@@ -168,6 +168,14 @@ func main() {
 	bus.Subscribe("GoalCreated", func(evt events.Event) error { sse.Push("GoalCreated", evt.Payload); return nil })
 	bus.Subscribe("GoalCompleted", func(evt events.Event) error { sse.Push("GoalCompleted", evt.Payload); return nil })
 	bus.Subscribe("ActionPendingApproval", func(evt events.Event) error { sse.Push("ActionPendingApproval", evt.Payload); return nil })
+	// 将 Action 执行结果存入 API Handler（Goal 完成后 GET query 可返回）
+	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
+		goalID := evt.GoalID
+		if result, ok := evt.Payload["result"]; ok {
+			api.TrackResult(goalID, result)
+		}
+		return nil
+	})
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", daemon.HandleDashboard)

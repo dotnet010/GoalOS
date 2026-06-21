@@ -135,32 +135,60 @@ func (s *Scheduler) handleGoalCreated(evt events.Event) error {
 }
 
 func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
-	nodeCount, _ := evt.Payload["node_count"].(float64)
 	s.mu.Lock()
-	s.totalActions[evt.GoalID] = int(nodeCount)
+	s.totalActions[evt.GoalID] = 0 // 延迟计数，循环中递增
 	s.mu.Unlock()
-	log.Printf("[Scheduler] MissionGenerated: %s (nodes=%d)", evt.GoalID, int(nodeCount))
 
-	// MVP 行为：自动确认 MissionGraph。完整审批流由 Watcher UI (W5-W6) 提供。
+	// 读取 MissionGraph node 列表
+	nodesRaw, _ := evt.Payload["nodes"].([]interface{})
+	nodeCount := len(nodesRaw)
+	log.Printf("[Scheduler] MissionGenerated: %s (nodes=%d)", evt.GoalID, nodeCount)
+	if nodeCount == 0 {
+		// 向后兼容：无 nodes 字段时 fallback 到 node_count
+		nc, _ := evt.Payload["node_count"].(float64)
+		nodeCount = int(nc)
+	}
+
+	// MVP 行为：自动确认 MissionGraph。
 	s.publish(events.Event{
 		Type:   events.TypeUserConfirmed,
 		GoalID: evt.GoalID,
 		Source: "scheduler",
 	})
 
-	// Emit ActionScheduled for each node
-	for i := 0; i < int(nodeCount); i++ {
+	// 按节点生成 ActionScheduled
+	for i := 0; i < nodeCount; i++ {
+		actionType := "fs.read"
+		target := "generic"
+		if i < len(nodesRaw) {
+			if node, ok := nodesRaw[i].(map[string]interface{}); ok {
+				if at, ok := node["action_type"].(string); ok && at != "" {
+					actionType = at
+				}
+				if t, ok := node["target"].(string); ok && t != "" {
+					target = t
+				}
+			}
+		}
+		// 按 action_type 推算风险等级
+		riskLevel := "L0"
+		if actionType == "web.search" {
+			riskLevel = "L1"
+		}
+		s.mu.Lock()
+		s.totalActions[evt.GoalID]++
+		s.mu.Unlock()
 		s.publish(events.Event{
 			Type:   events.TypeActionScheduled,
 			GoalID: evt.GoalID,
 			Source: "scheduler",
 			Payload: map[string]interface{}{
 				"action_id":             generateActionID(evt.GoalID, i+1),
-				"action_type":           "fs.read",
-				"target":                "w1-stub",
-				"required_capabilities": []interface{}{"fs.read"},
-				"timeout_seconds":       30,
-				"risk_level_pre":        "L0",
+				"action_type":           actionType,
+				"target":                target,
+				"required_capabilities": []interface{}{actionType},
+				"timeout_seconds":       float64(30),
+				"risk_level_pre":        riskLevel,
 			},
 		})
 	}

@@ -1,0 +1,9 @@
+{
+  "name": "websearch",
+  "type": "capability",
+  "version": "1.0.0",
+  "signature": "",
+  "binary": "./plugin-websearch",
+  "declared_capabilities": ["web.search"],
+  "description": "Web 搜索执行器 — 调用 Bing Search API，返回结构化搜索结果"
+}

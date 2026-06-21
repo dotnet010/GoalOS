@@ -427,6 +427,7 @@ func (e *Engine) evaluateCapability(requiredCaps []interface{}) string {
 // capabilityRiskMap — 四维评分映射（R166）。修正了 browser.open/browser.click 等级。
 // 维度: d=destructiveness(0-3), e=external(0-2), p=privilege(0-3), r=reversibility(0-2)
 var capabilityRiskMap = map[string]struct{ d, e, p, r int }{
+	"web.search":        {0, 1, 0, 0}, // 1→L1 只读远程 API，无本地副作用
 	"fs.read":           {0, 0, 0, 0}, // 0→L0
 	"browser.open":      {0, 2, 0, 0}, // 2→L1 per spec label L1
 	"fs.write":          {1, 0, 0, 1}, // 2→L1

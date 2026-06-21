@@ -84,11 +84,10 @@ func TestE2EGoalLifecycle(t *testing.T) {
 	if received["MissionGenerated"] != 1 {
 		t.Errorf("expected 1 MissionGenerated, got %d", received["MissionGenerated"])
 	}
-	if received["ActionApproved"] != 3 {
-		t.Errorf("expected 3 ActionApproved (3 nodes), got %d", received["ActionApproved"])
+	if received["ActionApproved"] != 1 {
+		t.Errorf("expected 1 ActionApproved (StubAgent now returns 1 focused node), got %d", received["ActionApproved"])
 	}
-	// 无真实 Plugin 二进制 → stubExecute 发布 ActionFailed
-	t.Logf("ActionFailed received: %d (expected 3 — no plugin binaries for fs.read)", received["ActionFailed"])
+	t.Logf("ActionFailed received: %d (no plugin binary for action type)", received["ActionFailed"])
 }
 
 // TestE2EHTTPAPI 验证 HTTP API 端到端。

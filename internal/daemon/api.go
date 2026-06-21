@@ -18,11 +18,12 @@ import (
 
 // Handler 包含所有 HTTP 端点处理逻辑。
 type Handler struct {
-	Goals      map[string]*GoalRecord
-	mu         sync.RWMutex
-	port       int
-	startTime  time.Time
-	onShutdown func()
+	Goals       map[string]*GoalRecord
+	actionResults map[string]interface{} // goalID → last action result
+	mu          sync.RWMutex
+	port        int
+	startTime   time.Time
+	onShutdown  func()
 }
 
 // SetPort 设置 daemon 端口号。
@@ -41,13 +42,22 @@ type GoalRecord struct {
 	ID     string `json:"goal_id"`
 	Title  string `json:"title"`
 	Status string `json:"status"`
+	Result interface{} `json:"result,omitempty"` // Goal 完成后的执行结果
 }
 
 // NewHandler 创建一个 API Handler。
 func NewHandler() *Handler {
 	return &Handler{
-		Goals: make(map[string]*GoalRecord),
+		Goals:         make(map[string]*GoalRecord),
+		actionResults: make(map[string]interface{}),
 	}
+}
+
+// TrackResult 存储 Action 的执行结果。Goal 完成后 GET /api/goals/:id 返回。
+func (h *Handler) TrackResult(goalID string, result interface{}) {
+	h.mu.Lock()
+	h.actionResults[goalID] = result
+	h.mu.Unlock()
 }
 
 // writeJSON 写入 JSON 响应。
@@ -126,6 +136,10 @@ func (h *Handler) HandleGetGoal(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "目标不存在")
 		return
+	}
+	// 附加 Action 执行结果
+	if result, exists := h.actionResults[goalID]; exists {
+		goal.Result = result
 	}
 	writeJSON(w, http.StatusOK, goal)
 }

@@ -34,8 +34,10 @@ type MissionGraph struct {
 // GraphNode is a node in the MissionGraph.
 type GraphNode struct {
 	ID          string `json:"id"`
-	Type        string `json:"type"` // "mission" | "action" | "approval" | "condition" | "sub_goal" | "clarification"
-	Description string `json:"description"`
+	Type        string `json:"type"`        // "mission" | "action" | "approval" | "condition" | "sub_goal" | "clarification"
+	Description string `json:"description"` // 人类可读描述
+	ActionType  string `json:"action_type"` // 对应的 Capability action_type（如 "web.search", "fs.read"）
+	Target      string `json:"target"`      // 操作目标（搜索查询、文件路径等）
 }
 
 // GraphEdge connects two nodes.
@@ -102,6 +104,17 @@ func (e *Engine) handlePlanRequested(evt events.Event) error {
 		return nil
 	}
 
+	// 构造节点 payload 列表（供 Scheduler 读取 action_type/target）
+	nodesPayload := make([]interface{}, len(graph.Nodes))
+	for i, n := range graph.Nodes {
+		nodesPayload[i] = map[string]interface{}{
+			"id":          n.ID,
+			"type":        n.Type,
+			"description": n.Description,
+			"action_type": n.ActionType,
+			"target":      n.Target,
+		}
+	}
 	e.publish(events.Event{
 		Type:   events.TypeMissionGenerated,
 		GoalID: evt.GoalID,
@@ -109,6 +122,7 @@ func (e *Engine) handlePlanRequested(evt events.Event) error {
 		Payload: map[string]interface{}{
 			"node_count": float64(len(graph.Nodes)),
 			"strategy":   "GoalAgent",
+			"nodes":      nodesPayload,
 		},
 	})
 
@@ -228,16 +242,42 @@ type StubAgent struct{}
 func NewStubAgent() *StubAgent { return &StubAgent{} }
 
 func (s *StubAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
+	// 基于关键词推断 action_type。GoalAgent 接入后由 LLM 产出精确映射。
+	actionType := "fs.read"
+	target := goal
+	if containsAny(goal, "搜索", "search", "查找", "检索") {
+		actionType = "web.search"
+		target = extractQuery(goal)
+	}
 	return &MissionGraph{
 		GoalID: ctx.GoalID,
 		Nodes: []GraphNode{
-			{ID: "1", Type: "mission", Description: "分析需求: " + goal},
-			{ID: "2", Type: "mission", Description: "设计方案"},
-			{ID: "3", Type: "mission", Description: "执行实现"},
+			{ID: "1", Type: "mission", Description: "分析需求: " + goal, ActionType: actionType, Target: target},
 		},
-		Edges: []GraphEdge{
-			{From: "1", To: "2", Type: "sequential"},
-			{From: "2", To: "3", Type: "sequential"},
-		},
+		Edges: []GraphEdge{},
 	}, nil
+}
+
+func containsAny(s string, keywords ...string) bool {
+	for _, kw := range keywords {
+		if len(s) >= len(kw) {
+			for i := 0; i <= len(s)-len(kw); i++ {
+				if s[i:i+len(kw)] == kw {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func extractQuery(goal string) string {
+	// 去掉"搜索"/"查找"等前缀词，保留核心查询
+	prefixes := []string{"搜索一下", "搜索", "查找", "检索", "帮我搜索", "帮我查"}
+	for _, p := range prefixes {
+		if len(goal) > len(p) && goal[:len(p)] == p {
+			return goal[len(p):]
+		}
+	}
+	return goal
 }
