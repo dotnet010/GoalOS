@@ -552,8 +552,14 @@ func (e *Engine) flushAudit() {
 // ─── Event Publishing ───
 
 func (e *Engine) publishApproved(evt events.Event, d Decision) {
+	// 转发 PluginRunner 执行所需的所有字段（从 ActionScheduled payload）
 	payload := map[string]interface{}{
-		"action_id": evt.Payload["action_id"],
+		"action_id":             evt.Payload["action_id"],
+		"action_type":           evt.Payload["action_type"],
+		"target":                evt.Payload["target"],
+		"params":                evt.Payload["params"],
+		"required_capabilities": evt.Payload["required_capabilities"],
+		"timeout_seconds":       evt.Payload["timeout_seconds"],
 		"decision_path": map[string]string{
 			"policy":     d.Policy,
 			"capability": d.Capability,
