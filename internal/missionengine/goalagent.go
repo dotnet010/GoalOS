@@ -53,11 +53,13 @@ func (g *GoalAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
 // buildSystemPrompt 构建 system prompt。
 // Layer 1 Immutable：GoalOS 系统指令 + 角色描述。
 func (g *GoalAgent) buildSystemPrompt(ctx Context) string {
-	prompt := `Output ONLY this JSON format, no other text:
-{"nodes":[{"id":"1","type":"mission","description":"task","action_type":"shell.execute","target":"the exact shell command"}],"edges":[]}
+	prompt := `Output ONLY this exact JSON, no other text:
+{"nodes":[{"id":"1","type":"mission","description":"task","action_type":"shell.execute","target":"shell command"}],"edges":[]}
 
-For file creation, target is the complete shell command to create the file.
-Output only the JSON object, nothing else.`
+action_type MUST be one of: shell.execute web.search fs.read fs.write
+For creating files: action_type=shell.execute, target=the complete cat command
+Example: {"id":"1","type":"mission","description":"create file","action_type":"shell.execute","target":"cat > output.html << 'EOF'\ncontent\nEOF"}
+Output ONLY the JSON. No markdown. No explanation.`
 
 	if ctx.AnchorCheck {
 		prompt += "\n\n## GoalAnchor 检查\n请对照原始目标检查当前路径是否偏离。如果需要纠正——在 nodes 的第一个节点中注明纠正措施。"

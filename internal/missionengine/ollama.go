@@ -1,64 +1,50 @@
-// Package missionengine — Ollama LLM 客户端。
-// 实现 LLMClient 接口。调用本地 Ollama API (localhost:11434)。
+// Package missionengine — LLM 客户端。
+// 通过 OpenAI 兼容 API 调用本地 Ollama（或任何兼容 Provider）。
+// 设计依据：05架构文档 §A.8、ADR-013。any-llm-go 不可用→使用 go-openai。
 package missionengine
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
+
+	openai "github.com/sashabaranov/go-openai"
 )
 
-// OllamaClient 通过 Ollama API 调用本地 LLM。
+// OllamaClient 通过 Ollama 的 OpenAI 兼容 API 调用本地 LLM。
 type OllamaClient struct {
-	Model  string // 模型名，如 "qwen3.5:0.8b"
-	apiURL string
-	client *http.Client
+	model  string
+	client *openai.Client
 }
 
-// NewOllamaClient 创建 Ollama 客户端。
+// NewOllamaClient 创建客户端。Ollama 在 localhost:11434/v1 提供 OpenAI 兼容端点。
 func NewOllamaClient(model string) *OllamaClient {
+	cfg := openai.DefaultConfig("ollama") // key 可为任意值，Ollama 忽略
+	cfg.BaseURL = "http://localhost:11434/v1"
 	return &OllamaClient{
-		Model:  model,
-		apiURL: "http://localhost:11434/api/generate",
-		client: &http.Client{Timeout: 300 * time.Second},
+		model:  model,
+		client: openai.NewClientWithConfig(cfg),
 	}
 }
 
-// Chat 调用 Ollama API，返回模型响应。
+// Chat 调用 LLM，返回响应文本。实现 LLMClient 接口。
 func (o *OllamaClient) Chat(systemPrompt string, userMessage string) (string, error) {
-	// Ollama 用 system prompt 作为完整 prompt 的前缀
-	fullPrompt := systemPrompt + "\n\n" + userMessage
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	defer cancel()
 
-	reqBody := map[string]interface{}{
-		"model":  o.Model,
-		"prompt": fullPrompt,
-		"stream": false,
-	}
-	data, err := json.Marshal(reqBody)
+	resp, err := o.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: o.model,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
+			{Role: openai.ChatMessageRoleUser, Content: userMessage},
+		},
+		MaxTokens: 2048,
+	})
 	if err != nil {
-		return "", fmt.Errorf("ollama: marshal: %w", err)
+		return "", fmt.Errorf("ollama: %w", err)
 	}
-
-	resp, err := o.client.Post(o.apiURL, "application/json", bytes.NewReader(data))
-	if err != nil {
-		return "", fmt.Errorf("ollama: request: %w", err)
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("ollama: empty response")
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("ollama: %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		Response string `json:"response"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("ollama: decode: %w", err)
-	}
-
-	return result.Response, nil
+	return resp.Choices[0].Message.Content, nil
 }
