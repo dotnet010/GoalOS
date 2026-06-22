@@ -15,3 +15,6 @@ func sanitizeChildProcess(cmd *exec.Cmd) {
 		Setpgid: true,
 	}
 }
+
+// applySeccompToChild macOS 无 seccomp，Seatbelt 预留。
+func applySeccompToChild(cmd *exec.Cmd, profile *SeccompProfile) {}

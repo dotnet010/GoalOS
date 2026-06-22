@@ -19,12 +19,17 @@ import (
 	"github.com/goalos/goalos/pkg/events"
 )
 
-// GoalState 是一个 Goal 的状态投影。
+// GoalState 是一个 Goal 的状态投影 + Checkpoint。
 // 可从 events.jsonl 完全重建——非 Source of Truth。
 type GoalState struct {
-	GoalID         string `json:"goal_id"`          // Goal 标识符
-	InternalState  string `json:"internal_state"`   // 内部状态：draft/planned/running/...
-	LastAppliedSeq int    `json:"last_applied_seq"` // 最后应用的事件 seq。回放起点
+	GoalID         string   `json:"goal_id"`
+	InternalState  string   `json:"internal_state"`
+	LastAppliedSeq int      `json:"last_applied_seq"`
+	NodeID         string   `json:"node_id,omitempty"`          // 当前执行节点 ID
+	CompletedNodes []string `json:"completed_nodes,omitempty"`  // 已完成节点列表
+	CurrentState   map[string]interface{} `json:"current_state,omitempty"` // 当前状态快照
+	ArtifactPaths  []string `json:"artifact_paths,omitempty"`   // 产出物路径
+	TokenIDs       []string `json:"token_ids,omitempty"`        // 回滚时需撤销的 Token
 }
 
 // Store 管理事件持久化和状态投影。

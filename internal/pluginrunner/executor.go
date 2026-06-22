@@ -55,6 +55,7 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 	}
 
 	sanitizeChildProcess(cmd)
+	applySeccompToChild(cmd, DefaultSeccomp())
 
 	if cfg.WorkDir != "" {
 		if err := os.MkdirAll(cfg.WorkDir, 0755); err != nil {

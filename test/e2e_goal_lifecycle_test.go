@@ -35,7 +35,7 @@ func TestE2EGoalLifecycle(t *testing.T) {
 	missionEng := missionengine.New(bus, stub)
 	missionEng.Start()
 
-	runner := pluginrunner.New(bus)
+	runner := pluginrunner.New(bus, nil)
 	runner.Start()
 
 	received := make(map[string]int)
@@ -101,7 +101,7 @@ func TestE2EHTTPAPI(t *testing.T) {
 	gov2.RegisterCapabilities("test-plugin", []string{"fs.read", "fs.write", "shell.execute", "browser.open", "browser.click"})
 	gov2.Start()
 	missionengine.New(bus, &missionengine.StubAgent{}).Start()
-	pluginrunner.New(bus).Start()
+	pluginrunner.New(bus, nil).Start()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/goals" {

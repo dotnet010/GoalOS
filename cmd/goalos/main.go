@@ -128,7 +128,7 @@ func main() {
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (StubAgent)"}`, time.Now().Format(time.RFC3339))
 
 	// Step 10: Register Plugin Runner (扫描 plugins/ 目录，加载 Plugins)
-	runner := pluginrunner.New(bus)
+	runner := pluginrunner.New(bus, secretKey)
 	runner.Start()
 
 	// 将发现的 Plugin 能力注册到 Governance（Capability Engine 授权检查的前提）

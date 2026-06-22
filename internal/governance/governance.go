@@ -7,9 +7,6 @@
 package governance
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -223,7 +220,16 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 	decision.Approval = "AUTO"
 	// 自动放行路径也签发 Token
 	timeoutSec, _ := evt.Payload["timeout_seconds"].(float64)
-	if tokenID, tokenStr := e.issueToken(evt.GoalID, actionID, actionType, int64(timeoutSec)); tokenStr != "" {
+	now := time.Now().Unix()
+	ttl := int64(timeoutSec) * 2; if ttl <= 0 { ttl = 60 }
+	tokenID, tokenStr := "", ""
+	if len(e.secretKey) > 0 {
+		caps := make([]string, len(requiredCaps))
+		for i, c := range requiredCaps { caps[i] = fmt.Sprint(c) }
+		claims := TokenClaims{GoalID: evt.GoalID, ActionID: actionID, Capabilities: caps, IssuedAt: now, ExpiresAt: now + ttl}
+		if tok, err := IssueToken(claims, e.secretKey); err == nil { tokenStr = tok; tokenID = fmt.Sprintf("%s_token_%d", actionID, now) }
+	}
+	if tokenStr != "" {
 		decision.TokenID = tokenID
 	}
 	e.publishApproved(evt, decision)
@@ -262,7 +268,12 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 	}
 
 	// 签发 Capability Token
-	tokenID, tokenStr := e.issueToken(pending.goalID, actionID, pending.actionType, 30)
+	now := time.Now().Unix()
+	tokenID, tokenStr := "", ""
+	if len(e.secretKey) > 0 {
+		claims := TokenClaims{GoalID: pending.goalID, ActionID: actionID, Capabilities: []string{pending.actionType}, IssuedAt: now, ExpiresAt: now + 60}
+		if tok, err := IssueToken(claims, e.secretKey); err == nil { tokenStr = tok; tokenID = fmt.Sprintf("%s_token_%d", actionID, now) }
+	}
 	if tokenStr != "" {
 		decision.TokenID = tokenID
 	}
@@ -459,45 +470,6 @@ func (e *Engine) evaluateRisk(actionType string) string {
 	default:
 		return "L5"
 	}
-}
-
-// ─── Token ───
-
-// issueToken 签发 Capability Token（类 JWT，HMAC-SHA256）。
-func (e *Engine) issueToken(goalID, actionID, actionType string, timeoutSec int64) (tokenID string, tokenStr string) {
-	if len(e.secretKey) == 0 {
-		return "", ""
-	}
-	now := time.Now().Unix()
-	if timeoutSec <= 0 {
-		timeoutSec = 30
-	}
-	ttl := timeoutSec * 2 // TTL = action.timeout × 2
-
-	header := map[string]string{"alg": "HMAC-SHA256", "typ": "GLS-Token"}
-	payload := map[string]interface{}{
-		"goal_id":    goalID,
-		"action_id":  actionID,
-		"capability": actionType,
-		"scope":      "single",
-		"issuer":     "capability-engine",
-		"iat":        now,
-		"exp":        now + ttl,
-	}
-
-	h, _ := json.Marshal(header)
-	p, _ := json.Marshal(payload)
-	headerEnc := base64.RawURLEncoding.EncodeToString(h)
-	payloadEnc := base64.RawURLEncoding.EncodeToString(p)
-
-	sigInput := headerEnc + "." + payloadEnc
-	mac := hmac.New(sha256.New, e.secretKey)
-	mac.Write([]byte(sigInput))
-	sig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-
-	tokenStr = headerEnc + "." + payloadEnc + "." + sig
-	tokenID = fmt.Sprintf("%s_token_%d", actionID, now)
-	return tokenID, tokenStr
 }
 
 // ─── Audit Engine ───

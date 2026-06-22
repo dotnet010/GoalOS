@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/goalos/goalos/internal/eventbus"
+	"github.com/goalos/goalos/internal/governance"
 	"github.com/goalos/goalos/pkg/events"
 )
 
@@ -18,16 +19,18 @@ import (
 type Runner struct {
 	bus       *eventbus.EventBus
 	discovery *PluginDiscovery
+	secretKey []byte
 	seq       int
 }
 
-// New creates a Plugin Runner with the given plugins directory.
-func New(bus *eventbus.EventBus) *Runner {
+// New creates a Plugin Runner with the given plugins directory and token secret.
+func New(bus *eventbus.EventBus, secretKey []byte) *Runner {
 	home, _ := osUserHomeDir()
 	pluginsDir := home + "/.goalos/plugins"
 	return &Runner{
 		bus:       bus,
 		discovery: NewPluginDiscovery(pluginsDir),
+		secretKey: secretKey,
 	}
 }
 
@@ -56,6 +59,24 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 	actionType, _ := evt.Payload["action_type"].(string)
 
 	log.Printf("[PluginRunner] executing: %s (%s)", actionID, actionType)
+
+	// Token 验证：如果 payload 含 token_id→校验签名和过期
+	if tokenID, _ := evt.Payload["token_id"].(string); tokenID != "" && len(r.secretKey) > 0 {
+		if _, err := governance.VerifyToken(tokenID, r.secretKey); err != nil {
+			log.Printf("[PluginRunner] token verification failed: %v", err)
+			r.publish(events.Event{
+				Type:   events.TypeActionFailed,
+				GoalID: evt.GoalID,
+				Source: "plugin-runner",
+				Payload: map[string]interface{}{
+					"action_id":  actionID,
+					"error":      fmt.Sprintf("token verification failed: %v", err),
+					"error_type": "token_invalid",
+				},
+			})
+			return nil
+		}
+	}
 
 	// 尝试真实子进程执行。失败→回退 stub（MVP）。
 	result, err := r.executeAction(evt)
