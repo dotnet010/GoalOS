@@ -61,8 +61,8 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 	log.Printf("[PluginRunner] executing: %s (%s)", actionID, actionType)
 
 	// Token 验证：如果 payload 含 token_id→校验签名和过期
-	if tokenID, _ := evt.Payload["token_id"].(string); tokenID != "" && len(r.secretKey) > 0 {
-		if _, err := governance.VerifyToken(tokenID, r.secretKey); err != nil {
+	if tokenStr, _ := evt.Payload["token"].(string); tokenStr != "" && len(r.secretKey) > 0 {
+		if _, err := governance.VerifyToken(tokenStr, r.secretKey); err != nil {
 			log.Printf("[PluginRunner] token verification failed: %v", err)
 			r.publish(events.Event{
 				Type:   events.TypeActionFailed,

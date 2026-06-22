@@ -41,7 +41,8 @@ type Decision struct {
 	Capability string // "GRANTED" | "DENIED"
 	Risk       string // "L0" - "L5"
 	Approval   string // "AUTO" | "GRANTED" | "DENIED" | "TIMEOUT"
-	TokenID    string // Capability Token ID（仅在 Approval 通过时设置）
+	TokenID    string // Capability Token ID
+	TokenStr   string // Capability Token 字符串（JWT）
 }
 
 // auditEntry 审计记录。
@@ -231,6 +232,7 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 	}
 	if tokenStr != "" {
 		decision.TokenID = tokenID
+		decision.TokenStr = tokenStr
 	}
 	e.publishApproved(evt, decision)
 	e.recordAudit(auditEntry{
@@ -276,6 +278,7 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 	}
 	if tokenStr != "" {
 		decision.TokenID = tokenID
+		decision.TokenStr = tokenStr
 	}
 
 	// 构造包含 action_type 的事件用于 publishApproved
@@ -542,6 +545,7 @@ func (e *Engine) publishApproved(evt events.Event, d Decision) {
 	}
 	if d.TokenID != "" {
 		payload["token_id"] = d.TokenID
+		payload["token"] = d.TokenStr
 	}
 	e.publish(events.Event{
 		Type:    events.TypeActionApproved,
