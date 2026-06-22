@@ -205,10 +205,15 @@ func main() {
 		api.RemovePendingApproval(actionID)
 		return nil
 	})
-	// 将 Action 执行结果存入 API Handler
+	// 将 Action 执行结果存入 API Handler, 成功则标记 Goal 完成
 	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
 		if result, ok := evt.Payload["result"]; ok {
 			api.TrackResult(evt.GoalID, result)
+			if m, ok := result.(map[string]interface{}); ok {
+				if m["status"] == "success" {
+					api.UpdateGoalStatus(evt.GoalID, "已完成")
+				}
+			}
 		}
 		return nil
 	})

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"syscall"
@@ -81,7 +82,7 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 	errCh := make(chan error, 1)
 	go readStdout(stdout, resultCh, errCh)
 
-	// 发送 execute（不含 token）
+	log.Printf("[executor] sending execute: action=%s type=%s target_len=%d", action.ActionID, action.ActionType, len(action.Target))
 	writeJSON(stdin, map[string]interface{}{
 		"type":        "execute",
 		"action_id":   action.ActionID,

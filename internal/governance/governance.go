@@ -79,6 +79,10 @@ type pendingApproval struct {
 	goalID     string
 	actionID   string
 	actionType string
+	target     string
+	params     map[string]interface{}
+	requiredCaps []interface{}
+	timeoutSec   float64
 	timer      *time.Timer
 }
 
@@ -211,10 +215,18 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 
 		// 启动审批超时计时器（300s → ActionRejected("approval_timeout")）
 		e.pendingMu.Lock()
+		target, _ := evt.Payload["target"].(string)
+		params, _ := evt.Payload["params"].(map[string]interface{})
+		requiredCaps, _ := evt.Payload["required_capabilities"].([]interface{})
+		timeoutSec, _ := evt.Payload["timeout_seconds"].(float64)
 		e.pendingApprovals[actionID] = pendingApproval{
 			goalID:     evt.GoalID,
 			actionID:   actionID,
 			actionType: actionType,
+			target:     target,
+			params:     params,
+			requiredCaps: requiredCaps,
+			timeoutSec:   timeoutSec,
 			timer: time.AfterFunc(300*time.Second, func() {
 				e.handleApprovalTimeout(evt.GoalID, actionID, decision)
 			}),
@@ -291,8 +303,12 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 	approvedEvt := events.Event{
 		GoalID: evt.GoalID,
 		Payload: map[string]interface{}{
-			"action_id":   actionID,
-			"action_type": pending.actionType,
+			"action_id":             actionID,
+			"action_type":           pending.actionType,
+			"target":                pending.target,
+			"params":                pending.params,
+			"required_capabilities": pending.requiredCaps,
+			"timeout_seconds":       pending.timeoutSec,
 		},
 	}
 	e.publishApproved(approvedEvt, decision)

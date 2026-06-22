@@ -244,7 +244,9 @@ func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 		}
 		s.mu.Lock()
 		s.totalActions[evt.GoalID]++
+		t := s.totalActions[evt.GoalID]
 		s.mu.Unlock()
+		log.Printf("[Scheduler] set totalActions[%s]=%d", evt.GoalID, t)
 		s.publish(events.Event{
 			Type:   events.TypeActionScheduled,
 			GoalID: evt.GoalID,
@@ -382,12 +384,15 @@ func (s *Scheduler) handleRollbackRequested(evt events.Event) error {
 
 func (s *Scheduler) handleActionCompleted(evt events.Event) error {
 	actionID, _ := evt.Payload["action_id"].(string)
+	log.Printf("[Scheduler] ActionCompleted received: %s", actionID)
 	s.mu.Lock()
 	s.actionStates[actionID] = ActionCompleted
 	s.completedActions[evt.GoalID]++
 	total := s.totalActions[evt.GoalID]
-	allDone := total > 0 && s.completedActions[evt.GoalID] >= total
+	completed := s.completedActions[evt.GoalID]
+	allDone := total > 0 && completed >= total
 	s.mu.Unlock()
+	log.Printf("[Scheduler] ActionCompleted counts: goal=%s completed=%d total=%d allDone=%v", evt.GoalID, completed, total, allDone)
 
 	if allDone {
 		log.Printf("[Scheduler] GoalCompleted: %s (all %d actions done)", evt.GoalID, total)

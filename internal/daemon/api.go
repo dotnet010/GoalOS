@@ -114,16 +114,16 @@ func (h *Handler) HandleApprove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
-	_, ok := h.pendingApprovals[actionID]
+	pa, ok := h.pendingApprovals[actionID]
 	delete(h.pendingApprovals, actionID)
 	h.mu.Unlock()
 	if !ok {
 		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "审批不存在或已过期")
 		return
 	}
-	// 发布 UserApprovedAction 事件
+	// 发布 UserApprovedAction 事件（携带 goal_id）
 	if eventBus != nil {
-		eventBus.Publish(events.NewEvent(events.TypeUserApprovedAction, "", "api").WithPayload(map[string]interface{}{
+		eventBus.Publish(events.NewEvent(events.TypeUserApprovedAction, pa.GoalID, "api").WithPayload(map[string]interface{}{
 			"action_id": actionID,
 		}))
 	}
@@ -138,16 +138,16 @@ func (h *Handler) HandleReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.mu.Lock()
-	_, ok := h.pendingApprovals[actionID]
+	pa, ok := h.pendingApprovals[actionID]
 	delete(h.pendingApprovals, actionID)
 	h.mu.Unlock()
 	if !ok {
 		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "审批不存在或已过期")
 		return
 	}
-	// 发布 ActionCancelled 事件（模拟拒绝）
+	// 发布 ActionCancelled 事件（携带 goal_id）
 	if eventBus != nil {
-		eventBus.Publish(events.NewEvent(events.TypeActionCancelled, "", "api").WithPayload(map[string]interface{}{
+		eventBus.Publish(events.NewEvent(events.TypeActionCancelled, pa.GoalID, "api").WithPayload(map[string]interface{}{
 			"action_id": actionID,
 			"reason":    "user_rejected",
 		}))
