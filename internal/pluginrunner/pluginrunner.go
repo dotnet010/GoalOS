@@ -62,16 +62,32 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 
 	// Token 验证：如果 payload 含 token_id→校验签名和过期
 	if tokenStr, _ := evt.Payload["token"].(string); tokenStr != "" && len(r.secretKey) > 0 {
-		if _, err := governance.VerifyToken(tokenStr, r.secretKey); err != nil {
+		claims, err := governance.VerifyToken(tokenStr, r.secretKey)
+		if err != nil {
 			log.Printf("[PluginRunner] token verification failed: %v", err)
 			r.publish(events.Event{
-				Type:   events.TypeActionFailed,
-				GoalID: evt.GoalID,
-				Source: "plugin-runner",
+				Type:    events.TypeActionFailed,
+				GoalID:  evt.GoalID,
+				Source:  "plugin-runner",
 				Payload: map[string]interface{}{
 					"action_id":  actionID,
-					"error":      fmt.Sprintf("token verification failed: %v", err),
+					"error":      fmt.Sprintf("token: %v", err),
 					"error_type": "token_invalid",
+				},
+			})
+			return nil
+		}
+		// Token scope 检查：Token 授权的 capability 是否覆盖本次 action_type
+		if !tokenCoversAction(claims.Capabilities, actionType) {
+			log.Printf("[PluginRunner] token scope: %v does not cover %s", claims.Capabilities, actionType)
+			r.publish(events.Event{
+				Type:    events.TypeActionFailed,
+				GoalID:  evt.GoalID,
+				Source:  "plugin-runner",
+				Payload: map[string]interface{}{
+					"action_id":  actionID,
+					"error":      fmt.Sprintf("token scope: %v does not cover %s", claims.Capabilities, actionType),
+					"error_type": "token_scope_denied",
 				},
 			})
 			return nil
@@ -81,8 +97,19 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 	// 尝试真实子进程执行。失败→回退 stub（MVP）。
 	result, err := r.executeAction(evt)
 	if err != nil {
-		log.Printf("[PluginRunner] subprocess execution failed: %v — falling back to stub", err)
-		result = r.stubExecute(actionID, actionType)
+		log.Printf("[PluginRunner] execution failed: %v", err)
+		r.publish(events.Event{
+			Type:    events.TypeActionFailed,
+			GoalID:  evt.GoalID,
+			Source:  "plugin-runner",
+			Payload: map[string]interface{}{
+				"action_id": actionID,
+				"result":    map[string]interface{}{"status": "failure", "output": fmt.Sprintf("no plugin for: %s", actionType)},
+				"error":     fmt.Sprintf("execution failed: %v", err),
+				"error_type": "execution_error",
+			},
+		})
+		return nil
 	}
 
 	r.publish(events.Event{
@@ -154,13 +181,14 @@ type execResult struct {
 	durationMs int
 }
 
-func (r *Runner) stubExecute(actionID, actionType string) execResult {
-	return execResult{
-		eventType:  events.TypeActionFailed,
-		status:     "failure",
-		output:     fmt.Sprintf("no plugin binary for: %s", actionType),
-		durationMs: 0,
+// tokenCoversAction 检查 Token 授权的 capability 列表是否覆盖 actionType。
+func tokenCoversAction(capabilities []string, actionType string) bool {
+	for _, c := range capabilities {
+		if c == actionType {
+			return true
+		}
 	}
+	return false
 }
 
 func (r *Runner) publish(evt events.Event) {
