@@ -270,7 +270,7 @@ func (s *StubAgent) inferAction(goal string) (string, string) {
 func buildCreateCommand(goal string) string {
 	// 3D魔方 → 生成完整HTML文件
 	if containsAny(goal, "魔方", "3D", "三维") {
-		return `cat > ~/Goals/` + goalToFilename(goal) + ` << 'HTMLEOF'
+		return `cat > $HOME/Goals/` + goalToFilename(goal) + ` << 'HTMLEOF'
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>3D魔方</title>
 <style>*{margin:0;padding:0;box-sizing:border-box}body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:Arial}
@@ -302,7 +302,7 @@ animate();
 HTMLEOF`
 	}
 	// 通用代码生成
-	return `cat > ~/Goals/` + goalToFilename(goal) + ` << 'EOF'
+	return `cat > $HOME/Goals/` + goalToFilename(goal) + ` << 'EOF'
 # 根据目标生成的代码文件
 # 目标: ` + goal + `
 EOF`

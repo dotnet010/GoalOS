@@ -97,7 +97,7 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 	// 尝试真实子进程执行。失败→回退 stub（MVP）。
 	result, err := r.executeAction(evt)
 	if err != nil {
-		log.Printf("[PluginRunner] execution failed: %v", err)
+		log.Printf("[PluginRunner] execution error: %v", err)
 		r.publish(events.Event{
 			Type:    events.TypeActionFailed,
 			GoalID:  evt.GoalID,
@@ -111,6 +111,8 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 		})
 		return nil
 	}
+
+	log.Printf("[PluginRunner] result: type=%s status=%s output_len=%d", result.eventType, result.status, len(result.output))
 
 	r.publish(events.Event{
 		Type:   result.eventType,
