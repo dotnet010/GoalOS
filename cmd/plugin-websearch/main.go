@@ -80,7 +80,6 @@ type searchItem struct {
 
 const (
 	serperEndpoint  = "https://google.serper.dev/search"
-	serpapiEndpoint = "https://serpapi.com/search"
 	bingEndpoint    = "https://api.bing.microsoft.com/v7.0/search"
 	braveEndpoint   = "https://api.search.brave.com/res/v1/web/search"
 )
@@ -143,24 +142,12 @@ func runBingSearch(msg ipcMessage, start time.Time) {
 		return
 	}
 
-	// 优先 Serper.dev，其次 SerpAPI，然后 Brave Search，最后 Bing
+	// 优先 Serper.dev，其次 Brave Search，最后 Bing
 	if key := os.Getenv("SERPER_API_KEY"); key != "" {
 		results, err := callSerperAPI(query, key)
 		elapsed := int(time.Since(start).Milliseconds())
 		if err != nil {
 			writeResult(msg.ActionID, "failure", "", fmt.Sprintf("Serper: %v", err), elapsed)
-			return
-		}
-		output, _ := json.MarshalIndent(results, "", "  ")
-		writeResult(msg.ActionID, "success", string(output), "", elapsed)
-		return
-	}
-
-	if key := os.Getenv("SERPAPI_API_KEY"); key != "" {
-		results, err := callSerpAPI(query, key)
-		elapsed := int(time.Since(start).Milliseconds())
-		if err != nil {
-			writeResult(msg.ActionID, "failure", "", fmt.Sprintf("SerpAPI: %v", err), elapsed)
 			return
 		}
 		output, _ := json.MarshalIndent(results, "", "  ")
@@ -192,7 +179,7 @@ func runBingSearch(msg ipcMessage, start time.Time) {
 		return
 	}
 
-	writeResult(msg.ActionID, "failure", "", "no search API key set (SERPER_API_KEY, SERPAPI_API_KEY, BRAVE_API_KEY, or BING_API_KEY)", int(time.Since(start).Milliseconds()))
+	writeResult(msg.ActionID, "failure", "", "no search API key set (SERPER_API_KEY, BRAVE_API_KEY, or BING_API_KEY)", int(time.Since(start).Milliseconds()))
 }
 
 func callBingAPI(query, apiKey string) (*searchOutput, error) {
@@ -277,50 +264,6 @@ func callSerperAPI(query, apiKey string) (*searchOutput, error) {
 
 	output := &searchOutput{Query: query, Total: len(sResp.Organic)}
 	for _, r := range sResp.Organic {
-		output.Results = append(output.Results, searchItem{
-			Title:   r.Title,
-			Snippet: r.Snippet,
-			URL:     r.Link,
-		})
-	}
-	return output, nil
-}
-
-// ─── SerpAPI ───
-
-type serpapiResponse struct {
-	OrganicResults []serpapiResult `json:"organic_results"`
-}
-
-type serpapiResult struct {
-	Title   string `json:"title"`
-	Snippet string `json:"snippet"`
-	Link    string `json:"link"`
-}
-
-func callSerpAPI(query, apiKey string) (*searchOutput, error) {
-	reqURL := fmt.Sprintf("%s?q=%s&api_key=%s&engine=google&hl=zh-CN&num=10",
-		serpapiEndpoint, url.QueryEscape(query), url.QueryEscape(apiKey))
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Get(reqURL)
-	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("SerpAPI returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var serpResp serpapiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&serpResp); err != nil {
-		return nil, fmt.Errorf("parse: %w", err)
-	}
-
-	output := &searchOutput{Query: query}
-	output.Total = len(serpResp.OrganicResults)
-	for _, r := range serpResp.OrganicResults {
 		output.Results = append(output.Results, searchItem{
 			Title:   r.Title,
 			Snippet: r.Snippet,

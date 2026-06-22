@@ -1,46 +1,51 @@
 # GoalOS gitignore
 
-# 编译产物（仅根目录下的二进制）
+# ─── 编译产物 ───
 /goalos-daemon
 /goalos
+/goalos-cli
+/plugin-shell
+/plugin-websearch
 *.exe
 
-# IDE
+# ─── IDE ───
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# OS
+# ─── OS ───
 .DS_Store
 Thumbs.db
 
-# 临时文件
+# ─── 临时文件 ───
 /tmp/
 *.tmp
 *.log
 
-# Go
+# ─── Go ───
 vendor/
 
-# 测试
+# ─── 测试产物 ───
 *.test
 *.out
 coverage.txt
 
-# 用户数据（不提交到 git）
+# ─── 用户数据 ───
 ~/.goalos/
 ~/Goals/
-goalos-cli
 
-# 内部文档
+# ─── 内部文档（仅本地，不发布到 GitHub）───
 发布规范.md
 开发日志.md
 验收规范.md
+开发规范.md
 
-# 密钥与本地环境
+# ─── 密钥与本地配置 ───
 .env
+RELEASE.md
+upload-release.sh
 
-# Plugin 二进制（仅根目录）
-/plugin-shell
+# ─── Plugin 二进制（CI 构建，不提交源码仓库）───
 /plugins/capability/*/plugin-shell
+/plugins/capability/*/plugin-websearch
