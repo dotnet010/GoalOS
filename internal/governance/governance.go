@@ -58,9 +58,10 @@ type auditEntry struct {
 // Engine is the Governance Layer — Execution Gate.
 type Engine struct {
 	bus             *eventbus.EventBus
-	capRegistry     map[string][]string // pluginName → declared_capabilities
+	capRegistry     map[string][]string
 	policy          []PolicyRule
 	secretKey       []byte
+	autonomyLevel   string // "autonomous"→自动放行L3+
 	seq             int
 
 	// Audit Engine: ring buffer (1000 entries) + async flush
@@ -115,6 +116,11 @@ func New(bus *eventbus.EventBus, secretKey []byte) *Engine {
 	return e
 }
 
+// SetAutonomyLevel 设置自治等级。autonomous→L3+自动放行。
+func (e *Engine) SetAutonomyLevel(level string) {
+	e.autonomyLevel = level
+}
+
 // Start subscribes to events and begins processing.
 func (e *Engine) Start() {
 	e.bus.Subscribe(events.TypeActionScheduled, e.handleActionScheduled)
@@ -149,7 +155,7 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 	riskLevel := e.evaluateRisk(actionType)
 
 	// Step 5: Approval Engine — trigger if L3+
-	needsApproval := riskLevel >= "L3" || policyResult == "APPROVAL_REQUIRED"
+	needsApproval := (riskLevel >= "L3" || policyResult == "APPROVAL_REQUIRED") && e.autonomyLevel != "autonomous"
 
 	decision := Decision{
 		Policy:     policyResult,

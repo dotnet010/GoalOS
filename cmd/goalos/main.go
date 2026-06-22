@@ -110,6 +110,7 @@ func main() {
 		log.Printf(`{"level":"WARN","ts":"%s","msg":"Step 7: secret key load failed, tokens disabled: %v"}`, time.Now().Format(time.RFC3339), err)
 	}
 	gov := governance.New(bus, secretKey)
+	gov.SetAutonomyLevel(cfg.Daemon.AutonomyLevel)
 	gov.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered (5 engines)"}`, time.Now().Format(time.RFC3339))
 
