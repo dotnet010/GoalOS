@@ -27,6 +27,8 @@ type Scheduler struct {
 	totalActions     map[string]int        // goalID → 总 Action 数
 	actionStates     map[string]ActionStatus // actionID → 当前 Action 状态
 	verificationAttempts map[string]int    // actionID → 验证重试次数 (max 3)
+	goalTimers       map[string]*time.Timer // goalID → 30s 超时检测
+	goalProgressed   map[string]bool       // goalID → 是否有 Action 进展
 }
 
 // New creates a Scheduler.
@@ -39,6 +41,8 @@ func New(bus *eventbus.EventBus, store *statestore.Store, goalAnchor *GoalAnchor
 		totalActions:         make(map[string]int),
 		actionStates:         make(map[string]ActionStatus),
 		verificationAttempts: make(map[string]int),
+		goalTimers:           make(map[string]*time.Timer),
+		goalProgressed:       make(map[string]bool),
 	}
 }
 
@@ -117,6 +121,27 @@ func (s *Scheduler) handleActionFailed(evt events.Event) error {
 
 func (s *Scheduler) handleGoalCreated(evt events.Event) error {
 	log.Printf("[Scheduler] GoalCreated: %s", evt.GoalID)
+
+	// 30s 超时检测：若无任何 Action 进展→Goal→Failed。防止用户得不到反馈
+	s.mu.Lock()
+	s.goalProgressed[evt.GoalID] = false
+	s.goalTimers[evt.GoalID] = time.AfterFunc(30*time.Second, func() {
+		s.mu.Lock()
+		progressed := s.goalProgressed[evt.GoalID]
+		s.mu.Unlock()
+		if !progressed {
+			log.Printf("[Scheduler] Goal %s: 30s timeout — no action progress, marking failed", evt.GoalID)
+			s.publish(events.Event{
+				Type:   events.TypeGoalCompleted,
+				GoalID: evt.GoalID,
+				Source: "scheduler",
+				Payload: map[string]interface{}{
+					"reason": "timeout: 30s 内无 Action 进展",
+				},
+			})
+		}
+	})
+	s.mu.Unlock()
 
 	// GoalAnchor: 每次 LLM 规划调用计数器+1。达阈值时注入 goal_anchor_check
 	goalText, _ := evt.Payload["title"].(string)
@@ -208,6 +233,8 @@ func (s *Scheduler) handleActionScheduled(evt events.Event) error {
 	actionID, _ := evt.Payload["action_id"].(string)
 	s.mu.Lock()
 	s.actionStates[actionID] = ActionScheduled
+	s.goalProgressed[evt.GoalID] = true // 标记进展，取消超时
+	if t, ok := s.goalTimers[evt.GoalID]; ok { t.Stop(); delete(s.goalTimers, evt.GoalID) }
 	s.mu.Unlock()
 	log.Printf("[Scheduler] ActionScheduled: %s state=Scheduled", actionID)
 	return nil

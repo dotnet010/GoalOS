@@ -124,6 +124,7 @@ func (h *Handler) HandleCreateGoal(w http.ResponseWriter, r *http.Request) {
 		}))
 	}
 
+	w.Header().Set("Location", "/api/goals/"+goalID)
 	writeJSON(w, http.StatusCreated, map[string]string{
 		"goal_id": goalID,
 		"status":  "created",

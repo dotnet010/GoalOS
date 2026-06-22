@@ -21,8 +21,11 @@ jobs:
         with:
           go-version: "1.23"
 
-      - name: Run tests
-        run: go test -count=1 -timeout 120s -v ./...
+      - name: Vet
+        run: go vet ./...
+
+      - name: Run tests (with race)
+        run: go test -count=1 -timeout 120s -race -v ./...
 
   release:
     needs: test
