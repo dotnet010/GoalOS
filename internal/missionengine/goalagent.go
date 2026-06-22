@@ -98,9 +98,13 @@ func cleanLLMJSON(raw string) string {
 	}
 	if end == -1 { return "" }
 	s = s[start : end+1]
-	// 3. 去掉 trailing comma（},] 前的逗号）
+	// 3. 去掉 trailing comma + 杂散括号
 	s = strings.ReplaceAll(s, ",}", "}")
 	s = strings.ReplaceAll(s, ",]", "]")
+	s = strings.ReplaceAll(s, ", }", "}")
+	s = strings.ReplaceAll(s, ", ]", "]")
+	s = strings.ReplaceAll(s, "\n}", "}")
+	s = strings.ReplaceAll(s, "\n]", "]")
 	// 3b. 替换常见 Unicode 引号（LLM 经常输出 smart quotes）
 	s = strings.ReplaceAll(s, "“", `"`) // "
 	s = strings.ReplaceAll(s, "”", `"`) // "

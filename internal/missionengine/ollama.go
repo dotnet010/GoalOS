@@ -29,7 +29,7 @@ func NewOllamaClient(model string) *OllamaClient {
 
 // Chat 调用 LLM，返回响应文本。实现 LLMClient 接口。
 func (o *OllamaClient) Chat(systemPrompt string, userMessage string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
 
 	resp, err := o.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
@@ -38,7 +38,7 @@ func (o *OllamaClient) Chat(systemPrompt string, userMessage string) (string, er
 			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
 			{Role: openai.ChatMessageRoleUser, Content: userMessage},
 		},
-		MaxTokens: 2048,
+		MaxTokens: 8192,
 	})
 	if err != nil {
 		return "", fmt.Errorf("ollama: %w", err)
