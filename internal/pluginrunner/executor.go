@@ -10,135 +10,161 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"syscall"
 	"time"
 )
 
-// ExecConfig 是子进程执行配置。
+// ExecConfig 子进程执行配置。
 type ExecConfig struct {
-	BinaryPath string        // 可执行文件路径
-	Args       []string      // 命令行参数
-	WorkDir    string        // 工作目录（~/Goals/<目标名>/）
-	TmpDir     string        // 临时目录（/tmp/goalos/<action_id>/）
-	Timeout    time.Duration // 执行超时
+	BinaryPath string
+	Args       []string
+	WorkDir    string
+	TmpDir     string
+	Timeout    time.Duration
 }
 
-// ExecResult 是子进程执行结果。
+// ExecResult 子进程执行结果。
 type ExecResult struct {
-	ActionID  string `json:"action_id"`
-	Status    string `json:"status"`    // "success" | "failure"
-	Output    string `json:"output"`    // 人类可读输出
-	Error     string `json:"error"`     // 错误描述
-	DurationMs int  `json:"cost_ms"`    // 执行耗时（毫秒）
+	ActionID   string `json:"action_id"`
+	Status     string `json:"status"`
+	Output     string `json:"output"`
+	Error      string `json:"error"`
+	DurationMs int    `json:"cost_ms"`
 }
 
-// Execute 启动子进程并执行 Action。
-// 通过 stdin/stdout JSON 行协议与子进程通信。
-// 超时→SIGTERM→5s→SIGKILL。子进程崩溃不影响 daemon。
+// Execute 启动子进程，通过 stdin/stdout JSON 行协议通信。
 func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
-	// 调试：确认二进制文件在 exec 前存在
-	if info, err := os.Stat(cfg.BinaryPath); err != nil {
-		log.Printf("[executor] PRE-EXEC STAT FAIL: %s: %v", cfg.BinaryPath, err)
-	} else {
-		log.Printf("[executor] PRE-EXEC STAT OK: %s (size=%d, mode=%v)", cfg.BinaryPath, info.Size(), info.Mode())
-	}
 	cmd := exec.Command(cfg.BinaryPath, cfg.Args...)
 	if cfg.WorkDir != "" {
 		cmd.Dir = cfg.WorkDir
 	}
-	// 设置子进程环境
 	cmd.Env = append(os.Environ(),
 		"GOALOS_WORKSPACE="+cfg.WorkDir,
 		"GOALOS_TMP="+cfg.TmpDir,
 	)
 
-	// 获取 stdin/stdout 管道
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, fmt.Errorf("executor: stdin pipe 失败: %w", err)
+		return nil, fmt.Errorf("executor: stdin pipe: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("executor: stdout pipe 失败: %w", err)
+		return nil, fmt.Errorf("executor: stdout pipe: %w", err)
 	}
 
-	// 平台安全加固（seccomp/NO_NEW_PRIVS/进程组隔离）
 	sanitizeChildProcess(cmd)
 
-	// 确保 WorkDir 存在
 	if cfg.WorkDir != "" {
 		if err := os.MkdirAll(cfg.WorkDir, 0755); err != nil {
-			return nil, fmt.Errorf("executor: 创建工作目录失败: %w", err)
+			return nil, fmt.Errorf("executor: mkdir: %w", err)
 		}
 	}
 
-	// 启动子进程
 	startTime := time.Now()
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("executor: 启动子进程失败: %w", err)
+		return nil, fmt.Errorf("executor: start: %w", err)
 	}
 
-	// 发送 InitMessage
-	initMsg := map[string]interface{}{
+	// 发送 init
+	writeJSON(stdin, map[string]interface{}{
 		"type":         "init",
-		"config":       map[string]interface{}{},
 		"capabilities": action.RequiredCapabilities,
 		"workspace":    cfg.WorkDir,
 		"tmp":          cfg.TmpDir,
-	}
-	if err := writeJSON(stdin, initMsg); err != nil {
-		cmd.Process.Kill()
-		return nil, fmt.Errorf("executor: 发送 init 失败: %w", err)
-	}
+	})
 
-	// 发送 ExecuteMessage（不含 token——R226 daemon 侧验证）
-	execMsg := map[string]interface{}{
+	// 在发送 execute 之前启动 stdout 读取 goroutine
+	resultCh := make(chan *ExecResult, 1)
+	errCh := make(chan error, 1)
+	go readStdout(stdout, resultCh, errCh)
+
+	// 发送 execute（不含 token）
+	writeJSON(stdin, map[string]interface{}{
 		"type":        "execute",
 		"action_id":   action.ActionID,
 		"action_type": action.ActionType,
 		"target":      action.Target,
 		"params":      action.Params,
 		"timeout_ms":  cfg.Timeout.Milliseconds(),
-	}
-	if err := writeJSON(stdin, execMsg); err != nil {
-		cmd.Process.Kill()
-		return nil, fmt.Errorf("executor: 发送 execute 失败: %w", err)
+	})
+
+	// 等待结果
+	var result *ExecResult
+	select {
+	case r := <-resultCh:
+		result = r
+	case e := <-errCh:
+		return nil, e
+	case <-time.After(cfg.Timeout):
+		cmd.Process.Signal(syscall.SIGTERM)
+		select {
+		case r := <-resultCh:
+			result = r
+		case <-time.After(5 * time.Second):
+			cmd.Process.Kill()
+			return nil, fmt.Errorf("executor: timeout (%v)", cfg.Timeout)
+		}
 	}
 
-	// 读取子进程响应（带超时）
-	result, err := readResult(cmd, stdout, cfg.Timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	// 发送 ShutdownMessage
-	shutdownMsg := map[string]interface{}{
+	// 发送 shutdown，等待退出
+	writeJSON(stdin, map[string]interface{}{
 		"type":   "shutdown",
 		"reason": "completed",
-	}
-	writeJSON(stdin, shutdownMsg)
+	})
 	stdin.Close()
-
-	// 等待子进程退出
 	cmd.Wait()
 
 	result.DurationMs = int(time.Since(startTime).Milliseconds())
 	return result, nil
 }
 
-// ActionRequest 是发送给子进程的 Action 描述。
-type ActionRequest struct {
-	ActionID             string   `json:"action_id"`
-	ActionType           string   `json:"action_type"`
-	Target               string   `json:"target"`
-	Params               map[string]interface{} `json:"params"`
-	RequiredCapabilities []string `json:"required_capabilities"`
+// readStdout 从 stdout 读取子进程返回的 ResultMessage。
+func readStdout(stdout io.Reader, resultCh chan<- *ExecResult, errCh chan<- error) {
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 65536), 65536)
+	for scanner.Scan() {
+		var msg map[string]interface{}
+		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
+			continue
+		}
+		msgType, _ := msg["type"].(string)
+		switch msgType {
+		case "result":
+			r := &ExecResult{ActionID: str(msg["action_id"]), Status: str(msg["status"])}
+			if v, ok := msg["output"].(string); ok {
+				r.Output = v
+			}
+			if v, ok := msg["error"].(string); ok {
+				r.Error = v
+			}
+			resultCh <- r
+			return
+		case "error":
+			errCh <- fmt.Errorf("plugin error: %v", msg["message"])
+			return
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		errCh <- fmt.Errorf("stdout read: %w", err)
+	}
 }
 
-// writeJSON 写入一条完整的 JSON 行消息到 stdin。
+func str(v interface{}) string {
+	s, _ := v.(string)
+	return s
+}
+
+// ActionRequest 发送给子进程的 Action 描述。
+type ActionRequest struct {
+	ActionID             string
+	ActionType           string
+	Target               string
+	Params               map[string]interface{}
+	RequiredCapabilities []string
+}
+
 func writeJSON(w io.Writer, v interface{}) error {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -147,61 +173,4 @@ func writeJSON(w io.Writer, v interface{}) error {
 	data = append(data, '\n')
 	_, err = w.Write(data)
 	return err
-}
-
-// readResult 从 stdout 读取子进程返回的 ResultMessage。
-// 超时时发送 SIGTERM→SIGKILL。
-func readResult(cmd *exec.Cmd, stdout io.Reader, timeout time.Duration) (*ExecResult, error) {
-	done := make(chan *ExecResult, 1)
-	errCh := make(chan error, 1)
-
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			var msg map[string]interface{}
-			if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
-				continue // 跳过非 JSON 行
-			}
-			msgType, _ := msg["type"].(string)
-			if msgType == "result" {
-				result := &ExecResult{
-					ActionID: msg["action_id"].(string),
-					Status:   msg["status"].(string),
-				}
-				if v, ok := msg["output"].(string); ok {
-					result.Output = v
-				}
-				if v, ok := msg["error"].(string); ok {
-					result.Error = v
-				}
-				done <- result
-				return
-			}
-			if msgType == "error" {
-				errCh <- fmt.Errorf("子进程错误: %v", msg["message"])
-				return
-			}
-		}
-		if err := scanner.Err(); err != nil {
-			errCh <- fmt.Errorf("stdout 读取错误: %w", err)
-		}
-	}()
-
-	select {
-	case result := <-done:
-		return result, nil
-	case err := <-errCh:
-		return nil, err
-	case <-time.After(timeout):
-		// 超时→SIGTERM
-		cmd.Process.Signal(syscall.SIGTERM)
-		// 5s 后如果仍未退出→SIGKILL
-		select {
-		case result := <-done:
-			return result, nil
-		case <-time.After(5 * time.Second):
-			cmd.Process.Kill()
-			return nil, fmt.Errorf("executor: 子进程超时（%v），已强制终止", timeout)
-		}
-	}
 }

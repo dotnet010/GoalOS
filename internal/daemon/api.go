@@ -160,6 +160,10 @@ func (h *Handler) HandleListGoals(w http.ResponseWriter, r *http.Request) {
 
 	goals := make([]*GoalRecord, 0, len(h.Goals))
 	for _, g := range h.Goals {
+		// Merge action result into goal record
+		if result, exists := h.actionResults[g.ID]; exists {
+			g.Result = result
+		}
 		goals = append(goals, g)
 	}
 	writeJSON(w, http.StatusOK, goals)
