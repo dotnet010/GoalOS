@@ -52,26 +52,28 @@ func (g *GoalAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
 // buildSystemPrompt 构建 system prompt。
 // Layer 1 Immutable：GoalOS 系统指令 + 角色描述。
 func (g *GoalAgent) buildSystemPrompt(ctx Context) string {
-	prompt := `你是 GoalOS 的智能规划引擎。你的任务是将用户的目标拆解为可执行的任务图（MissionGraph）。
+	prompt := `你是 GoalOS 的智能规划引擎。将用户目标拆解为可执行任务图。
 
 ## 输出格式
-你必须输出合法的 JSON：
+合法 JSON：
 {
   "nodes": [
-    {"id": "1", "type": "mission", "description": "任务描述"},
-    {"id": "2", "type": "mission", "description": "任务描述"}
+    {"id": "1", "type": "mission", "description": "描述", "action_type": "shell.execute", "target": "要执行的命令"}
   ],
-  "edges": [
-    {"from": "1", "to": "2", "type": "sequential"}
-  ]
+  "edges": [{"from": "1", "to": "2", "type": "sequential"}]
 }
 
+## action_type 选项
+- "shell.execute": 运行 shell 命令（创建文件/安装依赖/执行代码）
+- "web.search": 搜索信息
+- "fs.write": 写入文件
+
 ## 规则
-- 每个 node 的 type 必须是 "mission"
-- 每个 edge 的 type 必须是 "sequential" 或 "parallel"
-- 任务描述使用中文。简洁清晰
-- 3-7 个节点为佳。不要过于细碎
-- 不产出可执行代码——只做规划`
+- type="mission"（必填）
+- action_type 和 target 必须填。target 是传给 Plugin 的具体指令
+- 代码生成任务：用 shell.execute，target 包含完整命令
+- 3-5 个节点。不要过于细碎
+- 只做规划，不输出代码正文`
 
 	if ctx.AnchorCheck {
 		prompt += "\n\n## GoalAnchor 检查\n请对照原始目标检查当前路径是否偏离。如果需要纠正——在 nodes 的第一个节点中注明纠正措施。"
@@ -99,6 +101,8 @@ func (g *GoalAgent) parseResponse(response string) (*MissionGraph, error) {
 			ID          string `json:"id"`
 			Type        string `json:"type"`
 			Description string `json:"description"`
+			ActionType  string `json:"action_type"`
+			Target      string `json:"target"`
 		} `json:"nodes"`
 		Edges []struct {
 			From string `json:"from"`
@@ -115,7 +119,10 @@ func (g *GoalAgent) parseResponse(response string) (*MissionGraph, error) {
 
 	nodes := make([]GraphNode, len(parsed.Nodes))
 	for i, n := range parsed.Nodes {
-		nodes[i] = GraphNode{ID: n.ID, Type: n.Type, Description: n.Description}
+		nodes[i] = GraphNode{
+			ID: n.ID, Type: n.Type, Description: n.Description,
+			ActionType: n.ActionType, Target: n.Target,
+		}
 	}
 	edges := make([]GraphEdge, len(parsed.Edges))
 	for i, e := range parsed.Edges {

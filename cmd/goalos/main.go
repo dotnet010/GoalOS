@@ -118,14 +118,20 @@ func main() {
 	_ = ctxEng
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 8: Context Engine registered"}`, time.Now().Format(time.RFC3339))
 
-	// Step 9: Register Mission Engine。默认 StubAgent；配置 LLM Provider 后使用 GoalAgent。
+	// Step 9: Register Mission Engine。Ollama 可用时用 GoalAgent，否则用 StubAgent。
 	var agent missionengine.Agent = missionengine.NewStubAgent()
-	if cfg.LLM.Provider != "" && cfg.LLM.APIKeyEnv != "" {
-		agent = missionengine.NewStubAgent() // GoalAgent 待 LLMClient 实例化后启用
+	agentName := "StubAgent"
+	if ollamaModel := os.Getenv("OLLAMA_MODEL"); ollamaModel != "" {
+		ollama := missionengine.NewOllamaClient(ollamaModel)
+		agent = missionengine.NewGoalAgent(ollama)
+		agentName = "GoalAgent+Ollama(" + ollamaModel + ")"
+	} else if cfg.LLM.Provider != "" && cfg.LLM.APIKeyEnv != "" {
+		// 未来：any-llm-go 接入点
+		agentName = "StubAgent (LLM configured but client not wired)"
 	}
 	missionEng := missionengine.New(bus, agent)
 	missionEng.Start()
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (StubAgent)"}`, time.Now().Format(time.RFC3339))
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (%s)"}`, time.Now().Format(time.RFC3339), agentName)
 
 	// Step 10: Register Plugin Runner (扫描 plugins/ 目录，加载 Plugins)
 	runner := pluginrunner.New(bus, secretKey)
