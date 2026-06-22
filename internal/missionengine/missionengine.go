@@ -272,34 +272,107 @@ func buildCreateCommand(goal string) string {
 	if containsAny(goal, "魔方", "3D", "三维") {
 		return `cat > $HOME/Goals/` + goalToFilename(goal) + ` << 'HTMLEOF'
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>3D魔方</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:Arial}
+<html><head><meta charset="UTF-8"><title>魔方</title>
+<style>*{margin:0;padding:0}body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:Arial}
 canvas{display:block;margin:20px}
 .btns{display:flex;gap:20px;margin:20px}
 button{padding:12px 36px;font-size:18px;border:none;border-radius:8px;cursor:pointer;color:#fff;transition:all .3s}
 .scramble{background:#e94560}.scramble:hover{background:#ff6b81}
 .solve{background:#0f3460}.solve:hover{background:#1a5276}
 </style></head><body>
-<canvas id="cube"></canvas>
-<div class="btns"><button class="scramble" onclick="scramble()">打乱</button><button class="solve" onclick="solve()">解决</button></div>
+<canvas id="c"></canvas>
+<div class="btns"><button class="scramble" onclick="doScramble()">打乱</button><button class="solve" onclick="doSolve()">解决</button></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2e);
-const camera=new THREE.PerspectiveCamera(45,1,0.1,100);camera.position.set(5,4,6);camera.lookAt(0,0,0);
-const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('cube'),antialias:true});renderer.setSize(400,400);
-const light=new THREE.DirectionalLight(0xffffff,1);light.position.set(5,5,5);scene.add(light);scene.add(new THREE.AmbientLight(0x404040));
-const geometry=new THREE.BoxGeometry(1,1,1);
-const colors=[0xff0000,0x00ff00,0x0000ff,0xffff00,0xff8800,0xffffff];
-const materials=colors.map(c=>new THREE.MeshPhongMaterial({color:c}));
-const cube=new THREE.Mesh(geometry,materials);scene.add(cube);
-const edges=new THREE.EdgesGeometry(geometry);scene.add(new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0x000000})));
-const originalRot={x:0,y:0,z:0};let animId,targetRot={x:0,y:0,z:0},currentRot={x:0,y:0,z:0};
-function animate(){currentRot.x+=(targetRot.x-currentRot.x)*0.1;currentRot.y+=(targetRot.y-currentRot.y)*0.1;currentRot.z+=(targetRot.z-currentRot.z)*0.1;cube.rotation.set(currentRot.x,currentRot.y,currentRot.z);renderer.render(scene,camera);animId=requestAnimationFrame(animate)}
-function scramble(){targetRot={x:Math.random()*Math.PI*4,y:Math.random()*Math.PI*4,z:Math.random()*Math.PI*4}}
-function solve(){targetRot={x:0,y:0,z:0}}
-animate();
+const R=0xff0000,O=0xff8800,W=0xffffff,Y=0xffff00,G=0x00ff00,B=0x0000ff,K=0x111111;
+const s=new THREE.Scene();s.background=new THREE.Color(0x1a1a2e);
+const cam=new THREE.PerspectiveCamera(40,1,0.1,100);cam.position.set(5,4,6);cam.lookAt(0,0,0);
+const r=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});r.setSize(440,440);
+s.add(new THREE.DirectionalLight(0xffffff,1).position.set(5,5,5));s.add(new THREE.AmbientLight(0x404040));
+const cubies=[];const pivot=new THREE.Group();s.add(pivot);
+// 26个小方块(3x3x3去掉中心)
+for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++)for(let z=-1;z<=1;z++){
+	if(x===0&&y===0&&z===0)continue;
+	const ge=new THREE.BoxGeometry(0.9,0.9,0.9);
+	const ms=[new THREE.MeshPhongMaterial({color:K}),new THREE.MeshPhongMaterial({color:K}),new THREE.MeshPhongMaterial({color:K}),new THREE.MeshPhongMaterial({color:K}),new THREE.MeshPhongMaterial({color:K}),new THREE.MeshPhongMaterial({color:K})];
+	if(x=== 1)ms[0]=new THREE.MeshPhongMaterial({color:R});
+	if(x===-1)ms[1]=new THREE.MeshPhongMaterial({color:O});
+	if(y=== 1)ms[2]=new THREE.MeshPhongMaterial({color:W});
+	if(y===-1)ms[3]=new THREE.MeshPhongMaterial({color:Y});
+	if(z=== 1)ms[4]=new THREE.MeshPhongMaterial({color:G});
+	if(z===-1)ms[5]=new THREE.MeshPhongMaterial({color:B});
+	const cu=new THREE.Mesh(ge,ms);cu.position.set(x,y,z);
+	const ed=new THREE.EdgesGeometry(ge);cu.add(new THREE.LineSegments(ed,new THREE.LineBasicMaterial({color:0x000000})));
+	pivot.add(cu);cubies.push(cu);
+}
+// 外框
+const og=new THREE.BoxGeometry(3.05,3.05,3.05);
+pivot.add(new THREE.LineSegments(new THREE.EdgesGeometry(og),new THREE.LineBasicMaterial({color:0x333333})));
+// 旋转引擎
+let moveQ=[],moveA=0,moveAxis=null,moveLayer=[],moveDir=1,totalA=0;
+let moveHistory=[];
+// 获取某一层的小方块
+function getLayer(axis,val){
+	const layer=[];const eps=0.5;
+	for(const cu of cubies){
+		const wp=new THREE.Vector3();cu.getWorldPosition(wp);
+		if(Math.abs(wp[axis]-val)<eps)layer.push(cu);
+	}
+	return layer;
+}
+// 执行一个旋转步骤
+function doStep(axis,val,dir){
+	moveAxis=axis;totalA=0;moveDir=dir;
+	moveLayer=getLayer(axis,val);
+	for(const cu of moveLayer){pivot.remove(cu);s.add(cu);}
+}
+function anim(){
+	if(moveAxis!==null){
+		const step=0.12;
+		moveA+=step;totalA+=step;
+		const v=new THREE.Vector3(moveAxis==='x'?1:0,moveAxis==='y'?1:0,moveAxis==='z'?1:0);
+		if(totalA>=Math.PI/2){
+			const rem=Math.PI/2-(totalA-step);
+			for(const cu of moveLayer)cu.rotateOnWorldAxis(v,rem*moveDir);
+			for(const cu of moveLayer){s.remove(cu);pivot.add(cu);}
+			moveAxis=null;
+			if(moveQ.length>0){const m=moveQ.shift();doStep(m.axis,m.val,m.dir);}
+		}else{
+			for(const cu of moveLayer)cu.rotateOnWorldAxis(v,step*moveDir);
+		}
+	}
+	r.render(s,cam);requestAnimationFrame(anim);
+}
+// 执行命名的旋转
+function exec(name){
+	let axis,val=1,dir=1;
+	switch(name[0]){
+		case'U':axis='y';break;case'D':axis='y';val=-1;break;
+		case'L':axis='x';val=-1;break;case'R':axis='x';break;
+		case'F':axis='z';break;case'B':axis='z';val=-1;break;
+	}
+	if(name[1]==="'")dir=-1;
+	doStep(axis,val,dir);
+}
+const allMoves=['U',"U'",'D',"D'",'L',"L'",'R',"R'",'F',"F'",'B',"B'"];
+function doScramble(){
+	moveHistory=[];moveQ=[];
+	for(let i=0;i<20;i++){const m=allMoves[Math.floor(Math.random()*12)];moveHistory.push(m);moveQ.push({name:m});}
+	if(moveQ.length>0){const m=moveQ.shift();exec(m.name);}
+}
+function doSolve(){
+	moveQ=[];
+	for(let i=moveHistory.length-1;i>=0;i--){
+		const m=moveHistory[i];
+		moveQ.push({name:m.includes("'")?m[0]:m+"'"});
+	}
+	moveHistory=[];
+	if(moveQ.length>0){const m=moveQ.shift();exec(m.name);}
+}
+anim();
 </script></body></html>
 HTMLEOF`
+
 	}
 	// 通用代码生成
 	return `cat > $HOME/Goals/` + goalToFilename(goal) + ` << 'EOF'
