@@ -14,3 +14,6 @@ func ApplySeccomp(profile *SeccompProfile) error {
 
 // applySeccompToChild 非 Linux/macOS 平台无 seccomp。
 func applySeccompToChild(cmd *exec.Cmd, profile *SeccompProfile) {}
+
+// sanitizeChildProcess 非 Linux/macOS 平台基础进程隔离。
+func sanitizeChildProcess(cmd *exec.Cmd) {}
