@@ -42,7 +42,7 @@ func Default() *Config {
 	return &Config{
 		Daemon: DaemonConfig{
 			Port:            18920,
-			AutonomyLevel:   "autonomous", // MVP: 无 Watcher UI，所有风险等级自动放行
+			AutonomyLevel:   "approve",
 			IdleTimeout:     5 * time.Minute,
 			ShutdownTimeout: 5 * time.Second,
 		},

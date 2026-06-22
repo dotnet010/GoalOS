@@ -182,7 +182,29 @@ func main() {
 		sse.Push("GoalCompleted", evt.Payload)
 		return nil
 	})
-	bus.Subscribe("ActionPendingApproval", func(evt events.Event) error { sse.Push("ActionPendingApproval", evt.Payload); return nil })
+	bus.Subscribe("ActionPendingApproval", func(evt events.Event) error {
+		sse.Push("ActionPendingApproval", evt.Payload)
+		actionID, _ := evt.Payload["action_id"].(string)
+		actionType, _ := evt.Payload["action_description"].(string)
+		riskLevel, _ := evt.Payload["risk_level"].(string)
+		timeout, _ := evt.Payload["timeout_seconds"].(float64)
+		api.TrackPendingApproval(daemon.PendingApproval{
+			ActionID: actionID, GoalID: evt.GoalID, ActionType: actionType,
+			RiskLevel: riskLevel, TimeoutSeconds: int(timeout),
+			ActionDescription: fmt.Sprintf("风险等级 %s 的操作需要人工审批", riskLevel),
+		})
+		return nil
+	})
+	bus.Subscribe(events.TypeActionApproved, func(evt events.Event) error {
+		actionID, _ := evt.Payload["action_id"].(string)
+		api.RemovePendingApproval(actionID)
+		return nil
+	})
+	bus.Subscribe(events.TypeActionRejected, func(evt events.Event) error {
+		actionID, _ := evt.Payload["action_id"].(string)
+		api.RemovePendingApproval(actionID)
+		return nil
+	})
 	// 将 Action 执行结果存入 API Handler
 	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
 		if result, ok := evt.Payload["result"]; ok {
@@ -222,6 +244,19 @@ func main() {
 		}
 	})
 	mux.HandleFunc("/api/system/status", api.HandleSystemStatus)
+	mux.HandleFunc("/api/approvals", api.HandleListApprovals)
+	mux.HandleFunc("/api/approvals/", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimPrefix(r.URL.Path, "/api/approvals/")
+		id = strings.Split(id, "/")[0]
+		r.SetPathValue("id", id)
+		if strings.HasSuffix(r.URL.Path, "/approve") {
+			api.HandleApprove(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/reject") {
+			api.HandleReject(w, r)
+		} else {
+			http.Error(w, `{"error":{"code":"INVALID_REQUEST","message":"unknown"}}`, http.StatusNotFound)
+		}
+	})
 	mux.HandleFunc("/api/system/stop", api.HandleDaemonStop)
 	mux.HandleFunc("/api/system/restart", api.HandleDaemonRestart)
 

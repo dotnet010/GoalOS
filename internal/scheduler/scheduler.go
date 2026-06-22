@@ -24,6 +24,7 @@ type Scheduler struct {
 	goalAnchor       *GoalAnchorTracker
 	mu               sync.Mutex
 	completedActions map[string]int        // goalID → 已完成 Action 数
+	failedActions    map[string]int        // goalID → 失败 Action 数
 	totalActions     map[string]int        // goalID → 总 Action 数
 	actionStates     map[string]ActionStatus // actionID → 当前 Action 状态
 	verificationAttempts map[string]int    // actionID → 验证重试次数 (max 3)
@@ -38,6 +39,7 @@ func New(bus *eventbus.EventBus, store *statestore.Store, goalAnchor *GoalAnchor
 		store:                store,
 		goalAnchor:           goalAnchor,
 		completedActions:     make(map[string]int),
+		failedActions:        make(map[string]int),
 		totalActions:         make(map[string]int),
 		actionStates:         make(map[string]ActionStatus),
 		verificationAttempts: make(map[string]int),
@@ -69,7 +71,28 @@ func (s *Scheduler) handleActionFailed(evt events.Event) error {
 
 	s.mu.Lock()
 	s.actionStates[actionID] = ActionFailed
+	if !recoverable {
+		s.failedActions[evt.GoalID]++
+	}
+	total := s.totalActions[evt.GoalID]
+	doneOrFailed := s.completedActions[evt.GoalID] + s.failedActions[evt.GoalID]
+	allResolved := total > 0 && doneOrFailed >= total
 	s.mu.Unlock()
+
+	if allResolved {
+		log.Printf("[Scheduler] GoalFailed: %s (all %d actions resolved, %d failed)", evt.GoalID, total, s.failedActions[evt.GoalID])
+		s.publish(events.Event{
+			Type:    events.TypeGoalCompleted,
+			GoalID:  evt.GoalID,
+			Source:  "scheduler",
+			Payload: map[string]interface{}{
+				"reason": fmt.Sprintf("all %d actions resolved, %d failed", total, s.failedActions[evt.GoalID]),
+			},
+		})
+		// 取消超时计时器
+		if t, ok := s.goalTimers[evt.GoalID]; ok { t.Stop(); delete(s.goalTimers, evt.GoalID) }
+		return nil
+	}
 
 	// seccomp 违规 → 直接 HumanIntervention。不重试（安全事件必须人工审查）。
 	if errorType == "seccomp_violation" {

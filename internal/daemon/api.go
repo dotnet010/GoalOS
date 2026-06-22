@@ -17,13 +17,25 @@ import (
 )
 
 // Handler 包含所有 HTTP 端点处理逻辑。
+// PendingApproval 待审批的 Action。
+type PendingApproval struct {
+	ActionID          string `json:"action_id"`
+	GoalID            string `json:"goal_id"`
+	ActionType        string `json:"action_type"`
+	RiskLevel         string `json:"risk_level"`
+	ActionDescription string `json:"description"`
+	TimeoutSeconds    int    `json:"timeout_seconds"`
+}
+
+// Handler 包含所有 HTTP 端点处理逻辑。
 type Handler struct {
-	Goals       map[string]*GoalRecord
-	actionResults map[string]interface{} // goalID → last action result
-	mu          sync.RWMutex
-	port        int
-	startTime   time.Time
-	onShutdown  func()
+	Goals            map[string]*GoalRecord
+	actionResults    map[string]interface{}
+	pendingApprovals map[string]PendingApproval // actionID → approval info
+	mu               sync.RWMutex
+	port             int
+	startTime        time.Time
+	onShutdown       func()
 }
 
 // SetPort 设置 daemon 端口号。
@@ -48,8 +60,9 @@ type GoalRecord struct {
 // NewHandler 创建一个 API Handler。
 func NewHandler() *Handler {
 	return &Handler{
-		Goals:         make(map[string]*GoalRecord),
-		actionResults: make(map[string]interface{}),
+		Goals:            make(map[string]*GoalRecord),
+		actionResults:    make(map[string]interface{}),
+		pendingApprovals: make(map[string]PendingApproval),
 	}
 }
 
@@ -66,6 +79,80 @@ func parseOutput(result interface{}) interface{} {
 		}
 	}
 	return m
+}
+
+// TrackPendingApproval 记录待审批 Action。
+func (h *Handler) TrackPendingApproval(pa PendingApproval) {
+	h.mu.Lock()
+	h.pendingApprovals[pa.ActionID] = pa
+	h.mu.Unlock()
+}
+
+// RemovePendingApproval 移除已处理的审批。
+func (h *Handler) RemovePendingApproval(actionID string) {
+	h.mu.Lock()
+	delete(h.pendingApprovals, actionID)
+	h.mu.Unlock()
+}
+
+// HandleListApprovals 列出待审批 Action。GET /api/approvals。
+func (h *Handler) HandleListApprovals(w http.ResponseWriter, r *http.Request) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	list := make([]PendingApproval, 0, len(h.pendingApprovals))
+	for _, pa := range h.pendingApprovals {
+		list = append(list, pa)
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// HandleApprove 批准 Action。POST /api/approvals/:id/approve。
+func (h *Handler) HandleApprove(w http.ResponseWriter, r *http.Request) {
+	actionID := r.PathValue("id")
+	if actionID == "" {
+		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "缺少 action id")
+		return
+	}
+	h.mu.Lock()
+	_, ok := h.pendingApprovals[actionID]
+	delete(h.pendingApprovals, actionID)
+	h.mu.Unlock()
+	if !ok {
+		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "审批不存在或已过期")
+		return
+	}
+	// 发布 UserApprovedAction 事件
+	if eventBus != nil {
+		eventBus.Publish(events.NewEvent(events.TypeUserApprovedAction, "", "api").WithPayload(map[string]interface{}{
+			"action_id": actionID,
+		}))
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "approved"})
+}
+
+// HandleReject 拒绝 Action。POST /api/approvals/:id/reject。
+func (h *Handler) HandleReject(w http.ResponseWriter, r *http.Request) {
+	actionID := r.PathValue("id")
+	if actionID == "" {
+		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "缺少 action id")
+		return
+	}
+	h.mu.Lock()
+	_, ok := h.pendingApprovals[actionID]
+	delete(h.pendingApprovals, actionID)
+	h.mu.Unlock()
+	if !ok {
+		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "审批不存在或已过期")
+		return
+	}
+	// 发布 ActionCancelled 事件（模拟拒绝）
+	if eventBus != nil {
+		eventBus.Publish(events.NewEvent(events.TypeActionCancelled, "", "api").WithPayload(map[string]interface{}{
+			"action_id": actionID,
+			"reason":    "user_rejected",
+		}))
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
 }
 
 // TrackResult 存储 Action 的执行结果。
