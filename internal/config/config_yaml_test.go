@@ -82,7 +82,7 @@ daemon:
 		t.Errorf("expected port=9999, got %d", cfg.Daemon.Port)
 	}
 	// 其余应保持默认
-	if cfg.Daemon.AutonomyLevel != "approve" {
+	if cfg.Daemon.AutonomyLevel != "autonomous" {
 		t.Errorf("autonomy should stay default=approve, got %s", cfg.Daemon.AutonomyLevel)
 	}
 	if cfg.LLM.Provider != "anthropic" {

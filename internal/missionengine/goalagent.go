@@ -86,29 +86,74 @@ func (g *GoalAgent) buildUserMessage(goal string) string {
 	return fmt.Sprintf("目标：%s\n请拆解为可执行的任务图。", goal)
 }
 
+// cleanLLMJSON 清理 LLM 输出的常见 JSON 格式问题。
+func cleanLLMJSON(raw string) string {
+	s := raw
+	// 1. 去掉 markdown 代码块
+	if idx := strings.Index(s, "```json"); idx != -1 {
+		s = s[idx+7:]
+		if end := strings.Index(s, "```"); end != -1 {
+			s = s[:end]
+		}
+	} else if idx := strings.Index(s, "```"); idx != -1 {
+		s = s[idx+3:]
+		if end := strings.Index(s, "```"); end != -1 {
+			s = s[:end]
+		}
+	}
+	// 2. 提取 { 到 }
+	start := strings.Index(s, "{")
+	end := strings.LastIndex(s, "}")
+	if start == -1 || end == -1 || start >= end {
+		return ""
+	}
+	s = s[start : end+1]
+	// 3. 去掉 trailing comma（},] 前的逗号）
+	s = strings.ReplaceAll(s, ",}", "}")
+	s = strings.ReplaceAll(s, ",]", "]")
+	// 4. 去掉 // 注释行
+	lines := strings.Split(s, "\n")
+	var clean []string
+	for _, line := range lines {
+		if idx := strings.Index(line, "//"); idx != -1 {
+			line = line[:idx]
+		}
+		line = strings.TrimSpace(line)
+		if line != "" {
+			clean = append(clean, line)
+		}
+	}
+	return strings.Join(clean, "\n")
+}
+
 // parseResponse 从 LLM 响应中解析 MissionGraph JSON。
 func (g *GoalAgent) parseResponse(response string) (*MissionGraph, error) {
-	// 提取 JSON 块（LLM 可能在 JSON 前后附加文字）
-	start := strings.Index(response, "{")
-	end := strings.LastIndex(response, "}")
-	if start == -1 || end == -1 || start >= end {
+	jsonStr := cleanLLMJSON(response)
+	if jsonStr == "" {
 		return nil, fmt.Errorf("响应中未找到 JSON")
 	}
-	jsonStr := response[start : end+1]
 
 	var parsed struct {
 		Nodes []struct {
-			ID          string `json:"id"`
-			Type        string `json:"type"`
-			Description string `json:"description"`
-			ActionType  string `json:"action_type"`
-			Target      string `json:"target"`
+			ID          interface{} `json:"id"`   // 容错：接受 string 或 number
+			Type        string      `json:"type"`
+			Description string      `json:"description"`
+			ActionType  string      `json:"action_type"`
+			Target      string      `json:"target"`
 		} `json:"nodes"`
 		Edges []struct {
-			From string `json:"from"`
-			To   string `json:"to"`
-			Type string `json:"type"`
+			From interface{} `json:"from"` // 容错：接受 string 或 number
+			To   interface{} `json:"to"`
+			Type string      `json:"type"`
 		} `json:"edges"`
+	}
+	// 将 ID/From/To 统一转为 string
+	toString := func(v interface{}) string {
+		switch val := v.(type) {
+		case string: return val
+		case float64: return fmt.Sprintf("%.0f", val)
+		default: return fmt.Sprint(v)
+		}
 	}
 	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
 		return nil, fmt.Errorf("JSON 解析失败: %w", err)
@@ -120,13 +165,13 @@ func (g *GoalAgent) parseResponse(response string) (*MissionGraph, error) {
 	nodes := make([]GraphNode, len(parsed.Nodes))
 	for i, n := range parsed.Nodes {
 		nodes[i] = GraphNode{
-			ID: n.ID, Type: n.Type, Description: n.Description,
+			ID: toString(n.ID), Type: n.Type, Description: n.Description,
 			ActionType: n.ActionType, Target: n.Target,
 		}
 	}
 	edges := make([]GraphEdge, len(parsed.Edges))
 	for i, e := range parsed.Edges {
-		edges[i] = GraphEdge{From: e.From, To: e.To, Type: e.Type}
+		edges[i] = GraphEdge{From: toString(e.From), To: toString(e.To), Type: e.Type}
 	}
 	return &MissionGraph{Nodes: nodes, Edges: edges}, nil
 }

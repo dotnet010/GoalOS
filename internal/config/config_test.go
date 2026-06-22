@@ -12,7 +12,7 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Daemon.Port != 18920 {
 		t.Errorf("expected port 18920, got %d", cfg.Daemon.Port)
 	}
-	if cfg.Daemon.AutonomyLevel != "approve" {
+	if cfg.Daemon.AutonomyLevel != "autonomous" {
 		t.Errorf("expected approve, got %s", cfg.Daemon.AutonomyLevel)
 	}
 	if cfg.Persona != "concise" {
@@ -42,7 +42,7 @@ func TestEnvOverride(t *testing.T) {
 		t.Errorf("env override: expected warm, got %s", cfg.Persona)
 	}
 	// Non-overridden values should stay at defaults
-	if cfg.Daemon.AutonomyLevel != "approve" {
+	if cfg.Daemon.AutonomyLevel != "autonomous" {
 		t.Errorf("expected default approve, got %s", cfg.Daemon.AutonomyLevel)
 	}
 }

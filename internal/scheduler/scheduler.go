@@ -161,7 +161,26 @@ func (s *Scheduler) handleGoalCreated(evt events.Event) error {
 
 func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 	s.mu.Lock()
-	s.totalActions[evt.GoalID] = 0 // 延迟计数，循环中递增
+	s.totalActions[evt.GoalID] = 0
+	// 规划完成→重置超时计时器（为执行阶段提供 60s）
+	s.goalProgressed[evt.GoalID] = false
+	if old, ok := s.goalTimers[evt.GoalID]; ok { old.Stop() }
+	s.goalTimers[evt.GoalID] = time.AfterFunc(60*time.Second, func() {
+		s.mu.Lock()
+		progressed := s.goalProgressed[evt.GoalID]
+		s.mu.Unlock()
+		if !progressed {
+			log.Printf("[Scheduler] Goal %s: 60s execution timeout", evt.GoalID)
+			s.publish(events.Event{
+				Type:   events.TypeGoalCompleted,
+				GoalID: evt.GoalID,
+				Source: "scheduler",
+				Payload: map[string]interface{}{
+					"reason": "timeout: 60s 内无 Action 进展",
+				},
+			})
+		}
+	})
 	s.mu.Unlock()
 
 	// 读取 MissionGraph node 列表

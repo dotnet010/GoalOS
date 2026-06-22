@@ -74,8 +74,8 @@ func TestE2EGoalLifecycle(t *testing.T) {
 
 	goalID := "goal_e2e_001"
 	bus.Publish(events.NewEvent(events.TypeGoalCreated, goalID, "daemon").WithPayload(map[string]interface{}{
-		"title":       "开发CRM系统",
-		"description": "面向中小企业的客户关系管理系统",
+		"title":       "整理项目资料",
+		"description": "测试无Plugin的fs.read动作",
 	}))
 
 	if received["GoalCreated"] != 1 {

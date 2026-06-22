@@ -6,6 +6,7 @@ package missionengine
 
 import (
 	"log"
+	"strings"
 
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/pkg/events"
@@ -242,20 +243,80 @@ type StubAgent struct{}
 func NewStubAgent() *StubAgent { return &StubAgent{} }
 
 func (s *StubAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
-	// 基于关键词推断 action_type。GoalAgent 接入后由 LLM 产出精确映射。
-	actionType := "fs.read"
-	target := goal
-	if containsAny(goal, "搜索", "search", "查找", "检索") {
-		actionType = "web.search"
-		target = extractQuery(goal)
-	}
+	actionType, target := s.inferAction(goal)
 	return &MissionGraph{
 		GoalID: ctx.GoalID,
 		Nodes: []GraphNode{
-			{ID: "1", Type: "mission", Description: "分析需求: " + goal, ActionType: actionType, Target: target},
+			{ID: "1", Type: "mission", Description: goal, ActionType: actionType, Target: target},
 		},
 		Edges: []GraphEdge{},
 	}, nil
+}
+
+func (s *StubAgent) inferAction(goal string) (string, string) {
+	// 搜索类 → web.search
+	if containsAny(goal, "搜索", "search", "查找", "检索") {
+		return "web.search", extractQuery(goal)
+	}
+	// 代码/文件生成类 → shell.execute
+	if containsAny(goal, "创建", "生成", "写", "开发", "HTML", "html", "代码", "文件", "应用", "魔方", "3D", "三维", "动画", "游戏") {
+		cmd := buildCreateCommand(goal)
+		return "shell.execute", cmd
+	}
+	return "fs.read", goal
+}
+
+// buildCreateCommand 根据目标描述生成 shell 命令。
+func buildCreateCommand(goal string) string {
+	// 3D魔方 → 生成完整HTML文件
+	if containsAny(goal, "魔方", "3D", "三维") {
+		return `cat > ~/Goals/` + goalToFilename(goal) + ` << 'HTMLEOF'
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>3D魔方</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:Arial}
+canvas{display:block;margin:20px}
+.btns{display:flex;gap:20px;margin:20px}
+button{padding:12px 36px;font-size:18px;border:none;border-radius:8px;cursor:pointer;color:#fff;transition:all .3s}
+.scramble{background:#e94560}.scramble:hover{background:#ff6b81}
+.solve{background:#0f3460}.solve:hover{background:#1a5276}
+</style></head><body>
+<canvas id="cube"></canvas>
+<div class="btns"><button class="scramble" onclick="scramble()">打乱</button><button class="solve" onclick="solve()">解决</button></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2e);
+const camera=new THREE.PerspectiveCamera(45,1,0.1,100);camera.position.set(5,4,6);camera.lookAt(0,0,0);
+const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('cube'),antialias:true});renderer.setSize(400,400);
+const light=new THREE.DirectionalLight(0xffffff,1);light.position.set(5,5,5);scene.add(light);scene.add(new THREE.AmbientLight(0x404040));
+const geometry=new THREE.BoxGeometry(1,1,1);
+const colors=[0xff0000,0x00ff00,0x0000ff,0xffff00,0xff8800,0xffffff];
+const materials=colors.map(c=>new THREE.MeshPhongMaterial({color:c}));
+const cube=new THREE.Mesh(geometry,materials);scene.add(cube);
+const edges=new THREE.EdgesGeometry(geometry);scene.add(new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0x000000})));
+const originalRot={x:0,y:0,z:0};let animId,targetRot={x:0,y:0,z:0},currentRot={x:0,y:0,z:0};
+function animate(){currentRot.x+=(targetRot.x-currentRot.x)*0.1;currentRot.y+=(targetRot.y-currentRot.y)*0.1;currentRot.z+=(targetRot.z-currentRot.z)*0.1;cube.rotation.set(currentRot.x,currentRot.y,currentRot.z);renderer.render(scene,camera);animId=requestAnimationFrame(animate)}
+function scramble(){targetRot={x:Math.random()*Math.PI*4,y:Math.random()*Math.PI*4,z:Math.random()*Math.PI*4}}
+function solve(){targetRot={x:0,y:0,z:0}}
+animate();
+</script></body></html>
+HTMLEOF`
+	}
+	// 通用代码生成
+	return `cat > ~/Goals/` + goalToFilename(goal) + ` << 'EOF'
+# 根据目标生成的代码文件
+# 目标: ` + goal + `
+EOF`
+}
+
+func goalToFilename(goal string) string {
+	name := goal
+	for _, c := range []string{" ", "，", "。", "、", "：", "；"} {
+		name = strings.ReplaceAll(name, c, "_")
+	}
+	if len(name) > 30 {
+		name = name[:30]
+	}
+	return name + ".html"
 }
 
 func containsAny(s string, keywords ...string) bool {

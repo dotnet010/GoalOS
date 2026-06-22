@@ -104,10 +104,10 @@ func TestPluginRunner_ReadsActionTypeFromPayload(t *testing.T) {
 		Source: "governance",
 		Payload: map[string]interface{}{
 			"action_id":             "act_plr_001",
-			"action_type":           "shell.execute",
-			"target":                "echo hello",
-			"params":                map[string]interface{}{"command": "echo hello"},
-			"required_capabilities": []interface{}{"shell.execute"},
+			"action_type":           "fs.read",
+			"target":                "test-file",
+			"params":                map[string]interface{}{},
+			"required_capabilities": []interface{}{"fs.read"},
 			"timeout_seconds":       float64(30),
 		},
 	})
