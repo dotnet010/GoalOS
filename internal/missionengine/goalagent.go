@@ -176,18 +176,14 @@ func (g *GoalAgent) parseResponse(response string) (*MissionGraph, error) {
 	return &MissionGraph{Nodes: nodes, Edges: edges}, nil
 }
 
-// fallbackPlan 当 LLM 解析失败时的回退计划。
+// fallbackPlan 当 LLM 解析失败时，使用关键词推理作为回退。
 func (g *GoalAgent) fallbackPlan(goal string, ctx Context) *MissionGraph {
+	actionType, target := InferAction(goal)
 	return &MissionGraph{
 		GoalID: ctx.GoalID,
 		Nodes: []GraphNode{
-			{ID: "1", Type: "mission", Description: "分析需求: " + goal},
-			{ID: "2", Type: "mission", Description: "设计方案"},
-			{ID: "3", Type: "mission", Description: "执行实现"},
+			{ID: "1", Type: "mission", Description: goal, ActionType: actionType, Target: target},
 		},
-		Edges: []GraphEdge{
-			{From: "1", To: "2", Type: "sequential"},
-			{From: "2", To: "3", Type: "sequential"},
-		},
+		Edges: []GraphEdge{},
 	}
 }

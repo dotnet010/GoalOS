@@ -242,6 +242,20 @@ type StubAgent struct{}
 // NewStubAgent 创建 StubAgent（默认 Agent，零外部依赖）。
 func NewStubAgent() *StubAgent { return &StubAgent{} }
 
+// InferAction 根据目标关键词推断 action_type 和 target。GoalAgent fallback 共用。
+func InferAction(goal string) (string, string) {
+	if containsAny(goal, "搜索", "search", "查找", "检索") {
+		return "web.search", extractQuery(goal)
+	}
+	if containsAny(goal, "魔方", "水族", "鱼缸", "珊瑚", "海底", "海洋", "水下", "小丑鱼") {
+		return "shell.execute", buildCreateCommand(goal)
+	}
+	if containsAny(goal, "创建", "生成", "写", "开发", "HTML", "html", "代码", "文件", "应用", "3D", "三维", "动画", "游戏") {
+		return "shell.execute", buildCreateCommand(goal)
+	}
+	return "fs.read", goal
+}
+
 func (s *StubAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
 	actionType, target := s.inferAction(goal)
 	return &MissionGraph{
@@ -254,21 +268,16 @@ func (s *StubAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
 }
 
 func (s *StubAgent) inferAction(goal string) (string, string) {
-	// 搜索类 → web.search
-	if containsAny(goal, "搜索", "search", "查找", "检索") {
-		return "web.search", extractQuery(goal)
-	}
-	// 代码/文件生成类 → shell.execute
-	if containsAny(goal, "创建", "生成", "写", "开发", "HTML", "html", "代码", "文件", "应用", "魔方", "3D", "三维", "动画", "游戏") {
-		cmd := buildCreateCommand(goal)
-		return "shell.execute", cmd
-	}
-	return "fs.read", goal
+	return InferAction(goal)
 }
 
 // buildCreateCommand 根据目标描述生成 shell 命令。
 func buildCreateCommand(goal string) string {
-	// 3D魔方 → 生成完整HTML文件
+	// 水族/鱼缸 → 3D水族箱(小丑鱼+珊瑚+气泡)
+	if containsAny(goal, "水族", "鱼缸", "鱼", "珊瑚", "海底", "海洋", "水下", "小丑鱼") {
+		return generateAquarium(goal)
+	}
+	// 3D魔方 → 完整HTML文件
 	if containsAny(goal, "魔方", "3D", "三维") {
 		return `cat > $HOME/Goals/` + goalToFilename(goal) + ` << 'HTMLEOF'
 <!DOCTYPE html>
@@ -414,4 +423,33 @@ func extractQuery(goal string) string {
 		}
 	}
 	return goal
+}
+
+// generateAquarium 生成3D水族箱HTML（小丑鱼+珊瑚+海草+气泡）。
+func generateAquarium(goal string) string {
+	return `cat > $HOME/Goals/` + goalToFilename(goal) + ` << 'HTMLEOF'
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>3D水族箱</title>
+<style>*{margin:0;padding:0}body{background:#0a0a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:Arial}canvas{display:block;margin:10px}.info{color:#88ccff;font-size:14px;margin:10px}</style></head><body>
+<canvas id="c"></canvas><div class="info">🐠 小丑鱼在珊瑚间游动</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const s=new THREE.Scene();s.background=new THREE.Color(0x001a33);s.fog=new THREE.FogExp2(0x001a33,0.0008);
+const cam=new THREE.PerspectiveCamera(55,1.2,0.1,100);cam.position.set(4,2,8);cam.lookAt(0,0,0);
+const r=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true});r.setSize(500,400);
+s.add(new THREE.AmbientLight(0x224466,0.5));const sun=new THREE.DirectionalLight(0x88ccff,1);sun.position.set(0,10,5);s.add(sun);
+const tankGe=new THREE.BoxGeometry(6,4,4);s.add(new THREE.LineSegments(new THREE.EdgesGeometry(tankGe),new THREE.LineBasicMaterial({color:0x336688,transparent:true,opacity:0.3})));
+const sand=new THREE.Mesh(new THREE.PlaneGeometry(6,4),new THREE.MeshPhongMaterial({color:0xd4a574}));sand.rotation.x=-Math.PI/2;sand.position.y=-2;s.add(sand);
+function coral(x,y,z,h,c){const g=new THREE.CylinderGeometry(0.1,0.2,h,8);g.translate(0,h/2,0);const g2=new THREE.CylinderGeometry(0.08,0.15,h*0.6,8);g2.translate(0.2,h*0.3,0.1);const m=new THREE.MeshPhongMaterial({color:c});const cr=new THREE.Group();cr.add(new THREE.Mesh(g,m));cr.add(new THREE.Mesh(g2,m));cr.position.set(x,y,z);s.add(cr);}
+coral(-2,-2,0,1.2,0xff6644);coral(-1.5,-2,0.3,0.8,0xff8866);coral(1.8,-2,-0.2,1.5,0xff4466);coral(2.2,-2,0.5,0.9,0xff6644);coral(-1,-2,-0.5,1.1,0xee5577);coral(0.5,-2,1,1.3,0xff7755);
+function seaweed(x,z,h){const g=new THREE.ConeGeometry(0.15,0.5,6);const m=new THREE.MeshPhongMaterial({color:0x44aa44});for(let i=0;i<h;i++){const sg=new THREE.Mesh(g,m);sg.position.set(x+Math.sin(i*0.8)*0.3,-2+i*0.5,z+Math.cos(i*0.6)*0.2);s.add(sg);}}
+seaweed(-2.5,-1,6);seaweed(2,-1.5,5);seaweed(-0.5,1.5,7);
+const bubbles=[];function spawnBubble(){const g=new THREE.SphereGeometry(0.05,4,4);const b=new THREE.Mesh(g,new THREE.MeshPhongMaterial({color:0xaaddff,transparent:true,opacity:0.4}));b.position.set((Math.random()-.5)*5,-2+Math.random(),(Math.random()-.5)*3);b.userData={speed:0.005+Math.random()*0.02,offset:Math.random()*10};s.add(b);bubbles.push(b);if(bubbles.length>40)bubbles.shift();}
+const fishes=[];
+function createClownfish(x,y,z){const bg=new THREE.SphereGeometry(0.25,8,6);bg.scale(1.5,0.6,0.7);const bm=new THREE.MeshPhongMaterial({color:0xff6600});const tg=new THREE.ConeGeometry(0.15,0.3,6);tg.rotateX(Math.PI/2);tg.translate(-0.35,0,0);const tm=new THREE.MeshPhongMaterial({color:0xff4400});const fish=new THREE.Group();fish.add(new THREE.Mesh(bg,bm));fish.add(new THREE.Mesh(tg,tm));const sg=new THREE.BoxGeometry(0.02,0.15,0.6);const sm=new THREE.MeshPhongMaterial({color:0xffffff});[0.1,-0.1].forEach(d=>{const st=new THREE.Mesh(sg,sm);st.position.set(d,0,0);fish.add(st)});fish.position.set(x,y,z);fish.userData={speed:0.3+Math.random()*0.5,phase:Math.random()*Math.PI*2,targetX:x,targetZ:z,baseY:y};s.add(fish);fishes.push(fish);}
+createClownfish(0,0,0);createClownfish(1,0.3,0.5);createClownfish(-0.8,-0.2,-0.3);createClownfish(0.5,0.5,1.2);createClownfish(-1.2,0.1,0.8);
+let time=0;function anim(){time+=0.016;s.rotation.y+=0.0005;for(const b of bubbles){b.position.y+=b.userData.speed;b.position.x+=Math.sin(time+b.userData.offset)*0.003;if(b.position.y>2)b.position.y=-2;}if(Math.random()<0.3)spawnBubble();for(const f of fishes){if(Math.random()<0.005){f.userData.targetX=(Math.random()-.5)*5;f.userData.targetZ=(Math.random()-.5)*3;}f.position.x+=(f.userData.targetX-f.position.x)*0.02;f.position.z+=(f.userData.targetZ-f.position.z)*0.02;f.position.y=f.userData.baseY+Math.sin(time*2+f.userData.phase)*0.4;f.rotation.y=Math.atan2(f.userData.targetX-f.position.x,f.userData.targetZ-f.position.z);f.rotation.z=Math.sin(time*3+f.userData.phase)*0.3;}r.render(s,cam);requestAnimationFrame(anim);}
+for(let i=0;i<20;i++)spawnBubble();anim();
+</script></body></html>
+HTMLEOF`
 }

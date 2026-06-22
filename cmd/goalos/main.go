@@ -119,17 +119,14 @@ func main() {
 	_ = ctxEng
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 8: Context Engine registered"}`, time.Now().Format(time.RFC3339))
 
-	// Step 9: Register Mission Engine。Ollama 可用时用 GoalAgent，否则用 StubAgent。
+	// Step 9: Register Mission Engine。Ollama可用→GoalAgent推理,否则→StubAgent关键词。
 	var agent missionengine.Agent = missionengine.NewStubAgent()
-	agentName := "StubAgent"
+	agentName := "StubAgent(关键词匹配)"
 	if ollamaModel := os.Getenv("OLLAMA_MODEL"); ollamaModel != "" {
 		ollama := missionengine.NewOllamaClient(ollamaModel)
 		agent = missionengine.NewGoalAgent(ollama)
 		agentName = "GoalAgent+Ollama(" + ollamaModel + ")"
-	} else if cfg.LLM.Provider != "" && cfg.LLM.APIKeyEnv != "" {
-		// 未来：any-llm-go 接入点
-		agentName = "StubAgent (LLM configured but client not wired)"
-	}
+	} // Ollama auto-detection: W3启用(当模型JSON输出稳定后)
 	missionEng := missionengine.New(bus, agent)
 	missionEng.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (%s)"}`, time.Now().Format(time.RFC3339), agentName)
@@ -307,6 +304,16 @@ func main() {
 
 // acquirePIDLock 通过 O_EXCL 获取 PID 文件锁（单实例保证）。
 // 返回 os.File 用于后续 defer Close + Remove。
+// ollamaAvailable 检测本地 Ollama 是否可用。
+func ollamaAvailable() bool {
+	resp, err := http.Get("http://localhost:11434/api/tags")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == 200
+}
+
 func acquirePIDLock(path string) (*os.File, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
