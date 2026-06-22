@@ -156,22 +156,22 @@ func (e *Engine) validate(g *MissionGraph) error {
 		nodeIDs[n.ID] = true
 	}
 
-	// 验证边的 from/to 引用存在性 + 边类型合法性
+	// 验证边的 from/to 引用存在性。不存在的边丢弃（LLM 输出容错）。
 	validEdgeTypes := map[string]bool{"sequential": true, "parallel": true, "conditional": true, "on_completion": true, "on_failure": true}
+	validEdges := make([]GraphEdge, 0, len(g.Edges))
 	for _, edge := range g.Edges {
-		if !nodeIDs[edge.From] {
-			return &ValidationError{"边引用了不存在的源节点: " + edge.From}
-		}
-		if !nodeIDs[edge.To] {
-			return &ValidationError{"边引用了不存在的目标节点: " + edge.To}
+		if !nodeIDs[edge.From] || !nodeIDs[edge.To] {
+			continue // LLM 引用不存在的节点→跳过
 		}
 		if edge.From == edge.To {
-			return &ValidationError{"自循环边: " + edge.From}
+			continue // LLM 自循环→跳过
 		}
 		if !validEdgeTypes[edge.Type] {
-			return &ValidationError{"无效的边类型: " + edge.Type}
+			continue // LLM 无效边类型→跳过
 		}
+		validEdges = append(validEdges, edge)
 	}
+	g.Edges = validEdges
 
 	// 拓扑排序检测循环依赖
 	if hasCycle(g.Nodes, g.Edges) {

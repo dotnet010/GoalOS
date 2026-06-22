@@ -40,6 +40,7 @@ func (g *GoalAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
 	if err != nil {
 		return nil, fmt.Errorf("GoalAgent: LLM 调用失败: %w", err)
 	}
+	log.Printf("[GoalAgent] LLM response (%d chars): %.200s", len(response), response)
 
 	graph, err := g.parseResponse(response)
 	if err != nil {
@@ -52,28 +53,11 @@ func (g *GoalAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
 // buildSystemPrompt 构建 system prompt。
 // Layer 1 Immutable：GoalOS 系统指令 + 角色描述。
 func (g *GoalAgent) buildSystemPrompt(ctx Context) string {
-	prompt := `你是 GoalOS 的智能规划引擎。将用户目标拆解为可执行任务图。
+	prompt := `Output ONLY this JSON format, no other text:
+{"nodes":[{"id":"1","type":"mission","description":"task","action_type":"shell.execute","target":"the exact shell command"}],"edges":[]}
 
-## 输出格式
-合法 JSON：
-{
-  "nodes": [
-    {"id": "1", "type": "mission", "description": "描述", "action_type": "shell.execute", "target": "要执行的命令"}
-  ],
-  "edges": [{"from": "1", "to": "2", "type": "sequential"}]
-}
-
-## action_type 选项
-- "shell.execute": 运行 shell 命令（创建文件/安装依赖/执行代码）
-- "web.search": 搜索信息
-- "fs.write": 写入文件
-
-## 规则
-- type="mission"（必填）
-- action_type 和 target 必须填。target 是传给 Plugin 的具体指令
-- 代码生成任务：用 shell.execute，target 包含完整命令
-- 3-5 个节点。不要过于细碎
-- 只做规划，不输出代码正文`
+For file creation, target is the complete shell command to create the file.
+Output only the JSON object, nothing else.`
 
 	if ctx.AnchorCheck {
 		prompt += "\n\n## GoalAnchor 检查\n请对照原始目标检查当前路径是否偏离。如果需要纠正——在 nodes 的第一个节点中注明纠正措施。"
@@ -101,17 +85,34 @@ func cleanLLMJSON(raw string) string {
 			s = s[:end]
 		}
 	}
-	// 2. 提取 { 到 }
+	// 2. 提取第一个完整 JSON 对象（从 { 到匹配的 }）
 	start := strings.Index(s, "{")
-	end := strings.LastIndex(s, "}")
-	if start == -1 || end == -1 || start >= end {
-		return ""
+	if start == -1 { return "" }
+	depth := 0
+	end := -1
+	for i := start; i < len(s); i++ {
+		if s[i] == '{' { depth++ }
+		if s[i] == '}' { depth--; if depth == 0 { end = i; break } }
 	}
+	if end == -1 { return "" }
 	s = s[start : end+1]
 	// 3. 去掉 trailing comma（},] 前的逗号）
 	s = strings.ReplaceAll(s, ",}", "}")
 	s = strings.ReplaceAll(s, ",]", "]")
-	// 4. 去掉 // 注释行
+	// 3b. 替换常见 Unicode 引号（LLM 经常输出 smart quotes）
+	s = strings.ReplaceAll(s, "“", `"`) // "
+	s = strings.ReplaceAll(s, "”", `"`) // "
+	s = strings.ReplaceAll(s, "‘", "'") // '
+	s = strings.ReplaceAll(s, "’", "'") // '
+	// 3c. 去掉 BOM 和不可见控制字符
+	s = strings.TrimLeft(s, "\xef\xbb\xbf") // UTF-8 BOM
+	s = strings.Map(func(r rune) rune {
+		if r < 32 && r != '\n' && r != '\t' && r != '\r' { return -1 }
+		return r
+	}, s)
+	// 4. 修复 JSON 字符串中的未转义换行（LLM 常见错误）
+	s = fixUnescapedNewlines(s)
+	// 5. 去掉 // 注释行
 	lines := strings.Split(s, "\n")
 	var clean []string
 	for _, line := range lines {
@@ -124,6 +125,24 @@ func cleanLLMJSON(raw string) string {
 		}
 	}
 	return strings.Join(clean, "\n")
+}
+
+// fixUnescapedNewlines 修复 JSON 字符串值中的未转义换行。
+func fixUnescapedNewlines(s string) string {
+	var result strings.Builder
+	inString := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == '"' && (i == 0 || s[i-1] != '\\') {
+			inString = !inString
+		}
+		if inString && ch == '\n' {
+			result.WriteString("\\n")
+		} else {
+			result.WriteByte(ch)
+		}
+	}
+	return result.String()
 }
 
 // parseResponse 从 LLM 响应中解析 MissionGraph JSON。
