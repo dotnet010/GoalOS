@@ -84,24 +84,23 @@ func buildSeccompBPF(profile *SeccompProfile) []seccompInstr {
 	}
 
 	insns := []seccompInstr{
-		// ld [4] — 加载 arch
-		{Code: 0x20, K: 4},
-		// jne AUDIT_ARCH_X86_64 → KILL (next instruction)
-		{Code: 0x15, Jt: 0, Jf: 1, K: auditArchX8664},
-		// KILL (wrong arch)
-		{Code: 0x06, K: killAct},
-		// ld [0] — 加载 syscall number
-		{Code: 0x20, K: 0},
+		{Code: 0x20, K: 4},                                     // ld [4] — 加载 arch
+		{Code: 0x15, Jt: 1, Jf: 0, K: auditArchX8664},         // jeq x86_64: Jt=1 跳过 KILL 继续; Jf=0 落入 KILL
+		{Code: 0x06, K: killAct},                               // KILL — 错误架构
+		{Code: 0x20, K: 0},                                     // ld [0] — 加载 syscall number
 	}
 
-	// 为每个允许的 syscall 添加 jeq 检查
+	// 为每个允许的 syscall 添加 jeq 检查。Jt=N-i 确保命中时跳过剩余 jeq 到达 ALLOW。
+	allowedNums := make([]uint32, 0)
 	for _, name := range profile.AllowedSyscalls {
-		sysNo, ok := syscallNameToNumber[name]
-		if !ok {
-			continue
+		if sysNo, ok := syscallNameToNumber[name]; ok {
+			allowedNums = append(allowedNums, sysNo)
 		}
-		// jeq sysNo, +1 (跳转到 ALLOW)
-		insns = append(insns, seccompInstr{Code: 0x15, Jt: 1, Jf: 0, K: sysNo})
+	}
+	N := len(allowedNums)
+	for i, sysNo := range allowedNums {
+		jt := uint8(N - i) // 跳过剩余 (N-1-i) 个 jeq + 1 个 KILL = N-i
+		insns = append(insns, seccompInstr{Code: 0x15, Jt: jt, Jf: 0, K: sysNo})
 	}
 
 	// KILL (syscall not in whitelist)

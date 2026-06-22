@@ -1,6 +1,8 @@
 package pluginrunner_test
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,18 +17,21 @@ func TestDiscover(t *testing.T) {
 	pluginDir := filepath.Join(dir, "capability", "shell")
 	os.MkdirAll(pluginDir, 0755)
 
-	manifest := `{
+	// 创建虚拟 binary 并计算 SHA256
+	testBinary := []byte("fake-test-binary-for-discovery")
+	os.WriteFile(filepath.Join(pluginDir, "shell-executor"), testBinary, 0755)
+	hash := sha256Hex(testBinary)
+
+	manifest := fmt.Sprintf(`{
 		"name": "shell-executor",
 		"type": "capability",
 		"version": "1.0.0",
-		"signature": "",
+		"signature": "sha256:%s",
 		"binary": "./shell-executor",
 		"declared_capabilities": ["shell.execute"],
 		"description": "Shell 命令执行器"
-	}`
+	}`, hash)
 	os.WriteFile(filepath.Join(pluginDir, "plugin.json"), []byte(manifest), 0644)
-	// 创建虚拟 binary
-	os.WriteFile(filepath.Join(pluginDir, "shell-executor"), []byte("fake"), 0755)
 
 	plugins, err := pluginrunner.Discover(dir)
 	if err != nil {
@@ -89,4 +94,9 @@ func TestEmptyDir(t *testing.T) {
 	if len(plugins) != 0 {
 		t.Errorf("expected 0 plugins, got %d", len(plugins))
 	}
+}
+
+func sha256Hex(data []byte) string {
+	h := sha256.Sum256(data)
+	return fmt.Sprintf("%x", h[:])
 }

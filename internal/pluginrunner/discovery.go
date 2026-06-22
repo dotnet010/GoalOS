@@ -72,12 +72,14 @@ func Discover(pluginsDir string) ([]DiscoveredPlugin, error) {
 				continue
 			}
 
-			// 验证 SHA256 签名
-			if manifest.Signature != "" {
-				if err := verifySignature(binaryPath, manifest.Signature); err != nil {
-					log.Printf("[PluginRunner] SECURITY: signature verification failed for %s: %v", manifest.Name, err)
-					continue // 签名不匹配→拒绝加载
-				}
+			// 验证 SHA256 签名（空签名→拒绝加载。安全闸口不可绕过）
+			if manifest.Signature == "" {
+				log.Printf("[PluginRunner] SECURITY: empty signature for %s — plugin rejected", manifest.Name)
+				continue
+			}
+			if err := verifySignature(binaryPath, manifest.Signature); err != nil {
+				log.Printf("[PluginRunner] SECURITY: signature verification failed for %s: %v", manifest.Name, err)
+				continue
 			}
 
 			plugins = append(plugins, DiscoveredPlugin{

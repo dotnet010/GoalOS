@@ -167,7 +167,11 @@ func main() {
 	sse := daemon.NewSSEManager()
 	bus.Subscribe("GoalCreated", func(evt events.Event) error { sse.Push("GoalCreated", evt.Payload); return nil })
 	bus.Subscribe("GoalCompleted", func(evt events.Event) error {
-		api.UpdateGoalStatus(evt.GoalID, "已完成")
+		status := "已完成"
+		if reason, _ := evt.Payload["reason"].(string); reason != "" {
+			status = "需要处理" // timeout/failure → 用户可感知的异常状态
+		}
+		api.UpdateGoalStatus(evt.GoalID, status)
 		sse.Push("GoalCompleted", evt.Payload)
 		return nil
 	})
