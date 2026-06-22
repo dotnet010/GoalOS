@@ -147,8 +147,16 @@ func (h *Handler) HandleGetGoal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "目标不存在")
 		return
 	}
-	// 附加 Action 执行结果
+	// 附加 Action 执行结果，解析嵌套 JSON output
 	if result, exists := h.actionResults[goalID]; exists {
+		if m, ok := result.(map[string]interface{}); ok {
+			if outputStr, ok := m["output"].(string); ok && len(outputStr) > 0 {
+				var parsed interface{}
+				if json.Unmarshal([]byte(outputStr), &parsed) == nil {
+					m["output"] = parsed // 替换为结构化对象
+				}
+			}
+		}
 		goal.Result = result
 	}
 	writeJSON(w, http.StatusOK, goal)
