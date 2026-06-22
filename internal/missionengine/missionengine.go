@@ -250,36 +250,10 @@ func (s *StubAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
 	}, nil
 }
 
-// InferAction 纯路由：Agent 职责是选择 Plugin，不生成内容。内容由 Plugin 产生。
+// InferAction 纯路由：从配置文件加载规则，无匹配时使用默认 action_type。
+// W3: GoalAgent + LLM 推理替代关键词匹配。
 func InferAction(goal string) (string, string) {
-	if containsAny(goal, "搜索", "search", "查找", "检索") {
-		return "web.search", extractQuery(goal)
-	}
-	if containsAny(goal, "创建", "生成", "写", "开发", "HTML", "代码", "文件", "应用", "3D", "三维", "动画", "游戏") {
-		return "shell.execute", `echo "GoalOS任务: ` + goal + `"`
-	}
-	return "fs.read", goal
+	routes := LoadRoutes("") // 空路径→使用默认规则。W3: 从 ~/.goalos/config/routes.yaml 加载
+	return routes.MatchWithTarget(goal)
 }
 
-func containsAny(s string, keywords ...string) bool {
-	for _, kw := range keywords {
-		if len(s) >= len(kw) {
-			for i := 0; i <= len(s)-len(kw); i++ {
-				if s[i:i+len(kw)] == kw {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-func extractQuery(goal string) string {
-	prefixes := []string{"搜索一下", "搜索", "查找", "检索", "帮我搜索", "帮我查"}
-	for _, p := range prefixes {
-		if len(goal) > len(p) && goal[:len(p)] == p {
-			return goal[len(p):]
-		}
-	}
-	return goal
-}
