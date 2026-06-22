@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"os"
 	"os/exec"
 	"syscall"
 	"time"
@@ -37,15 +39,21 @@ type ExecResult struct {
 // 通过 stdin/stdout JSON 行协议与子进程通信。
 // 超时→SIGTERM→5s→SIGKILL。子进程崩溃不影响 daemon。
 func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
+	// 调试：确认二进制文件在 exec 前存在
+	if info, err := os.Stat(cfg.BinaryPath); err != nil {
+		log.Printf("[executor] PRE-EXEC STAT FAIL: %s: %v", cfg.BinaryPath, err)
+	} else {
+		log.Printf("[executor] PRE-EXEC STAT OK: %s (size=%d, mode=%v)", cfg.BinaryPath, info.Size(), info.Mode())
+	}
 	cmd := exec.Command(cfg.BinaryPath, cfg.Args...)
 	if cfg.WorkDir != "" {
 		cmd.Dir = cfg.WorkDir
 	}
 	// 设置子进程环境
-	cmd.Env = []string{
-		"GOALOS_WORKSPACE=" + cfg.WorkDir,
-		"GOALOS_TMP=" + cfg.TmpDir,
-	}
+	cmd.Env = append(os.Environ(),
+		"GOALOS_WORKSPACE="+cfg.WorkDir,
+		"GOALOS_TMP="+cfg.TmpDir,
+	)
 
 	// 获取 stdin/stdout 管道
 	stdin, err := cmd.StdinPipe()
@@ -59,6 +67,13 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 
 	// 平台安全加固（seccomp/NO_NEW_PRIVS/进程组隔离）
 	sanitizeChildProcess(cmd)
+
+	// 确保 WorkDir 存在
+	if cfg.WorkDir != "" {
+		if err := os.MkdirAll(cfg.WorkDir, 0755); err != nil {
+			return nil, fmt.Errorf("executor: 创建工作目录失败: %w", err)
+		}
+	}
 
 	// 启动子进程
 	startTime := time.Now()

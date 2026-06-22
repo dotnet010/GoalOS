@@ -53,10 +53,19 @@ func NewHandler() *Handler {
 	}
 }
 
-// TrackResult 存储 Action 的执行结果。Goal 完成后 GET /api/goals/:id 返回。
+// TrackResult 存储 Action 的执行结果。
 func (h *Handler) TrackResult(goalID string, result interface{}) {
 	h.mu.Lock()
 	h.actionResults[goalID] = result
+	h.mu.Unlock()
+}
+
+// UpdateGoalStatus 更新 Goal 状态（GoalCompleted 时由 EventBus subscriber 调用）。
+func (h *Handler) UpdateGoalStatus(goalID, status string) {
+	h.mu.Lock()
+	if g, ok := h.Goals[goalID]; ok {
+		g.Status = status
+	}
 	h.mu.Unlock()
 }
 

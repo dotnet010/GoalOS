@@ -95,8 +95,11 @@ func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 		return execResult{}, fmt.Errorf("no plugin found for action type: %s", actionType)
 	}
 
+	home, _ := osUserHomeDir()
 	cfg := ExecConfig{
 		BinaryPath: plugin.BinaryPath,
+		WorkDir:    home + "/Goals/" + evt.GoalID,
+		TmpDir:     "/tmp/goalos/" + actionID,
 		Timeout:    30 * time.Second,
 	}
 	action := ActionRequest{

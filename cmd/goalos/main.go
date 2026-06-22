@@ -166,13 +166,16 @@ func main() {
 
 	sse := daemon.NewSSEManager()
 	bus.Subscribe("GoalCreated", func(evt events.Event) error { sse.Push("GoalCreated", evt.Payload); return nil })
-	bus.Subscribe("GoalCompleted", func(evt events.Event) error { sse.Push("GoalCompleted", evt.Payload); return nil })
+	bus.Subscribe("GoalCompleted", func(evt events.Event) error {
+		api.UpdateGoalStatus(evt.GoalID, "已完成")
+		sse.Push("GoalCompleted", evt.Payload)
+		return nil
+	})
 	bus.Subscribe("ActionPendingApproval", func(evt events.Event) error { sse.Push("ActionPendingApproval", evt.Payload); return nil })
-	// 将 Action 执行结果存入 API Handler（Goal 完成后 GET query 可返回）
+	// 将 Action 执行结果存入 API Handler
 	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
-		goalID := evt.GoalID
 		if result, ok := evt.Payload["result"]; ok {
-			api.TrackResult(goalID, result)
+			api.TrackResult(evt.GoalID, result)
 		}
 		return nil
 	})
