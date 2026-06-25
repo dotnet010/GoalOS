@@ -1,6 +1,6 @@
 # GoalOS — A Personal Goal Execution Operating System
 
-[![Build & Release](https://github.com/dotnet010/GoalOS/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/dotnet010/GoalOS/actions/workflows/docker-publish.yml)
+[![Build & Release](https://img.shields.io/github/actions/workflow/status/dotnet010/GoalOS/docker-publish.yml)](https://github.com/dotnet010/GoalOS/actions/workflows/docker-publish.yml)
 [![Release](https://img.shields.io/github/v/release/dotnet010/GoalOS)](https://github.com/dotnet010/GoalOS/releases)
 
 > **You state the goal. The system delivers it — safely.**

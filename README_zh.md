@@ -1,6 +1,6 @@
 # GoalOS — 面向人类目标的个人操作系统
 
-[![Build & Release](https://github.com/dotnet010/GoalOS/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/dotnet010/GoalOS/actions/workflows/docker-publish.yml)
+[![Build & Release](https://img.shields.io/github/actions/workflow/status/dotnet010/GoalOS/docker-publish.yml)](https://github.com/dotnet010/GoalOS/actions/workflows/docker-publish.yml)
 
 > **用户只管提出目标，系统负责安全地实现它。**
 
