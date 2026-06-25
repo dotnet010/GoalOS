@@ -148,7 +148,7 @@ func (s *Scheduler) handleGoalCreated(evt events.Event) error {
 	// 30s 超时检测：若无任何 Action 进展→Goal→Failed。防止用户得不到反馈
 	s.mu.Lock()
 	s.goalProgressed[evt.GoalID] = false
-	s.goalTimers[evt.GoalID] = time.AfterFunc(600*time.Second, func() { // 600s 规划阶段超时（大模型可能需数分钟）
+	s.goalTimers[evt.GoalID] = time.AfterFunc(1800*time.Second, func() { // 1800s 规划阶段超时
 		s.mu.Lock()
 		progressed := s.goalProgressed[evt.GoalID]
 		s.mu.Unlock()

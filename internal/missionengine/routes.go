@@ -80,7 +80,7 @@ func (cfg *RouteConfig) MatchWithTarget(goal string) (string, string) {
 	if actionType == "web.search" {
 		target = extractSearchQuery(goal)
 	} else if actionType == "shell.execute" {
-		target = fmt.Sprintf("cat > output/goalos_task.html << 'GOALEOF'\n<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>GoalOS Task</title></head><body><h1>%s</h1><p>此文件由 GoalOS 系统自动生成。任务已路由到 shell.execute Plugin。</p></body></html>\nGOALEOF", goal)
+		target = fmt.Sprintf("mkdir -p output && cat > output/goalos_task.html << 'GOALEOF'\n<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>GoalOS Task</title></head><body><h1>%s</h1><p>此文件由 GoalOS 系统自动生成。任务已路由到 shell.execute Plugin。</p></body></html>\nGOALEOF", goal)
 	}
 	return actionType, target
 }

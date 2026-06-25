@@ -30,11 +30,13 @@ type DaemonConfig struct {
 
 // LLMConfig 是 LLM Provider 配置。
 type LLMConfig struct {
-	Provider  string `yaml:"provider"`   // "anthropic"|"openai"|"ollama"。默认 "anthropic"
-	Model     string `yaml:"model"`      // 模型名
-	APIKeyEnv string `yaml:"api_key_env"` // API Key 环境变量名。默认 "ANTHROPIC_API_KEY"
-	MaxTokens int    `yaml:"max_tokens"` // 最大 Token 数。默认 8192
-	Timeout   time.Duration `yaml:"timeout"` // 请求超时。默认 120s
+	Provider      string        `yaml:"provider"`        // "anthropic"|"openai"|"ollama"。默认 "anthropic"
+	Model         string        `yaml:"model"`           // 模型名
+	APIKeyEnv     string        `yaml:"api_key_env"`     // API Key 环境变量名。默认 "ANTHROPIC_API_KEY"
+	BaseURL       string        `yaml:"base_url"`        // API 基础 URL。Cloud 和 Ollama 均可配置
+	MaxTokens     int           `yaml:"max_tokens"`      // 最大 Token 数。默认 8192
+	Temperature   float32       `yaml:"temperature"`     // LLM 温度参数。0~2，默认 0.3
+	Timeout       time.Duration `yaml:"timeout"`         // 请求超时。默认 120s
 }
 
 // Default 返回默认配置。
@@ -47,11 +49,13 @@ func Default() *Config {
 			ShutdownTimeout: 5 * time.Second,
 		},
 		LLM: LLMConfig{
-			Provider:  "anthropic",
-			Model:     "claude-sonnet-4-6",
-			APIKeyEnv: "ANTHROPIC_API_KEY",
-			MaxTokens: 8192,
-			Timeout:   120 * time.Second,
+			Provider:    "anthropic",
+			Model:       "claude-sonnet-4-6",
+			APIKeyEnv:   "ANTHROPIC_API_KEY",
+			BaseURL:     "", // 空表示使用默认 API 端点
+			MaxTokens:   8192,
+			Temperature: 0.3,
+			Timeout:     120 * time.Second,
 		},
 		Persona: "concise",
 	}
@@ -93,6 +97,18 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("GOALOS_LLM_MODEL"); v != "" {
 		cfg.LLM.Model = v
 	}
+	if v := os.Getenv("GOALOS_LLM_BASE_URL"); v != "" {
+		cfg.LLM.BaseURL = v
+	}
+	if v := os.Getenv("OLLAMA_BASE_URL"); v != "" {
+		cfg.LLM.BaseURL = v // Ollama 环境变量覆盖
+	}
+	if v := os.Getenv("GOALOS_LLM_TEMPERATURE"); v != "" {
+		var t float64
+		if _, err := fmt.Sscanf(v, "%f", &t); err == nil {
+			cfg.LLM.Temperature = float32(t)
+		}
+	}
 }
 
 // loadYAML 从 YAML 文件加载配置，将文件值合并到 cfg 上（文件值覆盖默认值）。
@@ -130,6 +146,12 @@ func loadYAML(path string, cfg *Config) error {
 	}
 	if fileCfg.LLM.MaxTokens != 0 {
 		cfg.LLM.MaxTokens = fileCfg.LLM.MaxTokens
+	}
+	if fileCfg.LLM.Temperature != 0 {
+		cfg.LLM.Temperature = fileCfg.LLM.Temperature
+	}
+	if fileCfg.LLM.BaseURL != "" {
+		cfg.LLM.BaseURL = fileCfg.LLM.BaseURL
 	}
 	if fileCfg.LLM.Timeout != 0 {
 		cfg.LLM.Timeout = fileCfg.LLM.Timeout

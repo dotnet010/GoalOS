@@ -41,178 +41,145 @@ func main() {
 	}
 	goalOSDir := home + "/.goalos"
 
-	// Step 1: Ensure ~/.goalos/ exists, create full directory tree.
-	// 根目录 0700。子目录 0755。文件 0600。
-	rootDirs := []string{
-		goalOSDir,
-	}
+	rootDirs := []string{goalOSDir}
 	subDirs := []string{
-		goalOSDir + "/events",
-		goalOSDir + "/events/snapshots",
-		goalOSDir + "/plugins/capability",
-		goalOSDir + "/plugins/agent",
-		goalOSDir + "/plugins/channel",
-		goalOSDir + "/memory/decisions",
-		goalOSDir + "/memory/lessons",
-		goalOSDir + "/memory/patterns",
-		goalOSDir + "/cache",
-		goalOSDir + "/config",
-		goalOSDir + "/logs",
+		goalOSDir + "/events", goalOSDir + "/events/snapshots",
+		goalOSDir + "/plugins/capability", goalOSDir + "/plugins/agent", goalOSDir + "/plugins/channel",
+		goalOSDir + "/memory/decisions", goalOSDir + "/memory/lessons", goalOSDir + "/memory/patterns",
+		goalOSDir + "/cache", goalOSDir + "/config", goalOSDir + "/logs",
 	}
 	for _, d := range rootDirs {
-		if err := os.MkdirAll(d, 0700); err != nil {
-			log.Fatalf("[Daemon] create dir %s: %v", d, err)
-		}
+		if err := os.MkdirAll(d, 0700); err != nil { log.Fatalf("[Daemon] create dir %s: %v", d, err) }
 	}
 	for _, d := range subDirs {
-		if err := os.MkdirAll(d, 0755); err != nil {
-			log.Fatalf("[Daemon] create dir %s: %v", d, err)
-		}
+		if err := os.MkdirAll(d, 0755); err != nil { log.Fatalf("[Daemon] create dir %s: %v", d, err) }
 	}
-	log.Println("[Daemon] Step 1: directory tree created (root 0700, subdirs 0755)")
+	log.Println("[Daemon] Step 1: directory tree created")
 
-	// Step 2: Load config (优先级: 环境变量 > daemon.yaml > 默认值)
 	cfg, err := config.Load(home + "/" + defaultConfigPath)
-	if err != nil {
-		log.Printf("[Daemon] Step 2: config load warning: %v (using defaults)", err)
-		cfg = config.Default()
-	}
-	log.Printf("[Daemon] Step 2: config loaded (port=%d, autonomy=%s, persona=%s, llm=%s/%s)",
-		cfg.Daemon.Port, cfg.Daemon.AutonomyLevel, cfg.Persona, cfg.LLM.Provider, cfg.LLM.Model)
+	if err != nil { cfg = config.Default() }
+	log.Printf("[Daemon] Step 2: config loaded (port=%d)", cfg.Daemon.Port)
 
-	// Step 3: Create Event Bus
 	bus := eventbus.New()
 	log.Println("[Daemon] Step 3: Event Bus created")
 
-	// Step 4: Create Logger (JSON 格式, INFO 级别)
 	logFile, err := os.OpenFile(goalOSDir+"/logs/daemon.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		log.Printf("[Daemon] Step 4: log file creation failed (using stderr): %v", err)
-	} else {
-		log.SetOutput(logFile)
-		log.SetFlags(0) // JSON 格式不需要 flag 前缀
-		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 4: logger initialized (JSON format)"}`, time.Now().Format(time.RFC3339))
-	}
+	if err == nil { log.SetOutput(logFile); log.SetFlags(0) }
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 4: logger initialized"}`, time.Now().Format(time.RFC3339))
 
-	// Step 5: Create State Store
 	store := statestore.New(goalOSDir + "/events")
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 5: State Store initialized"}`, time.Now().Format(time.RFC3339))
 
-	// Step 6: Register Scheduler (state machine driver, 含 GoalAnchor)
 	goalAnchor := scheduler.NewGoalAnchorTracker(20)
 	sched := scheduler.New(bus, store, goalAnchor)
 	sched.Start()
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 6: Scheduler registered (GoalAnchor N=20)"}`, time.Now().Format(time.RFC3339))
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 6: Scheduler registered"}`, time.Now().Format(time.RFC3339))
 
-	// Step 7: Register Governance (execution gate, 五引擎)
 	secretKey, err := governance.LoadOrGenerateSecret(goalOSDir + "/secrets.enc")
-	if err != nil {
-		log.Printf(`{"level":"WARN","ts":"%s","msg":"Step 7: secret key load failed, tokens disabled: %v"}`, time.Now().Format(time.RFC3339), err)
-	}
+	if err != nil { log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err) }
 	gov := governance.New(bus, secretKey)
 	gov.SetAutonomyLevel(cfg.Daemon.AutonomyLevel)
 	gov.Start()
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered (5 engines)"}`, time.Now().Format(time.RFC3339))
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered"}`, time.Now().Format(time.RFC3339))
 
-	// Step 8: Register Context Engine
 	ctxEng := contextengine.New(home+"/Goals", home+"/.goalos/memory")
 	_ = ctxEng
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 8: Context Engine registered"}`, time.Now().Format(time.RFC3339))
 
-	// Step 9: Register Mission Engine。Ollama可用→GoalAgent推理,否则→StubAgent关键词。
+	// Step 9: Agent 选择。优先级：daemon.yaml > 环境变量 > StubAgent。
+	// 设计依据：R241（Ollama URL 可配置）、R251（Anthropic Provider）。
 	var agent missionengine.Agent = missionengine.NewStubAgent()
 	agentName := "StubAgent(关键词匹配)"
-	if ollamaModel := os.Getenv("OLLAMA_MODEL"); ollamaModel != "" {
-		ollama := missionengine.NewOllamaClient(ollamaModel)
-		agent = missionengine.NewGoalAgent(ollama)
-		agentName = "GoalAgent+Ollama(" + ollamaModel + ")"
-	} // Ollama auto-detection: W3启用(当模型JSON输出稳定后)
+
+	switch {
+	case cfg.LLM.Provider == "ollama" || os.Getenv("OLLAMA_MODEL") != "":
+		model := cfg.LLM.Model
+		if m := os.Getenv("OLLAMA_MODEL"); m != "" {
+			model = m
+		}
+		baseURL := cfg.LLM.BaseURL
+		if baseURL == "" {
+			baseURL = "http://localhost:11434"
+		}
+		ollamaClient := missionengine.NewOllamaClient(model, baseURL)
+		agent = missionengine.NewGoalAgentWithBus(ollamaClient, bus)
+		agentName = "GoalAgent+Ollama(" + model + ")"
+
+	case cfg.LLM.BaseURL != "" || os.Getenv("GOALOS_LLM_BASE_URL") != "":
+		baseURL := cfg.LLM.BaseURL
+		if u := os.Getenv("GOALOS_LLM_BASE_URL"); u != "" {
+			baseURL = u
+		}
+		apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
+		if k := os.Getenv("GOALOS_LLM_API_KEY"); k != "" {
+			apiKey = k
+		}
+		model := cfg.LLM.Model
+		if m := os.Getenv("GOALOS_LLM_MODEL"); m != "" {
+			model = m
+		}
+		cloudClient := missionengine.NewCloudLLMClient(baseURL, apiKey, model)
+		agent = missionengine.NewGoalAgentWithBus(cloudClient, bus)
+		agentName = "GoalAgent+Cloud(" + model + ")"
+	}
 	missionEng := missionengine.New(bus, agent)
 	missionEng.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (%s)"}`, time.Now().Format(time.RFC3339), agentName)
 
-	// Step 10: Register Plugin Runner (扫描 plugins/ 目录，加载 Plugins)
 	runner := pluginrunner.New(bus, secretKey)
 	runner.Start()
-
-	// 将发现的 Plugin 能力注册到 Governance（Capability Engine 授权检查的前提）
 	for _, p := range runner.DiscoveredPlugins() {
 		gov.RegisterCapabilities(p.Manifest.Name, p.Manifest.DeclaredCapabilities)
 	}
-	// 注册内置能力（MVP 无真实 Plugin 二进制时保证核心链路可用）
 	gov.RegisterCapabilities("builtin", []string{"fs.read", "fs.write", "shell.execute", "browser.open", "browser.click", "web.search"})
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 10: Plugin Runner registered (%d plugins + builtin caps)"}`, time.Now().Format(time.RFC3339), len(runner.DiscoveredPlugins()))
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 10: Plugin Runner registered"}`, time.Now().Format(time.RFC3339))
 
-	// Step 11: Snapshot 冷启动恢复
-	recovered, err := store.RecoverAll()
-	if err != nil {
-		log.Printf(`{"level":"WARN","ts":"%s","msg":"Step 11: recovery error: %v"}`, time.Now().Format(time.RFC3339), err)
+	if _, err := store.RecoverAll(); err != nil {
+		log.Printf(`{"level":"WARN","msg":"Step 11: recovery: %v"}`, err)
 	} else {
-		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 11: recovered %d goals"}`, time.Now().Format(time.RFC3339), len(recovered))
+		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 11: recovery ok"}`, time.Now().Format(time.RFC3339))
 	}
 
-	// Step 12: PID file lock (flock 语义通过 O_EXCL 实现)
 	pidFile := goalOSDir + "/goalos.pid"
 	pidLock, err := acquirePIDLock(pidFile)
-	if err != nil {
-		log.Fatalf(`{"level":"FATAL","ts":"%s","msg":"Step 12: PID lock failed (daemon already running?)"}`, time.Now().Format(time.RFC3339))
-	}
+	if err != nil { log.Fatalf("Step 12: PID lock failed") }
 	defer os.Remove(pidFile)
 	defer pidLock.Close()
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 12: PID lock acquired"}`, time.Now().Format(time.RFC3339))
 
-	// Step 13: Start Local UI Server (localhost:18920)
 	api := daemon.NewHandler()
-	api.SetPort(cfg.Daemon.Port)
-	api.SetStartTime(startTime)
-	daemon.SetEventBus(bus)
-	daemon.SetStateStore(store)
-
+	api.SetPort(cfg.Daemon.Port); api.SetStartTime(startTime)
+	daemon.SetEventBus(bus); daemon.SetStateStore(store)
 	sse := daemon.NewSSEManager()
 	bus.Subscribe("GoalCreated", func(evt events.Event) error { sse.Push("GoalCreated", evt.Payload); return nil })
 	bus.Subscribe("GoalCompleted", func(evt events.Event) error {
 		status := "已完成"
-		if reason, _ := evt.Payload["reason"].(string); reason != "" {
-			status = "需要处理" // timeout/failure → 用户可感知的异常状态
-		}
+		if reason, _ := evt.Payload["reason"].(string); reason != "" { status = "需要处理" }
 		api.UpdateGoalStatus(evt.GoalID, status)
-		sse.Push("GoalCompleted", evt.Payload)
-		return nil
+		sse.Push("GoalCompleted", evt.Payload); return nil
 	})
 	bus.Subscribe("ActionPendingApproval", func(evt events.Event) error {
 		sse.Push("ActionPendingApproval", evt.Payload)
-		actionID, _ := evt.Payload["action_id"].(string)
-		actionType, _ := evt.Payload["action_description"].(string)
-		riskLevel, _ := evt.Payload["risk_level"].(string)
-		timeout, _ := evt.Payload["timeout_seconds"].(float64)
 		api.TrackPendingApproval(daemon.PendingApproval{
-			ActionID: actionID, GoalID: evt.GoalID, ActionType: actionType,
-			RiskLevel: riskLevel, TimeoutSeconds: int(timeout),
-			ActionDescription: fmt.Sprintf("风险等级 %s 的操作需要人工审批", riskLevel),
+			ActionID: fmt.Sprint(evt.Payload["action_id"]), GoalID: evt.GoalID,
+			ActionType: fmt.Sprint(evt.Payload["action_description"]),
+			RiskLevel: fmt.Sprint(evt.Payload["risk_level"]),
 		})
 		return nil
 	})
-	bus.Subscribe(events.TypeActionApproved, func(evt events.Event) error {
-		actionID, _ := evt.Payload["action_id"].(string)
-		api.RemovePendingApproval(actionID)
-		return nil
-	})
-	bus.Subscribe(events.TypeActionRejected, func(evt events.Event) error {
-		actionID, _ := evt.Payload["action_id"].(string)
-		api.RemovePendingApproval(actionID)
-		return nil
-	})
-	// 将 Action 执行结果存入 API Handler, 成功则标记 Goal 完成
 	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
 		if result, ok := evt.Payload["result"]; ok {
 			api.TrackResult(evt.GoalID, result)
-			if m, ok := result.(map[string]interface{}); ok {
-				if m["status"] == "success" {
-					api.UpdateGoalStatus(evt.GoalID, "已完成")
-				}
+			if m, ok := result.(map[string]interface{}); ok && m["status"] == "success" {
+				api.UpdateGoalStatus(evt.GoalID, "已完成")
 			}
 		}
 		return nil
+	})
+	bus.Subscribe(events.TypeActionApproved, func(evt events.Event) error {
+		api.RemovePendingApproval(fmt.Sprint(evt.Payload["action_id"])); return nil
+	})
+	bus.Subscribe(events.TypeActionRejected, func(evt events.Event) error {
+		api.RemovePendingApproval(fmt.Sprint(evt.Payload["action_id"])); return nil
 	})
 
 	mux := http.NewServeMux()
@@ -220,105 +187,52 @@ func main() {
 	mux.HandleFunc("/api/events", sse.HandleSSE)
 	mux.HandleFunc("/api/health", api.HandleHealth)
 	mux.HandleFunc("/api/goals", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			api.HandleCreateGoal(w, r)
-		} else {
-			api.HandleListGoals(w, r)
-		}
+		if r.Method == http.MethodPost { api.HandleCreateGoal(w, r) } else { api.HandleListGoals(w, r) }
 	})
 	mux.HandleFunc("/api/goals/", func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimPrefix(r.URL.Path, "/api/goals/")
-		id = strings.Split(id, "/")[0]
-		r.SetPathValue("id", id)
+		id := strings.TrimPrefix(r.URL.Path, "/api/goals/"); id = strings.Split(id, "/")[0]; r.SetPathValue("id", id)
 		switch {
-		case strings.HasSuffix(r.URL.Path, "/pause"):
-			api.HandlePauseGoal(w, r)
-		case strings.HasSuffix(r.URL.Path, "/resume"):
-			api.HandleResumeGoal(w, r)
-		case strings.HasSuffix(r.URL.Path, "/stop"):
-			api.HandleStopGoal(w, r)
-		case strings.HasSuffix(r.URL.Path, "/log"):
-			api.HandleGoalLog(w, r)
-		case strings.HasSuffix(r.URL.Path, "/events"):
-			api.HandleGoalEvents(w, r)
-		default:
-			api.HandleGetGoal(w, r)
+		case strings.HasSuffix(r.URL.Path, "/pause"): api.HandlePauseGoal(w, r)
+		case strings.HasSuffix(r.URL.Path, "/resume"): api.HandleResumeGoal(w, r)
+		case strings.HasSuffix(r.URL.Path, "/stop"): api.HandleStopGoal(w, r)
+		case strings.HasSuffix(r.URL.Path, "/log"): api.HandleGoalLog(w, r)
+		case strings.HasSuffix(r.URL.Path, "/events"): api.HandleGoalEvents(w, r)
+		default: api.HandleGetGoal(w, r)
 		}
 	})
-	mux.HandleFunc("/api/system/status", api.HandleSystemStatus)
 	mux.HandleFunc("/api/approvals", api.HandleListApprovals)
 	mux.HandleFunc("/api/approvals/", func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimPrefix(r.URL.Path, "/api/approvals/")
-		id = strings.Split(id, "/")[0]
-		r.SetPathValue("id", id)
-		if strings.HasSuffix(r.URL.Path, "/approve") {
-			api.HandleApprove(w, r)
-		} else if strings.HasSuffix(r.URL.Path, "/reject") {
-			api.HandleReject(w, r)
-		} else {
-			http.Error(w, `{"error":{"code":"INVALID_REQUEST","message":"unknown"}}`, http.StatusNotFound)
-		}
+		id := strings.TrimPrefix(r.URL.Path, "/api/approvals/"); id = strings.Split(id, "/")[0]; r.SetPathValue("id", id)
+		if strings.HasSuffix(r.URL.Path, "/approve") { api.HandleApprove(w, r) } else if strings.HasSuffix(r.URL.Path, "/reject") { api.HandleReject(w, r) } else { http.Error(w, `{"error":{"code":"INVALID_REQUEST"}}`, http.StatusNotFound) }
 	})
+	mux.HandleFunc("/api/system/status", api.HandleSystemStatus)
 	mux.HandleFunc("/api/system/stop", api.HandleDaemonStop)
 	mux.HandleFunc("/api/system/restart", api.HandleDaemonRestart)
 
-	server := &http.Server{
-		Addr:    fmt.Sprintf("localhost:%d", cfg.Daemon.Port),
-		Handler: mux,
-	}
-
+	server := &http.Server{Addr: fmt.Sprintf("localhost:%d", cfg.Daemon.Port), Handler: mux}
 	go func() {
-		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13: HTTP server listening on localhost:%d"}`, time.Now().Format(time.RFC3339), cfg.Daemon.Port)
-		if err := server.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf(`{"level":"FATAL","ts":"%s","msg":"HTTP server error: %v"}`, time.Now().Format(time.RFC3339), err)
-		}
+		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13: HTTP on localhost:%d"}`, time.Now().Format(time.RFC3339), cfg.Daemon.Port)
+		if err := server.ListenAndServe(); err != http.ErrServerClosed { log.Fatalf("HTTP: %v", err) }
 	}()
 
-	// Step 14: Publish SystemStarted
-	bus.Publish(events.Event{
-		Type:    events.TypeSystemStarted,
-		Source:  "daemon",
-		Seq:     0,
-		Payload: map[string]interface{}{
-			"pid":  os.Getpid(),
-			"port": cfg.Daemon.Port,
-		},
-	})
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted event published"}`, time.Now().Format(time.RFC3339))
+	bus.Publish(events.Event{Type: events.TypeSystemStarted, Source: "daemon", Seq: 0,
+		Payload: map[string]interface{}{"pid": os.Getpid(), "port": cfg.Daemon.Port}})
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted"}`, time.Now().Format(time.RFC3339))
 
-	// Wait for shutdown signal
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-
 	<-ctx.Done()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Shutting down..."}`, time.Now().Format(time.RFC3339))
-
-	// Graceful shutdown
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Daemon.ShutdownTimeout)
 	defer cancel()
 	api.SetShutdownHook(func() { cancel() })
 	server.Shutdown(shutdownCtx)
-
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"GoalOS stopped. Goodbye."}`, time.Now().Format(time.RFC3339))
-}
-
-// acquirePIDLock 通过 O_EXCL 获取 PID 文件锁（单实例保证）。
-// 返回 os.File 用于后续 defer Close + Remove。
-// ollamaAvailable 检测本地 Ollama 是否可用。
-func ollamaAvailable() bool {
-	resp, err := http.Get("http://localhost:11434/api/tags")
-	if err != nil {
-		return false
-	}
-	resp.Body.Close()
-	return resp.StatusCode == 200
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"GoalOS stopped."}`, time.Now().Format(time.RFC3339))
 }
 
 func acquirePIDLock(path string) (*os.File, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return nil, fmt.Errorf("acquire pid lock: %w", err)
-	}
+	if err != nil { return nil, fmt.Errorf("pid lock: %w", err) }
 	fmt.Fprintf(f, "%d\n", os.Getpid())
 	return f, nil
 }

@@ -73,15 +73,16 @@ func (a *cycleAgent) Plan(goal string, ctx missionengine.Context) (*missionengin
 	}, nil
 }
 
-// TestMissionGraph_InvalidEdgeRejected 验证边引用不存在的节点被拒绝。
-func TestMissionGraph_InvalidEdgeRejected(t *testing.T) {
+// TestMissionGraph_InvalidEdgeDropped 验证边引用不存在的边被静默丢弃（LLM 输出容错）。
+// validate 函数会过滤掉引用不存在节点的边，不拒绝整个 Graph。
+func TestMissionGraph_InvalidEdgeDropped(t *testing.T) {
 	bus := eventbus.New()
 	eng := missionengine.New(bus, &badEdgeAgent{})
 	eng.Start()
 
-	rejected := make(chan events.Event, 1)
-	bus.Subscribe(events.TypeMissionGraphRejected, func(evt events.Event) error {
-		rejected <- evt
+	generated := make(chan events.Event, 1)
+	bus.Subscribe(events.TypeMissionGenerated, func(evt events.Event) error {
+		generated <- evt
 		return nil
 	})
 
@@ -96,10 +97,14 @@ func TestMissionGraph_InvalidEdgeRejected(t *testing.T) {
 	})
 
 	select {
-	case <-rejected:
-		// ok — validation caught bad edge
+	case evt := <-generated:
+		// ok — validate 过滤了无效边，graph 仍然生成
+		nodes, _ := evt.Payload["nodes"].([]interface{})
+		if len(nodes) != 1 {
+			t.Errorf("expected 1 valid node, got %d", len(nodes))
+		}
 	case <-time.After(time.Second):
-		t.Fatal("边引用不存在的节点应触发 MissionGraphRejected")
+		t.Fatal("应该生成 MissionGraph（无效边被过滤），但超时了")
 	}
 }
 
@@ -117,15 +122,16 @@ func (a *badEdgeAgent) Plan(goal string, ctx missionengine.Context) (*missioneng
 	}, nil
 }
 
-// TestMissionGraph_SelfLoopRejected 验证自循环边被拒绝。
-func TestMissionGraph_SelfLoopRejected(t *testing.T) {
+// TestMissionGraph_SelfLoopDropped 验证自循环边被静默丢弃（LLM 输出容错）。
+// validate 函数会过滤掉自循环边（from == to），不拒绝整个 Graph。
+func TestMissionGraph_SelfLoopDropped(t *testing.T) {
 	bus := eventbus.New()
 	eng := missionengine.New(bus, &selfLoopAgent{})
 	eng.Start()
 
-	rejected := make(chan events.Event, 1)
-	bus.Subscribe(events.TypeMissionGraphRejected, func(evt events.Event) error {
-		rejected <- evt
+	generated := make(chan events.Event, 1)
+	bus.Subscribe(events.TypeMissionGenerated, func(evt events.Event) error {
+		generated <- evt
 		return nil
 	})
 
@@ -140,10 +146,10 @@ func TestMissionGraph_SelfLoopRejected(t *testing.T) {
 	})
 
 	select {
-	case <-rejected:
-		// ok
+	case <-generated:
+		// ok — validate 过滤了自循环边，graph 仍然生成
 	case <-time.After(time.Second):
-		t.Fatal("自循环边应触发 MissionGraphRejected")
+		t.Fatal("应该生成 MissionGraph（自循环边被过滤），但超时了")
 	}
 }
 
