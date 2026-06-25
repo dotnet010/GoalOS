@@ -1,37 +1,40 @@
-# GoalOS — 面向人类目标的个人操作系统
+# GoalOS — A Personal Goal Execution Operating System
 
 [![Build & Release](https://github.com/dotnet010/GoalOS/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/dotnet010/GoalOS/actions/workflows/docker-publish.yml)
+[![Release](https://img.shields.io/github/v/release/dotnet010/GoalOS)](https://github.com/dotnet010/GoalOS/releases)
 
-> **用户只管提出目标，系统负责安全地实现它。**
+> **You state the goal. The system delivers it — safely.**
 
-GoalOS 不是聊天机器人，不是 Workflow 引擎，不是 Agent 框架。它是**面向人类目标的个人操作系统**——你只需要说出"我要什么"，系统理解、规划、执行、验证、交付。
+GoalOS is not a chatbot, not a workflow engine, not an agent framework. It is a **personal operating system for goal execution**. You say what you want — the system understands, plans, executes, verifies, and delivers.
+
+[中文文档](README_zh.md)
 
 ---
 
-## 愿景
+## Vision
 
-你表述目标 → 系统理解目标 → 双方就"什么叫完成"达成共识 → 系统安全执行 → 验证完成 → 交付结果。
+You state your goal → The system understands → You agree on "what done means" → The system executes safely → Verified → Delivered.
 
-任何不直接服务这一链路的功能都应被摒弃。
+Any feature that does not directly serve this chain should be removed.
 
-## v1.1.0 核心能力
+## v1.1.0 Core Capabilities
 
-| 能力 | 说明 |
-|------|------|
-| **CompletionContract** | 系统与你就"什么叫完成"建立契约。不再盲目执行 |
-| **Primitive 执行引擎** | Check→Exec→Wait→Decide 四原语管线。状态从事件推导 |
-| **Flow 模板** | 同一类目标每次按相同标准流程执行——结果可预测 |
-| **Multi-LLM 交叉验证** | 多个 AI 模型独立审查产出。验证金字塔：auto→cross-model→behavioral |
-| **自修正** | 执行失败时自动分析根因、修正、重试（最多 3 次） |
-| **Zero Trust 安全** | Capability Token + seccomp 沙箱 + IPC HMAC。每个 Action 必经 Governance |
-| **Persona 解耦** | 系统的"声音"由你控制。Core 产中性事件，Persona 决定怎么说 |
-| **运行可观测** | Timeline 审计、运行时不变式、Prometheus metrics |
+| Capability | Description |
+|------------|-------------|
+| **CompletionContract** | System establishes a contract with you on "what done means" before execution begins |
+| **Primitive Execution Engine** | Check→Exec→Wait→Decide pipeline. State derived from events (Projection over State) |
+| **Flow Templates** | Same goal type follows the same standard process — predictable results |
+| **Multi-LLM Verification** | Multiple AI models independently review output. Verification pyramid: auto-test → cross-model → behavioral |
+| **Self-Correction** | On failure, analyzes root cause, fixes, retries (up to 3×) before escalating to you |
+| **Zero Trust Security** | Capability Token + seccomp sandbox + IPC HMAC. Every Action passes through Governance |
+| **Persona Decoupled** | The system's "voice" is under your control. Core produces neutral events; Persona controls how it speaks |
+| **Runtime Observability** | Audit timeline, runtime invariants, Prometheus metrics |
 
-## 快速开始
+## Quick Start
 
-### 安装
+### Install
 
-从 [Releases](https://github.com/dotnet010/GoalOS/releases) 下载对应平台的二进制文件。
+Download the binary for your platform from [Releases](https://github.com/dotnet010/GoalOS/releases).
 
 ```bash
 # macOS/Linux
@@ -39,22 +42,22 @@ tar xzf goalos-<os>-<arch>.tar.gz
 ./goalos-daemon &
 ```
 
-### 第一个目标
+### Your First Goal
 
 ```bash
-# 通过 CLI
-goalos "设计一个3D魔方。使用HTML/CSS创建可以旋转的3D魔方。"
+# Via CLI
+goalos "Design a 3D rotating Rubik's Cube in HTML/CSS"
 
-# 或通过 HTTP API
+# Via HTTP API
 curl -X POST http://localhost:18920/api/goals \
   -H "Content-Type: application/json" \
-  -d '{"goal":"创建一个 CRM 系统"}'
+  -d '{"goal":"Build a CRM system"}'
 ```
 
-### 配置 LLM
+### Configure LLM
 
 ```bash
-# 编辑 ~/.goalos/config/daemon.yaml
+# Edit ~/.goalos/config/daemon.yaml
 llm:
   provider: openai
   model: glm-5.1
@@ -62,56 +65,56 @@ llm:
   base_url: https://your-llm-api.com/v1
   max_tokens: 4096
 
-# 设置 API Key
+# Set API Key
 export GOALOS_LLM_API_KEY="sk-..."
-# 热加载配置（无需重启 daemon）
+# Hot-reload config (no daemon restart needed)
 curl -X POST http://localhost:18920/api/system/reload
 ```
 
-### 交互通道
+### Interaction Channels
 
-| 通道 | 场景 |
-|------|------|
-| **HTTP API** | 系统集成、脚本自动化 |
-| **CLI** (`goalos`) | 终端用户、CI/CD |
-| **Web UI** | `http://localhost:18920` — 目标仪表盘、Timeline |
-| **Telegram Bot** | 移动端轻量交互（v1.1.0） |
+| Channel | Use Case |
+|---------|----------|
+| **HTTP API** | System integration, scripting, automation |
+| **CLI** (`goalos`) | Terminal users, CI/CD |
+| **Web UI** | `http://localhost:18920` — goal dashboard, timeline |
+| **Telegram Bot** | Mobile lightweight interaction (v1.1.0) |
 
-## 架构
+## Architecture
 
 ```
-用户目标 → Agent(Align→Analyze→Plan) → MissionGraph
-         → Governance(五引擎审批) → PipelineRunner(Check→Exec→Wait→Decide)
-         → Plugin Runner(seccomp沙箱) → 产出物(~/Goals/)
-         → Verifier(验证金字塔) → CompletionContract 验收 → 结果交付
+User Goal → Agent(Align→Analyze→Plan) → MissionGraph
+          → Governance(5-engine approval) → PipelineRunner(Check→Exec→Wait→Decide)
+          → Plugin Runner(seccomp sandbox) → Artifacts(~/Goals/)
+          → Verifier(verification pyramid) → CompletionContract → Delivered
 ```
 
-### 核心原则
+### Core Principles
 
-1. **Plugin over Build** — 可变能力皆 Plugin。核心不变
-2. **Event over Call** — 模块通过事件通信。可审计可回放
-3. **File over Database** — 数据是文件。用户拥有。零外部存储依赖
-4. **Projection over State** — 状态从事件推导。缓存可重建
-5. **Delegate over Build** — 已有平台的不重复做
-6. **One over Many** — 数据证明需要多个前只做一个
-7. **Interface over Implementation** — 定义"做什么"。实现可替换
-8. **User-Owned over System-Managed** — 用户拥有数据
-9. **Persona Decoupled** — Core 产中性事件。Persona 是可替换渲染层
+1. **Plugin over Build** — All variable capabilities are Plugins. The core never changes
+2. **Event over Call** — Modules communicate via events. Auditable and replayable
+3. **File over Database** — Data is files. User-owned. Zero external storage dependencies
+4. **Projection over State** — State is derived from events. Caches are rebuildable
+5. **Delegate over Build** — Don't rebuild what platforms already do (messaging, keychain, notifications)
+6. **One over Many** — Use one until data proves you need more
+7. **Interface over Implementation** — Define "what", not "how". Implementations are replaceable
+8. **User-Owned over System-Managed** — Data belongs to the user. Summaries in file frontmatter
+9. **Persona Decoupled** — Core produces neutral events. Persona is a replaceable rendering layer
 
-## API
+## API Reference
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/goals` | 创建目标 |
-| GET | `/api/goals/:id` | 查询目标状态 |
-| GET | `/api/goals` | 目标列表 |
-| POST | `/api/goals/:id/pause` | 暂停 |
-| POST | `/api/goals/:id/resume` | 恢复 |
-| POST | `/api/goals/:id/stop` | 终止 |
-| GET | `/api/health` | 健康检查 |
-| POST | `/api/system/reload` | 热加载配置 |
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/goals` | Create a goal |
+| GET | `/api/goals/:id` | Get goal status |
+| GET | `/api/goals` | List all goals |
+| POST | `/api/goals/:id/pause` | Pause a goal |
+| POST | `/api/goals/:id/resume` | Resume a goal |
+| POST | `/api/goals/:id/stop` | Stop a goal |
+| GET | `/api/health` | Health check |
+| POST | `/api/system/reload` | Hot-reload config |
 
-## 从源码构建
+## Build from Source
 
 ```bash
 git clone https://github.com/dotnet010/GoalOS.git
@@ -120,10 +123,10 @@ go build -o goalos-daemon ./cmd/goalos/
 go build -o goalos ./cmd/goalos-cli/
 ```
 
-## 文档
+## Documentation
 
-- [用户手册](用户手册.md)
-- [开发计划 v1.1.0](开发计划v1.1.0.md)
+- [User Manual](用户手册.md) (Chinese)
+- [Development Plan v1.1.0](开发计划v1.1.0.md)
 
 ## License
 
