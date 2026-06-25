@@ -130,4 +130,4 @@ go build -o goalos ./cmd/goalos-cli/
 
 ## License
 
-Apache-2.0
+GPL-3.0
