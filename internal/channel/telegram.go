@@ -141,7 +141,6 @@ func (tb *TelegramBot) Send(chatID string, content MessageContent) error {
 		Description string `json:"description"`
 	}
 	io.ReadAll(resp.Body)
-	// W7: 简化处理。完整错误处理在 W8。
 	_ = result
 	return nil
 }

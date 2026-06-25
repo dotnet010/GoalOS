@@ -74,7 +74,7 @@ func TestMissionEngine_EmptyGraphRejected(t *testing.T) {
 	}
 }
 
-// TestMissionEngine_WebSearchActionType 验证搜索类 Goal 产生 web.search action_type。
+// TestMissionEngine_WebSearchActionType 验证搜索类 Goal 产生 shell.execute action_type。
 func TestMissionEngine_WebSearchActionType(t *testing.T) {
 	bus := eventbus.New()
 	engine := missionengine.New(bus, &missionengine.StubAgent{})
@@ -104,8 +104,8 @@ func TestMissionEngine_WebSearchActionType(t *testing.T) {
 		}
 		node := nodes[0].(map[string]interface{})
 		actionType, _ := node["action_type"].(string)
-		if actionType != "web.search" {
-			t.Errorf("搜索类 Goal 应映射到 web.search, got %s", actionType)
+		if actionType != "shell.execute" {
+			t.Errorf("搜索类 Goal 应映射到 shell.execute, got %s", actionType)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("MissionGenerated event was not published for search goal (timeout)")

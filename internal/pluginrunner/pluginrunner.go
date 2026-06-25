@@ -112,7 +112,12 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 		return nil
 	}
 
-	log.Printf("[PluginRunner] result: type=%s status=%s output_len=%d", result.eventType, result.status, len(result.output))
+		// v1.1.0: output 为空时用 errMsg 填充
+	displayOutput := result.output
+	if displayOutput == "" && result.errMsg != "" {
+		displayOutput = result.errMsg
+	}
+	log.Printf("[PluginRunner] result: type=%s status=%s output_len=%d", result.eventType, result.status, len(displayOutput))
 
 	r.publish(events.Event{
 		Type:   result.eventType,
@@ -122,7 +127,7 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 			"action_id": actionID,
 			"result": map[string]interface{}{
 				"status": result.status,
-				"output": result.output,
+				"output": displayOutput,
 			},
 			"artifacts_produced": []interface{}{},
 			"cost": map[string]interface{}{
@@ -172,6 +177,7 @@ func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 		eventType:  evtType,
 		status:     result.Status,
 		output:     result.Output,
+			errMsg:     result.Error,
 		durationMs: result.DurationMs,
 	}, nil
 }
@@ -180,6 +186,7 @@ type execResult struct {
 	eventType  string
 	status     string
 	output     string
+	errMsg     string
 	durationMs int
 }
 

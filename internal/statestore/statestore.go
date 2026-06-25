@@ -30,6 +30,20 @@ type GoalState struct {
 	CurrentState   map[string]interface{} `json:"current_state,omitempty"` // 当前状态快照
 	ArtifactPaths  []string `json:"artifact_paths,omitempty"`   // 产出物路径
 	TokenIDs       []string `json:"token_ids,omitempty"`        // 回滚时需撤销的 Token
+	// v1.1.0: Wait 期间的执行位置。
+	// PipelineState 不作为独立文件存在——是 Snapshot 的字段，从 PipelinePaused 事件推导。
+	// 符合 Projection over State 原则。
+	PipelineState  *PipelineState `json:"pipeline_state,omitempty"`
+}
+
+// PipelineState 记录 PipelineRunner 在 Wait 期间的执行位置（v1.1.0）。
+// 不作为独立文件持久化——是 Snapshot 的字段，从 PipelinePaused 事件推导。
+type PipelineState struct {
+	ResumePoint     string `json:"resume_point"`     // 恢复节点 ID
+	ResumePrimitive string `json:"resume_primitive"` // 恢复后从哪个原语继续："decide"|"check"
+	WaitReason      string `json:"wait_reason"`      // "approval"|"dependency"|"resource"
+	TimeoutAt       string `json:"timeout_at"`       // ISO 8601 超时时间
+	PendingActionIDs []string `json:"pending_action_ids,omitempty"` // 等待中的 Action ID 列表
 }
 
 // Store 管理事件持久化和状态投影。

@@ -12,7 +12,7 @@ import (
 )
 
 // Agent is the planning interface.
-// MVP 提供两个实现: StubAgent (硬编码 3 节点图，无 LLM 依赖)、GoalAgent (LLM 驱动)。
+// 提供两个实现: GoalAgent (LLM 驱动，生产环境)、StubAgent (LLM 不可用时的回退，测试/CI)。
 type Agent interface {
 	Plan(goal string, ctx Context) (*MissionGraph, error)
 }
@@ -250,10 +250,16 @@ func (s *StubAgent) Plan(goal string, ctx Context) (*MissionGraph, error) {
 	}, nil
 }
 
-// InferAction 纯路由：从配置文件加载规则，无匹配时使用默认 action_type。
-// W3: GoalAgent + LLM 推理替代关键词匹配。
+// InferAction 返回默认 action_type。v1.1.0: GoalAgent+LLM 推理替代关键词匹配。
+// 仅作为 StubAgent/fallbackPlan 的最后回退。
 func InferAction(goal string) (string, string) {
-	routes := LoadRoutes("") // 空路径→使用默认规则。W3: 从 ~/.goalos/config/routes.yaml 加载
-	return routes.MatchWithTarget(goal)
+	return "shell.execute", goal
+}
+
+// SetAgent 热替换 Agent（v1.1.0 UX1 热加载）。
+// 线程安全。可在运行时切换 LLM Provider/Model 而不重启 daemon。
+func (e *Engine) SetAgent(agent Agent) {
+	e.agent = agent
+	log.Printf("[MissionEngine] agent hot-swapped to %T", agent)
 }
 

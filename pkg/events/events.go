@@ -114,6 +114,20 @@ const (
 	TypeMessageReceived = "MessageReceived" // 收到用户消息。Publisher: Channel Adapter
 	TypeMessageSent     = "MessageSent"     // 发送回复。Publisher: Channel Adapter
 
+	// ── v1.1.0 Primitive 事件 ──
+	TypeCheckPerformed               = "CheckPerformed"               // Check 原语完成。Publisher: PipelineRunner
+	TypeGateEvaluated                = "GateEvaluated"                // Gate 评估完成。Publisher: PipelineRunner
+	TypeDecidePathSelected           = "DecidePathSelected"           // Decide 路径选择。Publisher: PipelineRunner
+	TypePipelinePaused               = "PipelinePaused"               // Wait 暂停。Publisher: PipelineRunner
+	TypePipelineResumed              = "PipelineResumed"              // Wait 恢复。Publisher: PipelineRunner
+	TypeFlowStarted                  = "FlowStarted"                  // Flow 开始。Publisher: PipelineRunner
+	TypeFlowCompleted                = "FlowCompleted"                // Flow 完成。Publisher: PipelineRunner
+	TypeMultiLLMVerificationCompleted = "MultiLLMVerificationCompleted" // Multi-LLM 裁决完成。Publisher: Plugin Runner
+	TypeInvariantViolated            = "InvariantViolated"            // 运行时不变式违反。Publisher: 各核心模块
+	TypeTaskAnalysisCompleted        = "TaskAnalysisCompleted"        // Agent.Analyze() 完成。Publisher: Mission Engine
+	TypeResourceAvailable            = "ResourceAvailable"            // 资源可用。Publisher: Plugin Runner / OS Monitor
+	TypeDataSharingApproved          = "DataSharingApproved"          // 用户批准外发数据。Publisher: Channel Adapter
+
 	// ── Plugin 生命周期（v2 预留）──
 	TypePluginProcessTerminated = "PluginProcessTerminated" // Plugin 进程终止。Publisher: Plugin Runner
 	TypeCapabilityRegistered    = "CapabilityRegistered"    // 动态能力注册。Publisher: Plugin Runner (v2)

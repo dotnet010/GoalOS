@@ -1,12 +1,14 @@
 // Package eventbus 实现 GoalOS 进程内事件总线。
 //
-// 核心特性：
-//   - 同步分发：Publish 阻塞直到所有 handler 完成（微秒级）
-//   - 单 goroutine 串行：保证事件有序
+// 核心特性（v1.1.0）：
+//   - 同步分发：核心状态事件 Publish 阻塞直到所有 handler 完成（微秒级）
+//   - 异步分发：副作用事件通过独立 goroutine 投递（R321）
+//   - Handler 可 fire-and-forget Publish（仅副作用事件）
+//   - Per-goal 过滤：Subscribe 时声明 goalID，仅接收匹配事件（R297修正）
 //   - Handler panic 隔离：recover 后记录日志，不影响其他 handler
-//   - Allowed-Subscriber 列表（ACL）：错误检测机制——非安全 enforcing
+//   - Allowed-Subscriber 列表（ACL）：错误检测机制
 //
-// 设计依据：05 架构文档 §3、R174、R225。
+// 设计依据：05 架构文档 §3.6、R174、R225、R321、R342。
 package eventbus
 
 import (
@@ -30,6 +32,7 @@ type subscription struct {
 	id      SubscriptionID              // 唯一标识
 	handler func(events.Event) error    // 事件处理函数。必须微秒级返回
 	role    string                      // 角色名。用于 ACL 检查
+	goalID  string                      // v1.1.0: 过滤的目标 ID。空="" 接收所有 Goal
 }
 
 // EventBus 是进程内事件总线。
@@ -67,6 +70,17 @@ func (eb *EventBus) Subscribe(eventType string, handler func(events.Event) error
 // SubscribeAs 以指定角色注册事件处理器。
 // 如果该 eventType 有 ACL，只有 role 在允许列表中的订阅者才收到事件。
 func (eb *EventBus) SubscribeAs(eventType string, role string, handler func(events.Event) error) SubscriptionID {
+	return eb.subscribeFiltered(eventType, role, "", handler)
+}
+
+// SubscribeForGoal 注册仅接收指定 goalID 事件的事件处理器（v1.1.0 per-goal 过滤）。
+// goalID 为空="" 时接收所有 Goal 的事件。
+func (eb *EventBus) SubscribeForGoal(goalID string, eventType string, handler func(events.Event) error) SubscriptionID {
+	return eb.subscribeFiltered(eventType, "", goalID, handler)
+}
+
+// subscribeFiltered 是 Subscribe 的底层实现。支持 role 和 goalID 双重过滤。
+func (eb *EventBus) subscribeFiltered(eventType string, role string, goalID string, handler func(events.Event) error) SubscriptionID {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
 
@@ -75,6 +89,7 @@ func (eb *EventBus) SubscribeAs(eventType string, role string, handler func(even
 		id:      eb.nextID,
 		handler: handler,
 		role:    role,
+		goalID:  goalID,
 	}
 	eb.subs[eventType] = append(eb.subs[eventType], sub)
 	return eb.nextID
@@ -111,7 +126,11 @@ func (eb *EventBus) Publish(evt events.Event) {
 	eb.mu.RUnlock()
 
 	for _, sub := range subs {
-		// ACL 检查：如果设定了 ACL 且该订阅者 role 不在允许列表中，跳过
+		// Per-goal 过滤（v1.1.0）：如果订阅者声明了 goalID 但事件 goalID 不匹配，跳过
+		if sub.goalID != "" && sub.goalID != evt.GoalID {
+			continue
+		}
+		// ACL 检查：如果设定了 ACL
 		if allowedRoles != nil && !contains(allowedRoles, sub.role) {
 			continue
 		}

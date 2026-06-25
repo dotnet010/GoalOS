@@ -2,8 +2,8 @@
   "name": "shell-executor",
   "type": "capability",
   "version": "1.0.0",
-  "signature": "",
+  "signature": "sha256:f288380adf90f9d6b7aa2a3cc3bd8e3ac2d90a5be6ec68d2040fe6dc90a6aa66",
   "binary": "./plugin-shell",
-  "declared_capabilities": ["shell.execute", "shell.run"],
+  "declared_capabilities": ["shell.execute", "shell.run", "shell.append", "fs.write", "fs.read", "fs.create_dir", "fs.list"],
   "description": "Shell 命令执行器 — 在独立 OS 子进程中运行 shell 命令"
 }

@@ -9,7 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
+"os/signal"
 	"strings"
 	"syscall"
 	"time"
@@ -89,7 +89,7 @@ func main() {
 	// Step 9: Agent 选择。优先级：daemon.yaml > 环境变量 > StubAgent。
 	// 设计依据：R241（Ollama URL 可配置）、R251（Anthropic Provider）。
 	var agent missionengine.Agent = missionengine.NewStubAgent()
-	agentName := "StubAgent(关键词匹配)"
+	agentName := "StubAgent(fallback)"
 
 	switch {
 	case cfg.LLM.Provider == "ollama" || os.Getenv("OLLAMA_MODEL") != "":
@@ -208,7 +208,21 @@ func main() {
 	mux.HandleFunc("/api/system/status", api.HandleSystemStatus)
 	mux.HandleFunc("/api/system/stop", api.HandleDaemonStop)
 	mux.HandleFunc("/api/system/restart", api.HandleDaemonRestart)
-
+		mux.HandleFunc("/api/system/reload", func(w http.ResponseWriter, r *http.Request) {
+			configPath := home + "/.goalos/config/daemon.yaml"
+			if err := cfg.Reload(configPath); err != nil {
+				http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"`+err.Error()+`"}}`, http.StatusInternalServerError)
+				return
+			}
+			apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
+			if k := os.Getenv("GOALOS_LLM_API_KEY"); k != "" { apiKey = k }
+			cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, cfg.LLM.Model)
+			newAgent := missionengine.NewGoalAgentWithBus(cloudClient, bus)
+			missionEng.SetAgent(newAgent)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `"}`))
+			log.Printf("[Daemon] hot-reloaded: model=%s, agent swapped", cfg.LLM.Model)
+		})
 	server := &http.Server{Addr: fmt.Sprintf("localhost:%d", cfg.Daemon.Port), Handler: mux}
 	go func() {
 		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13: HTTP on localhost:%d"}`, time.Now().Format(time.RFC3339), cfg.Daemon.Port)
@@ -218,7 +232,8 @@ func main() {
 	bus.Publish(events.Event{Type: events.TypeSystemStarted, Source: "daemon", Seq: 0,
 		Payload: map[string]interface{}{"pid": os.Getpid(), "port": cfg.Daemon.Port}})
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted"}`, time.Now().Format(time.RFC3339))
-
+		// SIGHUP 热加载配置（v1.1.0 UX1）
+		go func() { sigCh := make(chan os.Signal, 1); signal.Notify(sigCh, syscall.SIGHUP); for range sigCh { configPath := home + "/.goalos/config/daemon.yaml"; if err := cfg.Reload(configPath); err != nil { log.Printf("[Daemon] SIGHUP reload failed: %v", err) } else { log.Printf("[Daemon] SIGHUP reloaded: model=%s", cfg.LLM.Model) } } }()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	<-ctx.Done()

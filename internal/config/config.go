@@ -161,3 +161,20 @@ func loadYAML(path string, cfg *Config) error {
 	}
 	return nil
 }
+
+// Reload 热加载配置——不重启 daemon（v1.1.0 UX1）。
+func (cfg *Config) Reload(path string) error {
+	if path == "" {
+		return fmt.Errorf("config: no path for reload")
+	}
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("config: %s not found", path)
+	}
+	oldPort := cfg.Daemon.Port
+	if err := loadYAML(path, cfg); err != nil {
+		return fmt.Errorf("config: reload failed: %w", err)
+	}
+	cfg.Daemon.Port = oldPort
+	applyEnv(cfg)
+	return nil
+}
