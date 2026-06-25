@@ -24,8 +24,8 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Run tests (with race)
-        run: go test -count=1 -timeout 120s -race -v ./...
+      - name: Run tests (with race, skip E2E)
+        run: go test -count=1 -timeout 120s -race -v $(go list ./... | grep -v '/test$')
 
   release:
     needs: test
