@@ -128,7 +128,7 @@ func (pr *PipelineRunner) Run(goalID string, state *statestore.GoalState) (*Pipe
 		return pr.wait(goalID, pr.state.WaitReason)
 	}
 	if pr.state.ResumePrimitive == "decide" {
-		return pr.decide(goalID, nil)
+		return pr.decide(goalID, "", nil)
 	}
 
 	// 核心管线（对每个待执行的 Action）
@@ -160,7 +160,7 @@ func (pr *PipelineRunner) executePrimitivePipeline(goalID string, actionID strin
 		log.Printf("[PipelineRunner] action=%s already completed — skipping Exec", actionID)
 	} else {
 		if err := pr.exec(actionID); err != nil {
-			return pr.decide(goalID, err)
+			return pr.decide(goalID, actionID, err)
 		}
 	}
 
@@ -170,7 +170,7 @@ func (pr *PipelineRunner) executePrimitivePipeline(goalID string, actionID strin
 	}
 
 	// 阶段 4: Decide
-	return pr.decide(goalID, nil)
+	return pr.decide(goalID, "", nil)
 }
 
 // check 评估 Action 的准入条件。返回 PASS/WARN/BLOCK/REJECT。
@@ -242,7 +242,7 @@ func (pr *PipelineRunner) wait(goalID string, reason string) (*PipelineResult, e
 }
 
 // decide 分析结果并选择路径。
-func (pr *PipelineRunner) decide(goalID string, execErr error) (*PipelineResult, error) {
+func (pr *PipelineRunner) decide(goalID string, actionID string, execErr error) (*PipelineResult, error) {
 	if execErr == nil {
 		pr.bus.Publish(events.Event{
 			Type:   events.TypeDecidePathSelected,
@@ -256,7 +256,7 @@ func (pr *PipelineRunner) decide(goalID string, execErr error) (*PipelineResult,
 	}
 
 	// 简化决策：execErr → AUTO_FIX（最多 3 次）→ ESCALATE
-	actionID := "current" // MVP 简化
+	 // MVP 简化
 	pr.autoFixCount[actionID]++
 	if pr.autoFixCount[actionID] <= 3 {
 		log.Printf("[PipelineRunner] AUTO_FIX attempt %d/3", pr.autoFixCount[actionID])

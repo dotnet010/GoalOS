@@ -119,7 +119,7 @@ func (gr *GoalRunner) State() GoalStatus {
 }
 
 // savePipelineState 持久化 PipelineState 到 Snapshot。
-func (gr *GoalRunner) savePipelineState(ps *PipelineState) {
+func (gr *GoalRunner) savePipelineState(ps *PipelineState) error {
 	state, _ := gr.store.LoadState(gr.goal.ID)
 	state.PipelineState = &statestore.PipelineState{
 		ResumePoint:      ps.ResumePoint,
@@ -129,8 +129,9 @@ func (gr *GoalRunner) savePipelineState(ps *PipelineState) {
 		PendingActionIDs: ps.PendingActionIDs,
 	}
 	if err := gr.store.SaveSnapshot(gr.goal.ID, state); err != nil {
-		log.Printf("[GoalRunner] save snapshot: %v", err)
+		return fmt.Errorf("goalrunner: save snapshot: %w", err)
 	}
+	return nil
 }
 
 // waitForWakeup 等待外部唤醒事件。
