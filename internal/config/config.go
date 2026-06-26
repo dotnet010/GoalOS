@@ -204,3 +204,26 @@ func (cfg *Config) Validate() error {
 	}
 	return nil
 }
+
+// WriteDefault 写入带注释的默认配置文件（v1.1.0 首次启动自动生成）。
+func WriteDefault(path string) error {
+	defaultYAML := `# GoalOS 配置文件 — 首次启动自动生成
+# 修改后保存，然后执行: curl -X POST http://localhost:18920/api/system/reload
+
+daemon:
+  port: 18920               # HTTP 端口
+  autonomy_level: approve    # observe|suggest|approve|autonomous
+
+llm:
+  provider: openai           # LLM 供应商: openai|anthropic|ollama
+  model: glm-5.1             # 模型名称
+  api_key: ""                # API Key。直接填写或留空使用环境变量
+  base_url: ""               # API 地址。空=使用默认端点。示例: https://api.openai.com/v1
+  max_tokens: 4096
+  temperature: 0.3
+  timeout: 300s
+
+persona: concise             # concise|warm|minimal
+`
+	return os.WriteFile(path, []byte(defaultYAML), 0600)
+}
