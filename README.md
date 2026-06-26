@@ -17,7 +17,7 @@ You state your goal → The system understands → You agree on "what done means
 
 Any feature that does not directly serve this chain should be removed.
 
-## v1.1.0 Core Capabilities
+## v0.1.0 Core Capabilities
 
 | Capability | Description |
 |------------|-------------|
@@ -78,7 +78,7 @@ curl -X POST http://localhost:18920/api/system/reload
 | **HTTP API** | System integration, scripting, automation |
 | **CLI** (`goalos`) | Terminal users, CI/CD |
 | **Web UI** | `http://localhost:18920` — goal dashboard, timeline |
-| **Telegram Bot** | Mobile lightweight interaction (v1.1.0) |
+| **Telegram Bot** | Mobile lightweight interaction (v0.1.0) |
 
 ## Architecture
 
@@ -126,7 +126,7 @@ go build -o goalos ./cmd/goalos-cli/
 ## Documentation
 
 - [User Manual](用户手册.md) (Chinese)
-- [Development Plan v1.1.0](开发计划v1.1.0.md)
+- [Development Plan v0.1.0](开发计划v0.1.0.md)
 
 ## License
 
