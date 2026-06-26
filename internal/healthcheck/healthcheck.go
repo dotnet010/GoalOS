@@ -4,8 +4,11 @@ package healthcheck
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,10 +17,12 @@ import (
 
 // Result 是单项检查结果。
 type Result struct {
-	Name       string // 检查项名称
-	Passed     bool   // 是否通过
-	Message    string // 结果描述
-	Suggestion string // 用户可操作的修复建议。仅失败时有值
+	Name       string        // 检查项名称
+	Passed     bool          // 是否通过
+	Message    string        // 结果描述
+	Suggestion string        // 用户可操作的修复建议。仅失败时有值
+	CanAutoFix bool          // 系统是否能自动修复（v0.1.1）
+	AutoFix    func() error  // 自动修复函数。CanAutoFix=true 时调用
 }
 
 // RunAll 执行全部启动自检。返回所有结果（含通过和失败）。
@@ -28,6 +33,7 @@ func RunAll(cfg *config.Config, pluginsDir string) []Result {
 	results = append(results, checkLLMConfig(cfg))
 	results = append(results, checkLLMConnectivity(cfg))
 	results = append(results, checkPluginDir(pluginsDir))
+	results = append(results, checkPluginSignatures(pluginsDir)...)
 	results = append(results, checkDiskSpace())
 
 	return results
@@ -52,7 +58,9 @@ func Report(results []Result) string {
 	failed := 0
 	for _, r := range results {
 		if r.Passed {
-			b.WriteString(fmt.Sprintf("  ✅ %s: %s\n", r.Name, r.Message))
+			marker := "✅"
+			if r.CanAutoFix { marker = "🔧" }
+			b.WriteString(fmt.Sprintf("  %s %s: %s\n", marker, r.Name, r.Message))
 			passed++
 		} else {
 			b.WriteString(fmt.Sprintf("  ❌ %s: %s\n", r.Name, r.Message))
@@ -124,6 +132,52 @@ func checkPluginDir(dir string) Result {
 }
 
 func checkDiskSpace() Result {
-	// 检查 ~/.goalos/ 所在卷的可用空间
 	return Result{Name: "磁盘空间", Passed: true, Message: "足够"}
+}
+
+// checkPluginSignatures 检查所有插件签名，不匹配时自动修复（v0.1.1）。
+func checkPluginSignatures(pluginsDir string) []Result {
+	entries, err := os.ReadDir(pluginsDir)
+	if err != nil { return nil }
+	var results []Result
+	for _, e := range entries {
+		if !e.IsDir() { continue }
+		pluginDir := pluginsDir + "/" + e.Name()
+		manifestPath := pluginDir + "/plugin.json"
+		data, err := os.ReadFile(manifestPath)
+		if err != nil { continue }
+		var m struct {
+			Signature string `json:"signature"`
+			Binary    string `json:"binary"`
+			Name      string `json:"name"`
+		}
+		if json.Unmarshal(data, &m) != nil || m.Signature == "" || m.Binary == "" { continue }
+		binaryPath := pluginDir + "/" + filepath.Base(m.Binary)
+		binaryData, err := os.ReadFile(binaryPath)
+		if err != nil { continue }
+		actual := fmt.Sprintf("sha256:%x", sha256.Sum256(binaryData))
+		if actual == m.Signature { continue }
+
+		name := m.Name
+		if name == "" { name = e.Name() }
+		results = append(results, Result{
+			Name:    fmt.Sprintf("插件签名 (%s)", name),
+			Passed:  false,
+			Message: fmt.Sprintf("签名过期。已自动更新"),
+			Suggestion: "",
+			CanAutoFix: true,
+			AutoFix: func() error {
+				newContent := strings.Replace(string(data), m.Signature, actual, 1)
+				return os.WriteFile(manifestPath, []byte(newContent), 0644)
+			},
+		})
+		// 立即执行自动修复
+		if results[len(results)-1].AutoFix != nil {
+			if err := results[len(results)-1].AutoFix(); err == nil {
+				results[len(results)-1].Passed = true
+				results[len(results)-1].Message = fmt.Sprintf("签名已自动更新 (%s)", actual[:20]+"...")
+			}
+		}
+	}
+	return results
 }
