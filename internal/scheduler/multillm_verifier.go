@@ -73,7 +73,7 @@ func (mv *MultiLLMVerifier) Verify(code string, actionID string) (*Verdict, erro
 
 // callProvider 调用单个 Provider 审查代码（30s 超时）。
 func (mv *MultiLLMVerifier) callProvider(p ProviderClient, code string, actionID string) ProviderVote {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	prompt := fmt.Sprintf(`审查以下代码。返回 PASS（没有问题）/ WARN（有小问题但不阻塞）/ FAIL（有严重问题必须修改）。
@@ -85,10 +85,11 @@ func (mv *MultiLLMVerifier) callProvider(p ProviderClient, code string, actionID
 
 	req := &llm.ChatRequest{
 		Messages: []llm.Message{
-			{Role: "system", Content: "你是代码审查专家。严格审查安全、性能、正确性。只返回PASS/WARN/FAIL。"},
+			{Role: "system", Content: "你是代码审查专家。严格审查安全、性能、正确性。只返回一个词: PASS, WARN, 或 FAIL。"},
 			{Role: "user", Content: prompt},
 		},
-		MaxTokens: 10,
+		MaxTokens:  10,
+		ToolChoice: "none", // 审查模式不需要 function calling
 	}
 
 	resp, err := p.Client.Chat(ctx, req)

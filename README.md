@@ -54,22 +54,47 @@ curl -X POST http://localhost:18920/api/goals \
   -d '{"goal":"Build a CRM system"}'
 ```
 
-### Configure LLM
+### Configuration
 
-```bash
-# Edit ~/.goalos/config/daemon.yaml
+On first startup, GoalOS auto-generates `~/.goalos/config/daemon.yaml` with comments. Edit it:
+
+```yaml
+daemon:
+  port: 18920
+  autonomy_level: autonomous   # observe|suggest|approve|autonomous
+
 llm:
   provider: openai
   model: glm-5.1
-  api_key_env: GOALOS_LLM_API_KEY
+  api_key: "sk-..."            # API key directly in config — no env vars needed
   base_url: https://your-llm-api.com/v1
   max_tokens: 4096
 
-# Set API Key
-export GOALOS_LLM_API_KEY="sk-..."
-# Hot-reload config (no daemon restart needed)
-curl -X POST http://localhost:18920/api/system/reload
+# Hot-reload — no daemon restart needed
+# curl -X POST http://localhost:18920/api/system/reload
 ```
+
+### Multi-Model Verification
+
+Configure multiple LLM providers for parallel code review:
+
+```yaml
+multi_llm:
+  enabled: true
+  providers:
+    - name: glm
+      model: glm-5.1
+      api_key: "sk-..."
+      base_url: https://ws-hwiv1ueutcxpjuzq.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+      allowed_for: [L0,L1,L2,L3,L4,L5]
+    - name: openrouter
+      model: nvidia/nemotron-3-ultra-550b-a55b:free
+      api_key: "sk-or-..."
+      base_url: https://openrouter.ai/api/v1
+      allowed_for: [L0,L1,L2]
+```
+
+System calls all providers in parallel → VerdictCombiner merges results. Divergence is shown to user.
 
 ### Interaction Channels
 
@@ -78,7 +103,7 @@ curl -X POST http://localhost:18920/api/system/reload
 | **HTTP API** | System integration, scripting, automation |
 | **CLI** (`goalos`) | Terminal users, CI/CD |
 | **Web UI** | `http://localhost:18920` — goal dashboard, timeline |
-| **Telegram Bot** | Mobile lightweight interaction (v0.1.0) |
+| **Telegram Bot** | Mobile lightweight interaction |
 
 ## Architecture
 

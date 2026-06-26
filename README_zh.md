@@ -51,22 +51,47 @@ curl -X POST http://localhost:18920/api/goals \
   -d '{"goal":"创建一个 CRM 系统"}'
 ```
 
-### 配置 LLM
+### 配置
 
-```bash
-# 编辑 ~/.goalos/config/daemon.yaml
+首次启动时 GoalOS 会自动生成 `~/.goalos/config/daemon.yaml`（带注释）。直接编辑：
+
+```yaml
+daemon:
+  port: 18920
+  autonomy_level: autonomous   # observe|suggest|approve|autonomous
+
 llm:
   provider: openai
   model: glm-5.1
-  api_key_env: GOALOS_LLM_API_KEY
+  api_key: "sk-..."            # API Key 直接填写，不需要环境变量
   base_url: https://your-llm-api.com/v1
   max_tokens: 4096
 
-# 设置 API Key
-export GOALOS_LLM_API_KEY="sk-..."
 # 热加载配置（无需重启 daemon）
-curl -X POST http://localhost:18920/api/system/reload
+# curl -X POST http://localhost:18920/api/system/reload
 ```
+
+### 多模型验证
+
+配置多个 LLM Provider 进行并行代码审查：
+
+```yaml
+multi_llm:
+  enabled: true
+  providers:
+    - name: glm
+      model: glm-5.1
+      api_key: "sk-..."
+      base_url: https://ws-hwiv1ueutcxpjuzq.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+      allowed_for: [L0,L1,L2,L3,L4,L5]
+    - name: openrouter
+      model: nvidia/nemotron-3-ultra-550b-a55b:free
+      api_key: "sk-or-..."
+      base_url: https://openrouter.ai/api/v1
+      allowed_for: [L0,L1,L2]
+```
+
+系统并行调用所有 Provider → VerdictCombiner 合并裁决。分歧会展示给用户。
 
 ### 交互通道
 
@@ -75,7 +100,7 @@ curl -X POST http://localhost:18920/api/system/reload
 | **HTTP API** | 系统集成、脚本自动化 |
 | **CLI** (`goalos`) | 终端用户、CI/CD |
 | **Web UI** | `http://localhost:18920` — 目标仪表盘、Timeline |
-| **Telegram Bot** | 移动端轻量交互（v0.1.0） |
+| **Telegram Bot** | 移动端轻量交互 |
 
 ## 架构
 

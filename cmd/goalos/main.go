@@ -110,7 +110,7 @@ func main() {
 		if u := os.Getenv("GOALOS_LLM_BASE_URL"); u != "" {
 			baseURL = u
 		}
-		apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
+		apiKey := os.Getenv(cfg.LLM.APIKeyEnv); if apiKey == "" { apiKey = cfg.LLM.APIKey }; if apiKey == "" { apiKey = cfg.LLM.APIKey }
 		if k := os.Getenv("GOALOS_LLM_API_KEY"); k != "" {
 			apiKey = k
 		}
@@ -214,7 +214,7 @@ func main() {
 				http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"`+err.Error()+`"}}`, http.StatusInternalServerError)
 				return
 			}
-			apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
+			apiKey := os.Getenv(cfg.LLM.APIKeyEnv); if apiKey == "" { apiKey = cfg.LLM.APIKey }; if apiKey == "" { apiKey = cfg.LLM.APIKey }
 			if k := os.Getenv("GOALOS_LLM_API_KEY"); k != "" { apiKey = k }
 			cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, cfg.LLM.Model)
 			newAgent := missionengine.NewGoalAgentWithBus(cloudClient, bus)
