@@ -31,7 +31,8 @@ type PendingApproval struct {
 type Handler struct {
 	Goals            map[string]*GoalRecord
 	actionResults    map[string]interface{}
-	pendingApprovals map[string]PendingApproval // actionID → approval info
+	pendingApprovals map[string]PendingApproval
+		artifacts        map[string][]string // goalID → paths (R-030) // actionID → approval info
 	mu               sync.RWMutex
 	port             int
 	startTime        time.Time
@@ -156,6 +157,13 @@ func (h *Handler) HandleReject(w http.ResponseWriter, r *http.Request) {
 }
 
 // TrackResult 存储 Action 的执行结果。
+func (h *Handler) TrackArtifact(goalID string, path string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.artifacts == nil { h.artifacts = make(map[string][]string) }
+	h.artifacts[goalID] = append(h.artifacts[goalID], path)
+}
+
 func (h *Handler) TrackResult(goalID string, result interface{}) {
 	h.mu.Lock()
 	h.actionResults[goalID] = result

@@ -75,6 +75,14 @@ func main() {
 	sched.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 6: Scheduler registered"}`, time.Now().Format(time.RFC3339))
 
+		// TC-GL-006: GoalRunner per-Goal 执行控制
+		pr := scheduler.NewPipelineRunner(bus, store)
+		bus.Subscribe(events.TypeGoalCreated, func(evt events.Event) error {
+			gr := scheduler.NewGoalRunner(scheduler.Goal{ID: evt.GoalID, Title: fmt.Sprint(evt.Payload["title"])}, bus, store, pr, goalAnchor)
+			go func() { log.Printf("[GoalRunner] goal=%s started", evt.GoalID); gr.Execute() }()
+			return nil
+		})
+
 	secretKey, err := governance.LoadOrGenerateSecret(goalOSDir + "/secrets.enc")
 	if err != nil { log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err) }
 	gov := governance.New(bus, secretKey)
