@@ -8,6 +8,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -33,6 +34,7 @@ type LLMConfig struct {
 	Provider      string        `yaml:"provider"`        // "anthropic"|"openai"|"ollama"。默认 "anthropic"
 	Model         string        `yaml:"model"`           // 模型名
 	APIKeyEnv     string        `yaml:"api_key_env"`     // API Key 环境变量名。默认 "ANTHROPIC_API_KEY"
+	APIKey        string        `yaml:"api_key"`         // v1.1.0: 直接配置 API Key（优先级低于环境变量）
 	BaseURL       string        `yaml:"base_url"`        // API 基础 URL。Cloud 和 Ollama 均可配置
 	MaxTokens     int           `yaml:"max_tokens"`      // 最大 Token 数。默认 8192
 	Temperature   float32       `yaml:"temperature"`     // LLM 温度参数。0~2，默认 0.3
@@ -144,6 +146,9 @@ func loadYAML(path string, cfg *Config) error {
 	if fileCfg.LLM.APIKeyEnv != "" {
 		cfg.LLM.APIKeyEnv = fileCfg.LLM.APIKeyEnv
 	}
+	if fileCfg.LLM.APIKey != "" {
+		cfg.LLM.APIKey = fileCfg.LLM.APIKey
+	}
 	if fileCfg.LLM.MaxTokens != 0 {
 		cfg.LLM.MaxTokens = fileCfg.LLM.MaxTokens
 	}
@@ -176,5 +181,26 @@ func (cfg *Config) Reload(path string) error {
 	}
 	cfg.Daemon.Port = oldPort
 	applyEnv(cfg)
+	return nil
+}
+
+// Validate 校验配置合法性。不合法拒绝启动，给出具体错误信息（v1.1.0）。
+func (cfg *Config) Validate() error {
+	if cfg.Daemon.Port < 1 || cfg.Daemon.Port > 65535 {
+		return fmt.Errorf("daemon.port 必须在 1-65535，当前: %d", cfg.Daemon.Port)
+	}
+	validAutonomy := map[string]bool{"observe":true,"suggest":true,"approve":true,"autonomous":true}
+	if !validAutonomy[cfg.Daemon.AutonomyLevel] {
+		return fmt.Errorf("daemon.autonomy_level 无效值 '%s'。有效: observe|suggest|approve|autonomous", cfg.Daemon.AutonomyLevel)
+	}
+	if cfg.LLM.Provider == "" {
+		return fmt.Errorf("llm.provider 不能为空")
+	}
+	if cfg.LLM.Model == "" {
+		return fmt.Errorf("llm.model 不能为空")
+	}
+	if cfg.LLM.BaseURL != "" && !strings.HasPrefix(cfg.LLM.BaseURL, "http") {
+		return fmt.Errorf("llm.base_url 必须以 http:// 或 https:// 开头，当前: %s", cfg.LLM.BaseURL)
+	}
 	return nil
 }
