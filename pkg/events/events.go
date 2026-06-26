@@ -59,7 +59,8 @@ const (
 	TypeMissionGenerated = "MissionGenerated" // Agent 产出 MissionGraph。Publisher: Mission Engine
 	TypeUserConfirmed    = "UserConfirmed"    // 用户确认 MissionGraph。Publisher: Channel Adapter
 	TypeUserRejected     = "UserRejected"     // 用户拒绝 MissionGraph。Publisher: Channel Adapter
-	TypeGoalCompleted    = "GoalCompleted"    // Goal 完成。Publisher: Scheduler
+	TypeGoalCompleted    = "GoalCompleted"
+	TypeGoalFailed      = "GoalFailed"    // Goal 完成。Publisher: Scheduler
 	TypeGoalPaused       = "GoalPaused"       // Goal 已暂停。Publisher: Scheduler
 	TypeGoalResumed      = "GoalResumed"      // Goal 已恢复。Publisher: Scheduler
 

@@ -193,7 +193,7 @@ func (gr *GoalRunner) publishGoalCompleted() {
 // publishGoalFailed 发布 GoalCompleted 事件（失败终态）。
 func (gr *GoalRunner) publishGoalFailed(reason string) {
 	gr.bus.Publish(events.Event{
-		Type:   events.TypeGoalCompleted,
+		Type:   events.TypeGoalFailed,
 		GoalID: gr.goal.ID,
 		Source: "goalrunner",
 		Payload: map[string]interface{}{

@@ -13,7 +13,9 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/goalos/goalos/internal/eventbus"
@@ -61,12 +63,14 @@ type Engine struct {
 	capRegistry     map[string][]string
 	policy          []PolicyRule
 	secretKey       []byte
-	autonomyLevel   string // "autonomous"→自动放行L3+
-	seq             int
+	autonomyLevel   string
+	approvalTimeout time.Duration // "autonomous"→自动放行L3+
+	seq             atomic.Int64
 
 	// Audit Engine: ring buffer (1000 entries) + async flush
 	auditBuf    []auditEntry
-	auditPos    int
+	auditPos         int
+	auditLastFlushed  int // BUG-02: 上次已刷位置
 	auditMu     sync.Mutex
 	auditLogDir string // ~/.goalos/logs/
 
@@ -159,7 +163,7 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 	riskLevel := e.evaluateRisk(actionType)
 
 	// Step 5: Approval Engine — trigger if L3+
-	needsApproval := (riskLevel >= "L3" || policyResult == "APPROVAL_REQUIRED") && e.autonomyLevel != "autonomous"
+	needsApproval := (riskGE(riskLevel, "L3") || policyResult == "APPROVAL_REQUIRED") && e.autonomyLevel != "autonomous"
 
 	decision := Decision{
 		Policy:     policyResult,
@@ -227,7 +231,7 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 			params:     params,
 			requiredCaps: requiredCaps,
 			timeoutSec:   timeoutSec,
-			timer: time.AfterFunc(300*time.Second, func() {
+			timer: time.AfterFunc(e.approvalTimeout, func() {
 				e.handleApprovalTimeout(evt.GoalID, actionID, decision)
 			}),
 		}
@@ -518,20 +522,19 @@ func (e *Engine) auditFlushLoop() {
 
 func (e *Engine) flushAudit() {
 	e.auditMu.Lock()
-	if e.auditPos == 0 {
+	if e.auditPos == e.auditLastFlushed {
 		e.auditMu.Unlock()
 		return
 	}
-	// 收集未刷盘事件
-	count := e.auditPos
-	if count > 1000 {
-		count = 1000
-	}
+	// BUG-02: 只刷增量，防重复写入
+	start := e.auditLastFlushed
+	count := e.auditPos - e.auditLastFlushed
+	if count > 1000 { count = 1000; start = e.auditPos - 1000 }
 	toFlush := make([]auditEntry, count)
-	start := e.auditPos - count
 	for i := 0; i < count; i++ {
 		toFlush[i] = e.auditBuf[(start+i)%1000]
 	}
+	e.auditLastFlushed = e.auditPos
 	e.auditMu.Unlock()
 
 	// 追加写入 audit.log
@@ -596,9 +599,11 @@ func (e *Engine) publishRejected(evt events.Event, d Decision, reason, source st
 	})
 }
 
+
+func riskGE(a, b string) bool { na, _ := strconv.Atoi(strings.TrimPrefix(a, "L")); nb, _ := strconv.Atoi(strings.TrimPrefix(b, "L")); return na >= nb }
 func (e *Engine) publish(evt events.Event) {
-	e.seq++
-	evt.Seq = e.seq
+	seq := int(e.seq.Add(1))
+	evt.Seq = seq
 	e.bus.Publish(evt)
 }
 
@@ -608,3 +613,4 @@ var osUserHomeDir = os.UserHomeDir
 var osOpenAppend = func(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 }
+func (e *Engine) SetApprovalTimeout(d time.Duration) { e.approvalTimeout = d }

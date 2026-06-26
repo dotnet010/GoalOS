@@ -8,6 +8,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"strings"
 	"log"
 	"sync"
 	"time"
@@ -109,10 +110,11 @@ func (mv *MultiLLMVerifier) callProvider(p ProviderClient, code string, actionID
 
 // parseVote 从 LLM 响应中提取 PASS/WARN/FAIL。
 func parseVote(content string) string {
-	if len(content) >= 4 && content[:4] == "PASS" { return "PASS" }
-	if len(content) >= 4 && content[:4] == "WARN" { return "WARN" }
-	if len(content) >= 4 && content[:4] == "FAIL" { return "FAIL" }
-	return "WARN" // 无法解析→保守
+	upper := strings.ToUpper(strings.TrimSpace(content))
+	for _, v := range []string{"FAIL", "WARN", "PASS"} { // 严格优先
+		if strings.Contains(upper, v) { return v }
+	}
+	return "WARN"
 }
 
 func truncateForReview(code string, maxLen int) string {

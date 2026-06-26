@@ -78,6 +78,7 @@ func main() {
 	secretKey, err := governance.LoadOrGenerateSecret(goalOSDir + "/secrets.enc")
 	if err != nil { log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err) }
 	gov := governance.New(bus, secretKey)
+	gov.SetApprovalTimeout(time.Duration(cfg.Policy.ApprovalTimeout) * time.Second)
 	gov.SetAutonomyLevel(cfg.Daemon.AutonomyLevel)
 	gov.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered"}`, time.Now().Format(time.RFC3339))
