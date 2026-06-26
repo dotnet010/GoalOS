@@ -18,6 +18,7 @@ import (
 type Config struct {
 	Daemon   DaemonConfig   `yaml:"daemon"`
 	LLM      LLMConfig      `yaml:"llm"`
+	MultiLLM MultiLLMConfig `yaml:"multi_llm"`
 	Policy   PolicyConfig   `yaml:"policy"`
 	Persona  string         `yaml:"persona"`  // "concise"|"warm"|"minimal"
 }
@@ -30,6 +31,21 @@ type DaemonConfig struct {
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"` // 优雅关闭超时。默认 5s
 }
 
+
+
+// MultiLLMConfig 是多模型验证配置（v1.1.0）。
+type MultiLLMConfig struct {
+	Enabled   bool               `yaml:"enabled"`
+	Providers []MultiLLMProvider `yaml:"providers"`
+}
+// MultiLLMProvider 是多模型验证的单个 Provider 配置。
+type MultiLLMProvider struct {
+	Name       string   `yaml:"name"`
+	Model      string   `yaml:"model"`
+	APIKey     string   `yaml:"api_key"`
+	BaseURL    string   `yaml:"base_url"`
+	AllowedFor []string `yaml:"allowed_for"`
+}
 
 // PolicyConfig 是运行时策略配置（v1.1.0）。
 type PolicyConfig struct {
