@@ -54,3 +54,4 @@ upload-release.sh
 # ─── Plugin 二进制（CI 构建，不提交源码仓库）───
 /plugins/capability/*/plugin-shell
 /plugins/capability/*/plugin-websearch
+daemon.test.yaml

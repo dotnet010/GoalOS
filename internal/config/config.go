@@ -246,6 +246,16 @@ func (cfg *Config) Validate() error {
 }
 
 // WriteDefault 写入带注释的默认配置文件（v1.1.0 首次启动自动生成）。
+
+// LoadTest 加载测试配置（优先 daemon.test.yaml，回退 daemon.yaml）。
+// 测试配置可含真实 API Key——.gitignore 已保护，不会提交到 Git。
+func LoadTest(configDir string) (*Config, error) {
+	testPath := configDir + "/daemon.test.yaml"
+	if _, err := os.Stat(testPath); err == nil {
+		return Load(testPath)
+	}
+	return Load(configDir + "/daemon.yaml")
+}
 func WriteDefault(path string) error {
 	defaultYAML := `# GoalOS 配置文件 — 首次启动自动生成
 # 修改后保存，然后执行: curl -X POST http://localhost:18920/api/system/reload
