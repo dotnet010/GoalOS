@@ -18,6 +18,7 @@ import (
 type Config struct {
 	Daemon   DaemonConfig   `yaml:"daemon"`
 	LLM      LLMConfig      `yaml:"llm"`
+	Policy   PolicyConfig   `yaml:"policy"`
 	Persona  string         `yaml:"persona"`  // "concise"|"warm"|"minimal"
 }
 
@@ -27,6 +28,18 @@ type DaemonConfig struct {
 	AutonomyLevel   string        `yaml:"autonomy_level"`  // "observe"|"suggest"|"approve"|"autonomous"。默认 "approve"
 	IdleTimeout     time.Duration `yaml:"idle_timeout"`    // 空闲超时后退出。默认 5m
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"` // 优雅关闭超时。默认 5s
+}
+
+
+// PolicyConfig 是运行时策略配置（v1.1.0）。
+type PolicyConfig struct {
+	ApprovalTimeout       int     `yaml:"approval_timeout"`        // 审批超时秒数。默认 300
+	TokenBudget           int     `yaml:"token_budget"`            // 单 Goal Token 上限。默认 1_000_000
+	TokenWarning          float64 `yaml:"token_warning"`           // 预算警告阈值。默认 0.8
+	AutoFixMax            int     `yaml:"auto_fix_max"`            // 自修正最大次数。默认 3
+	FlowDegradeThreshold  int     `yaml:"flow_degrade_threshold"`  // Flow 降级触发次数。默认 3
+	GoalAnchorInterval    int     `yaml:"goal_anchor_interval"`    // GoalAnchor 检查间隔。默认 20
+	RecoveryRetryMax      int     `yaml:"recovery_retry_max"`      // Recovery 重试最大次数。默认 3
 }
 
 // LLMConfig 是 LLM Provider 配置。
@@ -59,6 +72,10 @@ func Default() *Config {
 			Temperature: 0.3,
 			Timeout:     120 * time.Second,
 		},
+			Policy: PolicyConfig{
+				ApprovalTimeout: 300, TokenBudget: 1_000_000, TokenWarning: 0.8,
+				AutoFixMax: 3, FlowDegradeThreshold: 3, GoalAnchorInterval: 20, RecoveryRetryMax: 3,
+			},
 		Persona: "concise",
 	}
 }
@@ -160,6 +177,13 @@ func loadYAML(path string, cfg *Config) error {
 	}
 	if fileCfg.LLM.Timeout != 0 {
 		cfg.LLM.Timeout = fileCfg.LLM.Timeout
+	if fileCfg.Policy.ApprovalTimeout != 0 { cfg.Policy.ApprovalTimeout = fileCfg.Policy.ApprovalTimeout }
+	if fileCfg.Policy.TokenBudget != 0 { cfg.Policy.TokenBudget = fileCfg.Policy.TokenBudget }
+	if fileCfg.Policy.TokenWarning != 0 { cfg.Policy.TokenWarning = fileCfg.Policy.TokenWarning }
+	if fileCfg.Policy.AutoFixMax != 0 { cfg.Policy.AutoFixMax = fileCfg.Policy.AutoFixMax }
+	if fileCfg.Policy.FlowDegradeThreshold != 0 { cfg.Policy.FlowDegradeThreshold = fileCfg.Policy.FlowDegradeThreshold }
+	if fileCfg.Policy.GoalAnchorInterval != 0 { cfg.Policy.GoalAnchorInterval = fileCfg.Policy.GoalAnchorInterval }
+	if fileCfg.Policy.RecoveryRetryMax != 0 { cfg.Policy.RecoveryRetryMax = fileCfg.Policy.RecoveryRetryMax }
 	}
 	if fileCfg.Persona != "" {
 		cfg.Persona = fileCfg.Persona
@@ -222,6 +246,15 @@ llm:
   max_tokens: 4096
   temperature: 0.3
   timeout: 300s
+
+policy:
+  approval_timeout: 300        # 审批超时秒数
+  token_budget: 1000000        # 单 Goal Token 上限
+  token_warning: 0.8           # 预算警告阈值
+  auto_fix_max: 3              # 自修正最大次数
+  flow_degrade_threshold: 3    # Flow 降级触发
+  goal_anchor_interval: 20     # GoalAnchor 检查间隔
+  recovery_retry_max: 3        # Recovery 重试最大
 
 persona: concise             # concise|warm|minimal
 `
