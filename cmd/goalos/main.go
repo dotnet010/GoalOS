@@ -18,6 +18,7 @@ import (
 	"github.com/goalos/goalos/internal/contextengine"
 	"github.com/goalos/goalos/internal/daemon"
 	"github.com/goalos/goalos/internal/eventbus"
+	"github.com/goalos/goalos/internal/healthcheck"
 	"github.com/goalos/goalos/internal/governance"
 	"github.com/goalos/goalos/internal/missionengine"
 	"github.com/goalos/goalos/internal/pluginrunner"
@@ -60,6 +61,15 @@ func main() {
 	if err != nil { cfg = config.Default() }
 	log.Printf("[Daemon] Step 2: config loaded (port=%d)", cfg.Daemon.Port)
 
+
+	// Step 2.5: 启动自检（v0.1.1）
+	pluginsDir := home + "/.goalos/plugins/capability"
+	results := healthcheck.RunAll(cfg, pluginsDir)
+	log.Printf("[Daemon]\n%s", healthcheck.Report(results))
+	if healthcheck.HasErrors(results) {
+		log.Fatalf("[Daemon] 启动自检未通过。请修复以上问题后重新启动。")
+	}
+	log.Println("[Daemon] Step 2.5: health check passed")
 	bus := eventbus.New()
 	log.Println("[Daemon] Step 3: Event Bus created")
 
