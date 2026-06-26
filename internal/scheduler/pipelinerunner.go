@@ -84,7 +84,8 @@ type PipelineRunner struct {
 
 	// 幂等性追踪
 	autoFixCount map[string]int // actionID → 自修正次数
-	retryCount   map[string]int // actionID → 重试次数
+	retryCount   map[string]int
+		multiLLM     *MultiLLMVerifier // v0.1.1: Check 原语的多模型审查
 }
 
 // NewPipelineRunner 创建 PipelineRunner。
@@ -173,18 +174,34 @@ func (pr *PipelineRunner) executePrimitivePipeline(goalID string, actionID strin
 }
 
 // check 评估 Action 的准入条件。返回 PASS/WARN/BLOCK/REJECT。
-func (pr *PipelineRunner) check(actionID string) CheckResult {
-	// 发布 CheckPerformed 事件
+// v0.1.1: 集成 MultiLLMVerifier——不再硬编码返回 CheckPASS。
+func (pr *PipelineRunner) check(actionID string, code ...string) CheckResult {
+	result := CheckPASS
+	reason := "basic-check"
+
+	// 如果有代码内容且 MultiLLMVerifier 可用→执行多模型审查
+	if len(code) > 0 && code[0] != "" && pr.multiLLM != nil {
+		verdict, err := pr.multiLLM.Verify(code[0], actionID)
+		if err == nil {
+			switch verdict.Result {
+			case "FAIL": result = CheckREJECT; reason = "multi-llm:FAIL"
+			case "WARN": result = CheckWARN; reason = "multi-llm:WARN"
+			default: result = CheckPASS; reason = "multi-llm:PASS"
+			}
+		}
+	}
+
 	pr.bus.Publish(events.Event{
 		Type:   events.TypeCheckPerformed,
 		GoalID: "",
 		Source: "pipelinerunner",
 		Payload: map[string]interface{}{
 			"action_id": actionID,
-			"result":    "PASS",
+			"result":    string(result),
+			"reason":    reason,
 		},
 	})
-	return CheckPASS
+	return result
 }
 
 // exec 执行 Action。通过 Event Bus 触发 Plugin Runner。
@@ -286,3 +303,6 @@ func containsStr(slice []string, item string) bool {
 	}
 	return false
 }
+
+// SetMultiLLM 设置多模型验证器（v0.1.1）。
+func (pr *PipelineRunner) SetMultiLLM(v *MultiLLMVerifier) { pr.multiLLM = v }

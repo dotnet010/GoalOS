@@ -2,7 +2,7 @@
   "name": "websearch",
   "type": "capability",
   "version": "1.0.0",
-  "signature": "sha256:6064db62f505ec2224a3d0d5c75564bf23037f43a7f3df8608f12193d17cbb60",
+  "signature": "sha256:c414f430943f14a67f2e2a027805ca280b947b81f0dd80c64a249f9a30f64562",
   "binary": "./plugin-websearch",
   "declared_capabilities": ["web.search"],
   "description": "Web 搜索执行器 — 调用 Bing Search API，返回结构化搜索结果"
