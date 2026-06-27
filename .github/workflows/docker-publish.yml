@@ -21,6 +21,12 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Environment info
+        run: |
+          go version
+          go env GOPATH GOROOT GOMODCACHE
+          uname -a
+
       - name: Vet
         run: go vet ./...
 
