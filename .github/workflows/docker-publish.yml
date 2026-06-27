@@ -21,11 +21,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Environment info
+      - name: Build plugins (required for releasecheck)
         run: |
-          go version
-          go env GOPATH GOROOT GOMODCACHE
-          uname -a
+          go build -o ./plugins/capability/shell-executor/plugin-shell ./cmd/plugin-shell
+          go build -o ./plugins/capability/websearch/plugin-websearch ./cmd/plugin-websearch
 
       - name: Vet
         run: go vet ./...
