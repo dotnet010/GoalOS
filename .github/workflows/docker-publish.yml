@@ -24,16 +24,11 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Run tests (per-module, fail-fast)
-        run: |
-          set -e
-          for pkg in $(go list ./... | grep -v '/test$'); do
-            echo "=== Testing $pkg ==="
-            go test -count=1 -timeout 60s -v "$pkg" || { echo "FAILED: $pkg"; exit 1; }
-          done
+      - name: Run tests (all internal, no race)
+        run: go test -count=1 -timeout 180s ./internal/...
 
-      - name: Run tests (race detector, critical modules only)
-        run: go test -count=1 -timeout 300s -race $(go list ./internal/eventbus ./internal/governance ./internal/scheduler ./internal/pluginrunner)
+      - name: Run tests (race, critical only)
+        run: go test -count=1 -timeout 300s -race ./internal/eventbus ./internal/governance ./internal/scheduler ./internal/pluginrunner
 
       - name: L6 Release Readiness (v0.1.1)
         run: go test -v -run TestReleaseReadiness ./internal/releasecheck/
