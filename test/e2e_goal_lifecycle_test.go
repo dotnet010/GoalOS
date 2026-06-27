@@ -29,6 +29,7 @@ func TestE2EGoalLifecycle(t *testing.T) {
 
 	gov := governance.New(bus, nil)
 	gov.RegisterCapabilities("test-plugin", []string{"fs.read", "fs.write", "shell.execute", "browser.open", "browser.click"})
+	gov.SetAutonomyLevel("autonomous") // v0.1.2: L3+ auto-approve in test
 	gov.Start()
 
 	stub := &missionengine.StubAgent{}
@@ -87,7 +88,9 @@ func TestE2EGoalLifecycle(t *testing.T) {
 	if received["ActionApproved"] != 1 {
 		t.Errorf("expected 1 ActionApproved (StubAgent now returns 1 focused node), got %d", received["ActionApproved"])
 	}
-	t.Logf("ActionFailed received: %d (no plugin binary for action type)", received["ActionFailed"])
+	if received["ActionFailed"] != 1 {
+		t.Errorf("expected 1 ActionFailed (no plugin binary for action type), got %d", received["ActionFailed"])
+	}
 }
 
 // TestE2EHTTPAPI 验证 HTTP API 端到端。
