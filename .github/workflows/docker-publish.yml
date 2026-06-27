@@ -24,8 +24,11 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Run tests (with race, skip E2E)
-        run: go test -count=1 -timeout 120s -race -v $(go list ./... | grep -v '/test$')
+      - name: Run tests (fast, no race)
+        run: go test -count=1 -timeout 120s -v $(go list ./... | grep -v '/test$')
+
+      - name: Run tests (race detector)
+        run: go test -count=1 -timeout 300s -race -v $(go list ./... | grep -v '/test$')
 
       - name: L6 Release Readiness (v0.1.1)
         run: go test -v -run TestReleaseReadiness ./internal/releasecheck/
