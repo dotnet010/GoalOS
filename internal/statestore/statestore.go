@@ -19,24 +19,23 @@ import (
 	"github.com/goalos/goalos/pkg/events"
 )
 
-// GoalState 是一个 Goal 的状态投影 + Checkpoint。
-// 可从 events.jsonl 完全重建——非 Source of Truth。
+// GoalState 是一个 Goal 的状态投影 + Checkpoint（v0.1.0 类型安全重写 R-362）。
+// 可从 events.jsonl 完全重建——非 Source of Truth。符合 Projection over State 原则。
 type GoalState struct {
-	GoalID         string   `json:"goal_id"`
-	InternalState  string   `json:"internal_state"`
-	LastAppliedSeq int      `json:"last_applied_seq"`
-	NodeID         string   `json:"node_id,omitempty"`          // 当前执行节点 ID
-	CompletedNodes []string `json:"completed_nodes,omitempty"`  // 已完成节点列表
-	CurrentState   map[string]interface{} `json:"current_state,omitempty"` // 当前状态快照
-	ArtifactPaths  []string `json:"artifact_paths,omitempty"`   // 产出物路径
-	TokenIDs       []string `json:"token_ids,omitempty"`        // 回滚时需撤销的 Token
-	// v1.1.0: Wait 期间的执行位置。
-	// PipelineState 不作为独立文件存在——是 Snapshot 的字段，从 PipelinePaused 事件推导。
-	// 符合 Projection over State 原则。
-	PipelineState  *PipelineState `json:"pipeline_state,omitempty"`
+	GoalID            string   `json:"goal_id"`
+	InternalState     string   `json:"internal_state"` // Draft|Planned|Running|Paused|Failed|Completed
+	LastAppliedSeq    int      `json:"last_applied_seq"`
+	NodeID            string   `json:"node_id,omitempty"`
+	CompletedNodes    []string `json:"completed_nodes,omitempty"`
+	ArtifactPaths     []string `json:"artifact_paths,omitempty"`
+	TokenIDs          []string `json:"token_ids,omitempty"`
+	ApprovalPending   bool     `json:"approval_pending,omitempty"`   // v0.1.0: 是否有待审批 Action
+	DataSharingApproved bool   `json:"data_sharing_approved,omitempty"` // v0.1.0: 数据外发是否已确认
+	ActiveActions     int      `json:"active_actions,omitempty"`     // 当前并发 Action 数
+	PipelineState     *PipelineState `json:"pipeline_state,omitempty"`
 }
 
-// PipelineState 记录 PipelineRunner 在 Wait 期间的执行位置（v1.1.0）。
+// PipelineState 记录 PipelineRunner 在 Wait 期间的执行位置（v0.1.0）。
 // 不作为独立文件持久化——是 Snapshot 的字段，从 PipelinePaused 事件推导。
 type PipelineState struct {
 	ResumePoint     string `json:"resume_point"`     // 恢复节点 ID
@@ -49,14 +48,19 @@ type PipelineState struct {
 // Store 管理事件持久化和状态投影。
 // 线程安全——每个 Store 实例内部串行写入。
 type Store struct {
-	baseDir string      // 事件存储根目录。如 ~/.goalos/events/
-	mu      sync.Mutex  // 写入串行化锁
+	baseDir     string     // ~/.goalos/events/
+	mu          sync.Mutex
+	eventCount  int        // v0.1.0 R-372: 每 N=100 触发快照
+	snapshotFn  func(goalID string) // v0.1.0: 快照回调
 }
 
-// New 创建一个 Store。baseDir 是事件存储根目录。
+// New 创建一个 Store。
 func New(baseDir string) *Store {
 	return &Store{baseDir: baseDir}
 }
+
+// SetSnapshotCallback 设置快照回调（v0.1.0 R-372: N=100 定期快照）。
+func (s *Store) SetSnapshotCallback(fn func(goalID string)) { s.snapshotFn = fn }
 
 // Append 向 Goal 的 events.jsonl 追加一个事件。
 // 调用 fsync 保证持久性。O_APPEND 保证 POSIX 原子写入。
@@ -84,6 +88,11 @@ func (s *Store) Append(goalID string, evt events.Event) error {
 		return fmt.Errorf("statestore: JSON 编码事件失败: %w", err)
 	}
 	data = append(data, '\n')
+	s.eventCount++
+	// v0.1.0 R-372: 每 N=100 事件触发快照
+	if s.eventCount%100 == 0 && s.snapshotFn != nil {
+		s.snapshotFn(goalID)
+	}
 
 	if _, err := f.Write(data); err != nil {
 		return fmt.Errorf("statestore: 写入事件失败: %w", err)

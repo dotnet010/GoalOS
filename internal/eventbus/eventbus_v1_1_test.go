@@ -7,7 +7,7 @@ import (
 	"github.com/goalos/goalos/pkg/events"
 )
 
-// TestSubscribeForGoal_FiltersByGoalID 验证 per-goal 过滤（v1.1.0）。
+// TestSubscribeForGoal_FiltersByGoalID 验证 per-goal 过滤（v0.1.0）。
 func TestSubscribeForGoal_FiltersByGoalID(t *testing.T) {
 	bus := eventbus.New()
 	goal1Called := false

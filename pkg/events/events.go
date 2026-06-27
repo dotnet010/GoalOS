@@ -115,7 +115,7 @@ const (
 	TypeMessageReceived = "MessageReceived" // 收到用户消息。Publisher: Channel Adapter
 	TypeMessageSent     = "MessageSent"     // 发送回复。Publisher: Channel Adapter
 
-	// ── v1.1.0 Primitive 事件 ──
+	// ── v0.1.0 Primitive 事件 ──
 	TypeCheckPerformed               = "CheckPerformed"               // Check 原语完成。Publisher: PipelineRunner
 	TypeGateEvaluated                = "GateEvaluated"                // Gate 评估完成。Publisher: PipelineRunner
 	TypeDecidePathSelected           = "DecidePathSelected"           // Decide 路径选择。Publisher: PipelineRunner
@@ -126,6 +126,11 @@ const (
 	TypeMultiLLMVerificationCompleted = "MultiLLMVerificationCompleted" // Multi-LLM 裁决完成。Publisher: Plugin Runner
 	TypeInvariantViolated            = "InvariantViolated"            // 运行时不变式违反。Publisher: 各核心模块
 	TypeTaskAnalysisCompleted        = "TaskAnalysisCompleted"        // Agent.Analyze() 完成。Publisher: Mission Engine
+
+	// ── v0.1.0 副作用事件（EventBus 异步层投递）──
+	TypeAuditLogWritten  = "AuditLogWritten"  // 审计日志刷盘完成。Publisher: Audit Engine
+	TypeMetricsSnapshot  = "MetricsSnapshot"  // 定期指标采集。Publisher: PipelineRunner
+	TypeNotificationSent = "NotificationSent" // 用户通知已发送。Publisher: Channel Adapter
 	TypeResourceAvailable            = "ResourceAvailable"            // 资源可用。Publisher: Plugin Runner / OS Monitor
 	TypeDataSharingApproved          = "DataSharingApproved"          // 用户批准外发数据。Publisher: Channel Adapter
 

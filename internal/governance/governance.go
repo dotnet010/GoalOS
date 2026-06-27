@@ -80,14 +80,15 @@ type Engine struct {
 }
 
 type pendingApproval struct {
-	goalID     string
-	actionID   string
-	actionType string
-	target     string
-	params     map[string]interface{}
+	goalID       string
+	actionID     string
+	actionType   string
+	target       string
+	params       map[string]interface{}
 	requiredCaps []interface{}
 	timeoutSec   float64
-	timer      *time.Timer
+	timer        *time.Timer
+	decision     Decision // R-363: 异步审批路径承载 Policy/Capability/Risk 评估结果
 }
 
 // New creates a Governance Engine with default policies.
@@ -97,6 +98,7 @@ func New(bus *eventbus.EventBus, secretKey []byte) *Engine {
 		bus:              bus,
 		capRegistry:      make(map[string][]string),
 		secretKey:        secretKey,
+		approvalTimeout:  300 * time.Second, // R-362: 默认 300s 审批超时
 		auditBuf:         make([]auditEntry, 1000),
 		auditLogDir:      home + "/.goalos/logs/",
 		pendingApprovals: make(map[string]pendingApproval),
@@ -217,20 +219,19 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 			},
 		})
 
-		// 启动审批超时计时器（300s → ActionRejected("approval_timeout")）
+		// 启动审批超时计时器（R-362: 默认 300s → ActionRejected("approval_timeout")）
 		e.pendingMu.Lock()
-		target, _ := evt.Payload["target"].(string)
 		params, _ := evt.Payload["params"].(map[string]interface{})
-		requiredCaps, _ := evt.Payload["required_capabilities"].([]interface{})
 		timeoutSec, _ := evt.Payload["timeout_seconds"].(float64)
 		e.pendingApprovals[actionID] = pendingApproval{
-			goalID:     evt.GoalID,
-			actionID:   actionID,
-			actionType: actionType,
-			target:     target,
-			params:     params,
-			requiredCaps: requiredCaps,
+			goalID:       evt.GoalID,
+			actionID:     actionID,
+			actionType:   actionType,
+			target:       target,
+			params:       params,
+			requiredCaps: requiredCaps, // R-365: 复用第152行已声明的变量
 			timeoutSec:   timeoutSec,
+			decision:     decision, // R-363: 承载 Policy/Capability/Risk 评估结果
 			timer: time.AfterFunc(e.approvalTimeout, func() {
 				e.handleApprovalTimeout(evt.GoalID, actionID, decision)
 			}),
@@ -283,24 +284,18 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 		return nil
 	}
 
-	// 签发 Token 并发布 ActionApproved
-	decision := Decision{
-		Policy:     "ALLOW",
-		Capability: "GRANTED",
-		Risk:       "L3",
-		Approval:   "GRANTED",
-	}
+	// R-363: 从 pending 中取出原始 Policy/Capability/Risk 评估结果
+	decision := pending.decision
+	decision.Approval = "GRANTED"
 
 	// 签发 Capability Token
 	now := time.Now().Unix()
-	tokenID, tokenStr := "", ""
 	if len(e.secretKey) > 0 {
 		claims := TokenClaims{GoalID: pending.goalID, ActionID: actionID, Capabilities: []string{pending.actionType}, IssuedAt: now, ExpiresAt: now + 60}
-		if tok, err := IssueToken(claims, e.secretKey); err == nil { tokenStr = tok; tokenID = fmt.Sprintf("%s_token_%d", actionID, now) }
-	}
-	if tokenStr != "" {
-		decision.TokenID = tokenID
-		decision.TokenStr = tokenStr
+		if tok, err := IssueToken(claims, e.secretKey); err == nil {
+			decision.TokenStr = tok
+			decision.TokenID = fmt.Sprintf("%s_token_%d", actionID, now)
+		}
 	}
 
 	// 构造包含 action_type 的事件用于 publishApproved
@@ -318,7 +313,7 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 	e.publishApproved(approvedEvt, decision)
 	e.recordAudit(auditEntry{
 		Timestamp: time.Now().Format(time.RFC3339), GoalID: evt.GoalID, ActionID: actionID,
-		ActionType: "", Decision: decision, Result: "APPROVED",
+		ActionType: pending.actionType, Decision: decision, Result: "APPROVED", // R-364: 审计完整性
 	})
 	return nil
 }

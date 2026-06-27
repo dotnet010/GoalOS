@@ -2,8 +2,16 @@
   "name": "shell-executor",
   "type": "capability",
   "version": "1.0.0",
-  "signature": "sha256:f288380adf90f9d6b7aa2a3cc3bd8e3ac2d90a5be6ec68d2040fe6dc90a6aa66",
+  "signature": "sha256:7863d1fbfcba5db8e38a37a18ba72611d3b6abbbd36297d10c258782bbee2fd7",
   "binary": "./plugin-shell",
-  "declared_capabilities": ["shell.execute", "shell.run", "shell.append", "fs.write", "fs.read", "fs.create_dir", "fs.list"],
-  "description": "Shell 命令执行器 — 在独立 OS 子进程中运行 shell 命令"
+  "declared_capabilities": [
+    "shell.execute",
+    "shell.run",
+    "shell.append",
+    "fs.write",
+    "fs.read",
+    "fs.create_dir",
+    "fs.list"
+  ],
+  "description": "Shell \u547d\u4ee4\u6267\u884c\u5668 \u2014 \u5728\u72ec\u7acb OS \u5b50\u8fdb\u7a0b\u4e2d\u8fd0\u884c shell \u547d\u4ee4"
 }

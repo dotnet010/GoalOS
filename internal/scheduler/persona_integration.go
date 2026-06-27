@@ -1,4 +1,4 @@
-// Package scheduler — Persona v1.1.0 集成。
+// Package scheduler — Persona v0.1.0 集成。
 // PromptBuilder: 推理层 vs 渲染层 prompt 构建。
 // Immutable Layer 0: 不可变系统提示词约束。
 // Level 0.5: 分歧事实层。
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// PromptBuilder 构建 LLM prompt（v1.1.0）。
+// PromptBuilder 构建 LLM prompt（v0.1.0）。
 // 区分推理层（中性客观）和渲染层（含风格人设）。
 type PromptBuilder struct {
 	immutableLayer0 string // 不可变系统提示词约束
@@ -76,7 +76,7 @@ func (pb *PromptBuilder) BuildRenderingPrompt(eventType string, personaStyle str
 	return b.String()
 }
 
-// BuildDivergenceNotice 构建 Multi-LLM 分歧通知（v1.1.0 Level 0.5）。
+// BuildDivergenceNotice 构建 Multi-LLM 分歧通知（v0.1.0 Level 0.5）。
 // 信息结构由 Core 固定（不可被 Persona 重组），措辞语气由 Level 3 控制。
 func (pb *PromptBuilder) BuildDivergenceNotice(verdict *Verdict, style string) string {
 	var b strings.Builder

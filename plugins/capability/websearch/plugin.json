@@ -2,8 +2,10 @@
   "name": "websearch",
   "type": "capability",
   "version": "1.0.0",
-  "signature": "sha256:c414f430943f14a67f2e2a027805ca280b947b81f0dd80c64a249f9a30f64562",
+  "signature": "sha256:4debc8df57a9187b52286fd5aac1200bac0a895c66c266dbe649d9948c9e02dc",
   "binary": "./plugin-websearch",
-  "declared_capabilities": ["web.search"],
-  "description": "Web 搜索执行器 — 调用 Bing Search API，返回结构化搜索结果"
+  "declared_capabilities": [
+    "web.search"
+  ],
+  "description": "Web \u641c\u7d22\u6267\u884c\u5668 \u2014 \u8c03\u7528 Bing Search API\uff0c\u8fd4\u56de\u7ed3\u6784\u5316\u641c\u7d22\u7ed3\u679c"
 }

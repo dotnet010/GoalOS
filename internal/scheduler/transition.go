@@ -1,6 +1,6 @@
 // Package scheduler — 核心类型定义。
-// GoalStatus 和 ActionStatus 是 v1.0 保留类型——v1.1.0 GoalRunner+PipelineRunner 依赖。
-// Transition() 函数已被 PipelineRunner 替代（v1.1.0）。UserVisible() 合并入 Persona 渲染层。
+// GoalStatus 和 ActionStatus 是 v0.0.x 保留类型——v0.1.0 GoalRunner+PipelineRunner 依赖。
+// Transition() 函数已被 PipelineRunner 替代（v0.1.0）。UserVisible() 合并入 Persona 渲染层。
 package scheduler
 
 // GoalStatus 是 Goal 的内部状态。

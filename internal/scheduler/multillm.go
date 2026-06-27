@@ -131,6 +131,18 @@ func (vc *VerdictCombiner) isDivergent(votes []ProviderVote) bool {
 	return hasFail && hasPass
 }
 
+// SemanticMetaVerify 执行阶段 2 语义元验证（v0.1.0 R-372）。
+// 当 Combine 检测到分歧（NeedsMeta=true）时调用。保守策略：降级为 WARN。
+func (vc *VerdictCombiner) SemanticMetaVerify(v *Verdict) *Verdict {
+	if !v.NeedsMeta {
+		return v
+	}
+	log.Printf("[VerdictCombiner] semantic meta-verification triggered (divergent)")
+	v.Result = "WARN"
+	v.NeedsMeta = false
+	return v
+}
+
 // UpdateReliability 更新 Provider 可靠性权重。
 // 孤立投票（与其他所有 Provider 不同且最终被推翻）→降权。
 func (vc *VerdictCombiner) UpdateReliability(provider string, isIsolated bool) {

@@ -1,12 +1,17 @@
-// Package pluginrunner — IPC 子进程执行器。
+// Package pluginrunner — IPC 子进程执行器（v0.1.0 会议 #63 Linus 方案重写）。
 // os/exec 启动独立子进程。stdin/stdout JSON 行协议。
-// 子进程崩溃不影响 daemon。超时→SIGTERM→SIGKILL。
+// seccomp 由子进程在 init 阶段自加载（非父进程注入）。
+// HMAC Zero Trust IPC：每条消息附带 HMAC-SHA256(payload, session_token)。
 //
-// 设计依据：08 沙箱与 IPC 规范 §2-§3、R137、R197。
+// 设计依据：08 沙箱与 IPC 规范 §2-§3、R137、R197、会议 #63。
 package pluginrunner
 
 import (
 	"bufio"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +20,8 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/goalos/goalos/pkg/seccomp"
 )
 
 // ExecConfig 子进程执行配置。
@@ -24,6 +31,7 @@ type ExecConfig struct {
 	WorkDir    string
 	TmpDir     string
 	Timeout    time.Duration
+	RiskLevel  string
 }
 
 // ExecResult 子进程执行结果。
@@ -35,7 +43,9 @@ type ExecResult struct {
 	DurationMs int    `json:"cost_ms"`
 }
 
-// Execute 启动子进程，通过 stdin/stdout JSON 行协议通信。
+// Execute 启动子进程（v0.1.0 会议 #63 重写）。
+// seccomp profile 通过 InitMessage 传给子进程自加载。
+// session_token 用于 HMAC Zero Trust IPC。
 func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 	cmd := exec.Command(cfg.BinaryPath, cfg.Args...)
 	if cfg.WorkDir != "" {
@@ -55,8 +65,9 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 		return nil, fmt.Errorf("executor: stdout pipe: %w", err)
 	}
 
+	// 子进程安全加固（Linux: CLONE_NEWNET + Pdeathsig。macOS: Setpgid）
+	// 不再在此处 ApplySeccomp——由子进程在 init 阶段自加载（会议 #63 Linus 方案）
 	sanitizeChildProcess(cmd)
-	applySeccompToChild(cmd, DefaultSeccomp())
 
 	if cfg.WorkDir != "" {
 		if err := os.MkdirAll(cfg.WorkDir, 0755); err != nil {
@@ -64,23 +75,30 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 		}
 	}
 
+	// 生成 session_token（64 字符随机 hex）
+	sessionToken := generateSessionToken()
+
+	// 选择 seccomp profile
+	seccompProfile := seccomp.ForRiskLevel(cfg.RiskLevel)
+
 	startTime := time.Now()
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("executor: start: %w", err)
 	}
 
-	// 发送 init
+	// 发送 init（含 session_token + seccomp_profile）
 	writeJSON(stdin, map[string]interface{}{
-		"type":         "init",
-		"capabilities": action.RequiredCapabilities,
-		"workspace":    cfg.WorkDir,
-		"tmp":          cfg.TmpDir,
+		"type":            "init",
+		"session_token":   sessionToken,
+		"seccomp_profile": seccompProfile,
+		"capabilities":    action.RequiredCapabilities,
+		"workspace":       cfg.WorkDir,
+		"tmp":             cfg.TmpDir,
 	})
 
-	// 在发送 execute 之前启动 stdout 读取 goroutine
 	resultCh := make(chan *ExecResult, 1)
 	errCh := make(chan error, 1)
-	go readStdout(stdout, resultCh, errCh)
+	go readStdout(stdout, resultCh, errCh, sessionToken)
 
 	log.Printf("[executor] sending execute: action=%s type=%s target_len=%d", action.ActionID, action.ActionType, len(action.Target))
 	writeJSON(stdin, map[string]interface{}{
@@ -92,7 +110,6 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 		"timeout_ms":  cfg.Timeout.Milliseconds(),
 	})
 
-	// 等待结果
 	var result *ExecResult
 	select {
 	case r := <-resultCh:
@@ -110,7 +127,6 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 		}
 	}
 
-	// 发送 shutdown，等待退出
 	writeJSON(stdin, map[string]interface{}{
 		"type":   "shutdown",
 		"reason": "completed",
@@ -122,19 +138,33 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 	return result, nil
 }
 
-// readStdout 从 stdout 读取子进程返回的 ResultMessage。
-func readStdout(stdout io.Reader, resultCh chan<- *ExecResult, errCh chan<- error) {
+// readStdout 从 stdout 读取子进程返回的消息（v0.1.0 HMAC 验证）。
+func readStdout(stdout io.Reader, resultCh chan<- *ExecResult, errCh chan<- error, sessionToken string) {
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 65536), 65536)
 	for scanner.Scan() {
+		line := scanner.Bytes()
 		var msg map[string]interface{}
-		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
+		if err := json.Unmarshal(line, &msg); err != nil {
 			continue
 		}
+
+		// HMAC 验证（会议 #63 Zero Trust IPC）
+		if sessionToken != "" {
+			if err := verifyHMAC(line, msg, sessionToken); err != nil {
+				log.Printf("[executor] HMAC verification failed: %v", err)
+				errCh <- fmt.Errorf("ipc_security_violation: HMAC verification failed")
+				return
+			}
+		}
+
 		msgType, _ := msg["type"].(string)
 		switch msgType {
 		case "result":
-			r := &ExecResult{ActionID: str(msg["action_id"]), Status: str(msg["status"])}
+			r := &ExecResult{
+				ActionID: str(msg["action_id"]),
+				Status:   str(msg["status"]),
+			}
 			if v, ok := msg["output"].(string); ok {
 				r.Output = v
 			}
@@ -151,6 +181,38 @@ func readStdout(stdout io.Reader, resultCh chan<- *ExecResult, errCh chan<- erro
 	if err := scanner.Err(); err != nil {
 		errCh <- fmt.Errorf("stdout read: %w", err)
 	}
+}
+
+// verifyHMAC 验证消息的 HMAC-SHA256 签名（会议 #63）。
+func verifyHMAC(rawJSON []byte, msg map[string]interface{}, token string) error {
+	receivedHMAC, _ := msg["hmac"].(string)
+	if receivedHMAC == "" {
+		return fmt.Errorf("missing hmac field")
+	}
+	// 重新解析原始 JSON 以保留字段顺序
+	var raw map[string]interface{}
+	json.Unmarshal(rawJSON, &raw)
+	delete(raw, "hmac")
+	payload, _ := json.Marshal(raw)
+	expectedHMAC := computeHMAC(payload, token)
+	if !hmac.Equal([]byte(expectedHMAC), []byte(receivedHMAC)) {
+		return fmt.Errorf("hmac mismatch")
+	}
+	return nil
+}
+
+// computeHMAC 计算 HMAC-SHA256。
+func computeHMAC(payload []byte, token string) string {
+	mac := hmac.New(sha256.New, []byte(token))
+	mac.Write(payload)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// generateSessionToken 生成 64 字符随机 hex token。
+func generateSessionToken() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 func str(v interface{}) string {

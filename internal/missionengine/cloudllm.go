@@ -177,7 +177,7 @@ func (c *CloudLLMClient) chatOnce(ctx context.Context, req *llm.ChatRequest) (*l
 			}
 		}
 	} else if msg.Content != "" {
-		// v1.1.0: 部分 LLM 不返回 ToolCalls，JSON 直接在 Content 中（可能含转义）
+		// v0.1.0: 部分 LLM 不返回 ToolCalls，JSON 直接在 Content 中（可能含转义）
 		if idx := strings.Index(msg.Content, `{"nodes"`); idx >= 0 {
 			content := msg.Content[idx:]
 			if end := strings.LastIndex(content, "}"); end > 0 {

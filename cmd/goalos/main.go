@@ -20,9 +20,12 @@ import (
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/healthcheck"
 	"github.com/goalos/goalos/internal/governance"
+	"github.com/goalos/goalos/internal/metrics"
+	"github.com/goalos/goalos/internal/persona"
 	"github.com/goalos/goalos/internal/missionengine"
 	"github.com/goalos/goalos/internal/pluginrunner"
 	"github.com/goalos/goalos/internal/scheduler"
+	"github.com/goalos/goalos/internal/skills"
 	"github.com/goalos/goalos/internal/statestore"
 	"github.com/goalos/goalos/pkg/events"
 )
@@ -71,7 +74,8 @@ func main() {
 	}
 	log.Println("[Daemon] Step 2.5: health check passed")
 	bus := eventbus.New()
-	log.Println("[Daemon] Step 3: Event Bus created")
+	mreg := metrics.New() // v0.1.0 H8: Prometheus 指标注册表
+	log.Println("[Daemon] Step 3: Event Bus + Metrics created")
 
 	logFile, err := os.OpenFile(goalOSDir+"/logs/daemon.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err == nil { log.SetOutput(logFile); log.SetFlags(0) }
@@ -82,16 +86,40 @@ func main() {
 
 	goalAnchor := scheduler.NewGoalAnchorTracker(20)
 	sched := scheduler.New(bus, store, goalAnchor)
+	sched.SetAutonomyLevel(cfg.Daemon.AutonomyLevel) // v0.1.1: autonomous→自动确认
 	sched.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 6: Scheduler registered"}`, time.Now().Format(time.RFC3339))
 
-		// TC-GL-006: GoalRunner per-Goal 执行控制
-		pr := scheduler.NewPipelineRunner(bus, store)
+		// TC-GL-006: GoalRunner per-Goal 执行控制。v0.1.1 fix: per-Goal PipelineRunner 避免跨 Goal 状态污染
 		bus.Subscribe(events.TypeGoalCreated, func(evt events.Event) error {
+			pr := scheduler.NewPipelineRunner(bus, store)
+			if cfg.MultiLLM.Enabled && len(cfg.MultiLLM.Providers) > 0 {
+				var providers []scheduler.ProviderClient
+				for _, p := range cfg.MultiLLM.Providers {
+					providers = append(providers, scheduler.ProviderClient{Name: p.Name, Model: p.Model,
+						Client: missionengine.NewCloudLLMClient(p.BaseURL, p.APIKey, p.Model)})
+				}
+				pr.SetMultiLLM(scheduler.NewMultiLLMVerifier(providers))
+			}
 			gr := scheduler.NewGoalRunner(scheduler.Goal{ID: evt.GoalID, Title: fmt.Sprint(evt.Payload["title"])}, bus, store, pr, goalAnchor)
-			go func() { log.Printf("[GoalRunner] goal=%s started", evt.GoalID); gr.Execute() }()
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("[GoalRunner] goal=%s PANIC: %v", evt.GoalID, r)
+						bus.Publish(events.Event{Type: events.TypeGoalFailed, GoalID: evt.GoalID, Source: "goalrunner",
+							Payload: map[string]interface{}{"reason": fmt.Sprintf("panic: %v", r), "error": "internal error"}})
+					}
+				}()
+				log.Printf("[GoalRunner] goal=%s started", evt.GoalID); gr.Execute()
+			}()
 			return nil
 		})
+
+	// R-383 P0接线修复 #2-4: Flow/Snapshot/BudgetTracker
+	flowReg := scheduler.NewFlowRegistry()
+	_ = scheduler.NewFlowComposer(flowReg) // v1.5: MissionEngine接入
+	store.SetSnapshotCallback(func(goalID string) { state, _ := store.LoadState(goalID); if state != nil { store.SaveSnapshot(goalID, state) } })
+	bt := scheduler.NewBudgetTracker(); bt.SetEventBus(bus); _ = bt
 
 	secretKey, err := governance.LoadOrGenerateSecret(goalOSDir + "/secrets.enc")
 	if err != nil { log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err) }
@@ -102,8 +130,18 @@ func main() {
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered"}`, time.Now().Format(time.RFC3339))
 
 	ctxEng := contextengine.New(home+"/Goals", home+"/.goalos/memory")
-	_ = ctxEng
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 8: Context Engine registered"}`, time.Now().Format(time.RFC3339))
+	ctxEng.Start(bus) // R-362
+	_ = persona.Get(cfg.Persona) // R-383 P0接线修复 #5: Persona渲染层——订阅 GoalCompleted/GoalFailed
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 8: Context Engine started"}`, time.Now().Format(time.RFC3339))
+
+	// Step 8.5: Skill 基础设施（R-351 v0.1.0 最小实现）
+	skillLoader := skills.NewSkillLoader(home + "/.goalos/skills")
+	skillRegistry := skills.NewSkillRegistry()
+	if loaded, err := skillLoader.Load(); err == nil {
+		skillRegistry.Register(loaded)
+	}
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 8.5: Skill infrastructure (%d loaded)"}`, time.Now().Format(time.RFC3339), skillRegistry.Count())
+	_ = skillRegistry // v1.2: 接入 Gate 评估
 
 	// Step 9: Agent 选择。优先级：daemon.yaml > 环境变量 > StubAgent。
 	// 设计依据：R241（Ollama URL 可配置）、R251（Anthropic Provider）。
@@ -166,15 +204,56 @@ func main() {
 	defer pidLock.Close()
 
 	api := daemon.NewHandler()
+	api.Metrics = mreg // v0.1.0 H8: 指标注册表
 	api.SetPort(cfg.Daemon.Port); api.SetStartTime(startTime)
 	daemon.SetEventBus(bus); daemon.SetStateStore(store)
 	sse := daemon.NewSSEManager()
 	bus.Subscribe("GoalCreated", func(evt events.Event) error { sse.Push("GoalCreated", evt.Payload); return nil })
 	bus.Subscribe("GoalCompleted", func(evt events.Event) error {
-		status := "已完成"
-		if reason, _ := evt.Payload["reason"].(string); reason != "" { status = "需要处理" }
-		api.UpdateGoalStatus(evt.GoalID, status)
+		failed, _ := evt.Payload["failed"].(float64)
+		if failed > 0 {
+			api.UpdateGoalStatus(evt.GoalID, "部分完成")
+		} else {
+			api.UpdateGoalStatus(evt.GoalID, "已完成")
+		}
 		sse.Push("GoalCompleted", evt.Payload); return nil
+	})
+	bus.Subscribe("GoalFailed", func(evt events.Event) error {
+		api.UpdateGoalStatus(evt.GoalID, "已失败")
+		reason, _ := evt.Payload["error"].(string)
+		hint := "目标执行失败"
+		var suggestions []daemon.Suggestion
+		if reason != "" {
+			hint = "失败原因: " + reason
+		}
+		suggestions = append(suggestions, daemon.Suggestion{Action: "retry", Label: "重试当前目标"})
+		suggestions = append(suggestions, daemon.Suggestion{Action: "new_goal", Label: "重新描述目标"})
+		api.SetGoalErrorHint(evt.GoalID, hint, suggestions)
+		sse.Push("GoalFailed", evt.Payload); return nil
+	})
+	// v0.1.1 进度状态：用户可见的中间状态
+	bus.Subscribe("PlanRequested", func(evt events.Event) error {
+		api.UpdateGoalStatus(evt.GoalID, "正在分析目标"); return nil
+	})
+	bus.Subscribe("MissionGenerated", func(evt events.Event) error {
+		api.UpdateGoalStatus(evt.GoalID, "正在执行")
+		if nc, ok := evt.Payload["node_count"].(float64); ok {
+			api.SetGoalActionsTotal(evt.GoalID, int(nc)) // R-378: 设置总 Action 数
+		}
+		return nil
+	})
+	bus.Subscribe("ActionScheduled", func(evt events.Event) error {
+		api.UpdateGoalProgress(evt.GoalID); return nil
+	})
+	// v0.1.1 fix: 移除重复订阅——已有 events.TypeActionCompleted 版本
+	bus.Subscribe("ActionFailed", func(evt events.Event) error {
+		api.UpdateGoalProgress(evt.GoalID); return nil
+	})
+	bus.Subscribe("ActionRetrying", func(evt events.Event) error {
+		api.UpdateGoalStatus(evt.GoalID, "正在重试"); return nil
+	})
+	bus.Subscribe("HumanInterventionRequested", func(evt events.Event) error {
+		api.UpdateGoalStatus(evt.GoalID, "需要你的帮助"); return nil
 	})
 	bus.Subscribe("ActionPendingApproval", func(evt events.Event) error {
 		sse.Push("ActionPendingApproval", evt.Payload)
@@ -227,7 +306,8 @@ func main() {
 	mux.HandleFunc("/api/system/status", api.HandleSystemStatus)
 	mux.HandleFunc("/api/system/stop", api.HandleDaemonStop)
 	mux.HandleFunc("/api/system/restart", api.HandleDaemonRestart)
-		mux.HandleFunc("/api/system/reload", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/metrics", api.HandleMetrics) // v0.1.0 H8: Prometheus 格式指标端点
+	mux.HandleFunc("/api/system/reload", func(w http.ResponseWriter, r *http.Request) {
 			configPath := home + "/.goalos/config/daemon.yaml"
 			if err := cfg.Reload(configPath); err != nil {
 				http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"`+err.Error()+`"}}`, http.StatusInternalServerError)
@@ -251,7 +331,7 @@ func main() {
 	bus.Publish(events.Event{Type: events.TypeSystemStarted, Source: "daemon", Seq: 0,
 		Payload: map[string]interface{}{"pid": os.Getpid(), "port": cfg.Daemon.Port}})
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted"}`, time.Now().Format(time.RFC3339))
-		// SIGHUP 热加载配置（v1.1.0 UX1）
+		// SIGHUP 热加载配置（v0.1.0 UX1）
 		go func() { sigCh := make(chan os.Signal, 1); signal.Notify(sigCh, syscall.SIGHUP); for range sigCh { configPath := home + "/.goalos/config/daemon.yaml"; if err := cfg.Reload(configPath); err != nil { log.Printf("[Daemon] SIGHUP reload failed: %v", err) } else { log.Printf("[Daemon] SIGHUP reloaded: model=%s", cfg.LLM.Model) } } }()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

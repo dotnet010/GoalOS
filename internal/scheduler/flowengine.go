@@ -1,4 +1,4 @@
-// Package scheduler — Flow Engine v1.1.0。
+// Package scheduler — Flow Engine v0.1.0。
 // FlowRegistry: 模板注册与查找。FlowComposer: 约束验证与降级。
 // PlanningCircuitBreaker: 规划层熔断。
 //
@@ -30,7 +30,7 @@ type FlowStage struct {
 	Required bool   `json:"required"`  // true=强制阶段。Agent.Plan() 必须覆盖
 }
 
-// FlowRegistry 管理 Flow 模板的注册和查找（v1.1.0）。
+// FlowRegistry 管理 Flow 模板的注册和查找（v0.1.0）。
 type FlowRegistry struct {
 	mu      sync.RWMutex
 	flows   map[string]*FlowTemplate // name → template
@@ -112,6 +112,30 @@ func (fr *FlowRegistry) loadBuiltins() {
 		FailurePolicy: "continue_on_warn",
 	})
 	fr.Register(&FlowTemplate{
+		Name:        "builtin/research-v1",
+		Version:     "1.0",
+		Description: "调研任务流程（R-362: 补全 5 模板）",
+		TaskTypes:   []string{"research"},
+		Stages: []FlowStage{
+			{Name: "信息收集", Order: 1, Required: true},
+			{Name: "信息整理", Order: 2, Required: true},
+			{Name: "分析报告", Order: 3, Required: true},
+		},
+		FailurePolicy: "continue_on_warn",
+	})
+	fr.Register(&FlowTemplate{
+		Name:        "builtin/content-create-v1",
+		Version:     "1.0",
+		Description: "内容创作任务流程（R-362: 补全 5 模板）",
+		TaskTypes:   []string{"content_creation"},
+		Stages: []FlowStage{
+			{Name: "素材收集", Order: 1, Required: true},
+			{Name: "内容生成", Order: 2, Required: true},
+			{Name: "审核校验", Order: 3, Required: true},
+		},
+		FailurePolicy: "continue_on_warn",
+	})
+	fr.Register(&FlowTemplate{
 		Name:        "builtin/generic-v1",
 		Version:     "1.0",
 		Description: "通用兜底流程。Flow 降级时使用",
@@ -121,7 +145,7 @@ func (fr *FlowRegistry) loadBuiltins() {
 	})
 }
 
-// FlowComposer 是 Flow 约束验证与降级控制器（v1.1.0）。
+// FlowComposer 是 Flow 约束验证与降级控制器（v0.1.0）。
 type FlowComposer struct {
 	registry       *FlowRegistry
 	rejectCount    map[string]int // goalID → 连续拒绝次数
@@ -135,14 +159,14 @@ func NewFlowComposer(registry *FlowRegistry) *FlowComposer {
 	}
 }
 
-// MatchFlow 根据 TaskAnalysis 匹配最佳 Flow（v1.1.0 规则硬匹配）。
+// MatchFlow 根据 TaskAnalysis 匹配最佳 Flow（v0.1.0 规则硬匹配）。
 func (fc *FlowComposer) MatchFlow(taskType string) (*FlowTemplate, error) {
 	candidates := fc.registry.ListByTaskType(taskType)
 	if len(candidates) == 0 {
 		// 无匹配——使用 generic-v1
 		return fc.registry.Lookup("builtin/generic-v1")
 	}
-	// v1.1.0: 规则硬匹配——返回第一个匹配的
+	// v0.1.0: 规则硬匹配——返回第一个匹配的
 	return candidates[0], nil
 }
 
@@ -206,7 +230,7 @@ type FlowDegradeError struct {
 
 func (e *FlowDegradeError) Error() string { return e.Message }
 
-// PlanningCircuitBreaker 规划层熔断（v1.1.0）。
+// PlanningCircuitBreaker 规划层熔断（v0.1.0）。
 type PlanningCircuitBreaker struct {
 	planFailures map[string]int // goalID → 连续 Plan 失败次数
 	maxFailures  int            // 触发熔断的阈值（默认 3）

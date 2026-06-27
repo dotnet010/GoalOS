@@ -7,7 +7,7 @@ import (
 	"github.com/goalos/goalos/internal/statestore"
 )
 
-// TestPipelineState_RoundTrip 验证 PipelineState 序列化往返（v1.1.0）。
+// TestPipelineState_RoundTrip 验证 PipelineState 序列化往返（v0.1.0）。
 func TestPipelineState_RoundTrip(t *testing.T) {
 	ps := &statestore.PipelineState{
 		ResumePoint:     "node-3",

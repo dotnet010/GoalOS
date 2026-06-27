@@ -33,7 +33,7 @@ func TestGoalAgent_ParseValidJSON(t *testing.T) {
 		response: `{"nodes":[{"id":"1","type":"mission","description":"分析需求","action_type":"web.search","target":"需求分析"},{"id":"2","type":"mission","description":"设计方案","action_type":"shell.execute","target":"echo design"}],"edges":[{"from":"1","to":"2","type":"sequential"}]}`,
 	})
 
-	graph, err := agent.Plan("test", missionengine.Context{GoalID: "goal_001"})
+	graph, err := agent.PlanLegacy("test", missionengine.Context{GoalID: "goal_001"})
 	if err != nil {
 		t.Fatalf("Plan failed: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestGoalAgent_FallbackOnParseError(t *testing.T) {
 		response: "这是一段文字，不是JSON",
 	})
 
-	graph, err := agent.Plan("test", missionengine.Context{GoalID: "goal_001"})
+	graph, err := agent.PlanLegacy("test", missionengine.Context{GoalID: "goal_001"})
 	if err != nil {
 		t.Fatalf("Plan should use fallback, not fail: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestGoalAgent_JSONWithExtraText(t *testing.T) {
 		response: "好的，以下是任务拆解：\n```json\n{\"nodes\":[{\"id\":\"1\",\"type\":\"mission\",\"description\":\"分析需求\",\"action_type\":\"web.search\",\"target\":\"test\"}],\"edges\":[]}\n```\n希望这对你有帮助。",
 	})
 
-	graph, err := agent.Plan("test", missionengine.Context{GoalID: "goal_001"})
+	graph, err := agent.PlanLegacy("test", missionengine.Context{GoalID: "goal_001"})
 	if err != nil {
 		t.Fatalf("Plan failed: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestGoalAgent_LLMError(t *testing.T) {
 		err: context.DeadlineExceeded,
 	})
 
-	_, err := agent.Plan("test", missionengine.Context{GoalID: "goal_001"})
+	_, err := agent.PlanLegacy("test", missionengine.Context{GoalID: "goal_001"})
 	if err == nil {
 		t.Fatal("expected error when LLM fails, got nil")
 	}

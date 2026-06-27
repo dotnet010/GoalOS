@@ -2,7 +2,7 @@
 // 优先级：环境变量 > daemon.yaml > 默认值。
 // 修改 daemon.yaml 后发送 SIGHUP 热加载。
 //
-// 设计依据：05 架构文档 §10、附录 B.6、R176、R203。
+// 设计依据：05 架构文档 §10、附录 B.6、R176、R203、R-361。
 package config
 
 import (
@@ -13,6 +13,10 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// CanonicalVersion 是项目权威版本号（R-361）。
+// 所有输出版本号的代码必须引用此常量。CI 检查与最新 git tag 一致。
+const CanonicalVersion = "0.1.2"
 
 // Config 是 GoalOS 完整配置。
 type Config struct {
@@ -33,7 +37,7 @@ type DaemonConfig struct {
 
 
 
-// MultiLLMConfig 是多模型验证配置（v1.1.0）。
+// MultiLLMConfig 是多模型验证配置（v0.1.0）。
 type MultiLLMConfig struct {
 	Enabled   bool               `yaml:"enabled"`
 	Providers []MultiLLMProvider `yaml:"providers"`
@@ -47,7 +51,7 @@ type MultiLLMProvider struct {
 	AllowedFor []string `yaml:"allowed_for"`
 }
 
-// PolicyConfig 是运行时策略配置（v1.1.0）。
+// PolicyConfig 是运行时策略配置（v0.1.0）。
 type PolicyConfig struct {
 	ApprovalTimeout       int     `yaml:"approval_timeout"`        // 审批超时秒数。默认 300
 	TokenBudget           int     `yaml:"token_budget"`            // 单 Goal Token 上限。默认 1_000_000
@@ -63,7 +67,7 @@ type LLMConfig struct {
 	Provider      string        `yaml:"provider"`        // "anthropic"|"openai"|"ollama"。默认 "anthropic"
 	Model         string        `yaml:"model"`           // 模型名
 	APIKeyEnv     string        `yaml:"api_key_env"`     // API Key 环境变量名。默认 "ANTHROPIC_API_KEY"
-	APIKey        string        `yaml:"api_key"`         // v1.1.0: 直接配置 API Key（优先级低于环境变量）
+	APIKey        string        `yaml:"api_key"`         // v0.1.0: 直接配置 API Key（优先级低于环境变量）
 	BaseURL       string        `yaml:"base_url"`        // API 基础 URL。Cloud 和 Ollama 均可配置
 	MaxTokens     int           `yaml:"max_tokens"`      // 最大 Token 数。默认 8192
 	Temperature   float32       `yaml:"temperature"`     // LLM 温度参数。0~2，默认 0.3
@@ -207,7 +211,7 @@ func loadYAML(path string, cfg *Config) error {
 	return nil
 }
 
-// Reload 热加载配置——不重启 daemon（v1.1.0 UX1）。
+// Reload 热加载配置——不重启 daemon（v0.1.0 UX1）。
 func (cfg *Config) Reload(path string) error {
 	if path == "" {
 		return fmt.Errorf("config: no path for reload")
@@ -224,7 +228,7 @@ func (cfg *Config) Reload(path string) error {
 	return nil
 }
 
-// Validate 校验配置合法性。不合法拒绝启动，给出具体错误信息（v1.1.0）。
+// Validate 校验配置合法性。不合法拒绝启动，给出具体错误信息（v0.1.0）。
 func (cfg *Config) Validate() error {
 	if cfg.Daemon.Port < 1 || cfg.Daemon.Port > 65535 {
 		return fmt.Errorf("daemon.port 必须在 1-65535，当前: %d", cfg.Daemon.Port)
@@ -245,7 +249,7 @@ func (cfg *Config) Validate() error {
 	return nil
 }
 
-// WriteDefault 写入带注释的默认配置文件（v1.1.0 首次启动自动生成）。
+// WriteDefault 写入带注释的默认配置文件（v0.1.0 首次启动自动生成）。
 
 // LoadTest 加载测试配置（优先 daemon.test.yaml，回退 daemon.yaml）。
 // 测试配置可含真实 API Key——.gitignore 已保护，不会提交到 Git。

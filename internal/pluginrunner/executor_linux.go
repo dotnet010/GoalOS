@@ -1,39 +1,27 @@
 //go:build linux
 
+// Package pluginrunner — Linux 子进程安全加固（v0.1.0 会议 #63 Linus 方案）。
+// seccomp 不再在父进程应用——由子进程在 init 阶段通过 pkg/seccomp 自加载。
+// 父进程仅设置 namespace 隔离（CLONE_NEWNET）+ Pdeathsig。
 package pluginrunner
 
 import (
-	"fmt"
 	"os/exec"
-	"runtime"
 	"syscall"
 )
 
 // sanitizeChildProcess 在子进程启动前设置 Linux 安全加固。
-// LockOSThread + PR_SET_NO_NEW_PRIVS，确保 fork 出的子进程无法通过 setuid/setgid 提权。
-// 必须在 applySeccompToChild 之前调用——seccomp 要求 NO_NEW_PRIVS 已设置。
+// CLONE_NEWNET 网络命名空间隔离 + Pdeathsig 父进程死亡时自动清理。
 func sanitizeChildProcess(cmd *exec.Cmd) {
-	runtime.LockOSThread()
-
-	const prSetNoNewPrivs = 36
-	if _, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, prSetNoNewPrivs, 1, 0); errno != 0 {
-		fmt.Printf("[executor] WARNING: prctl(PR_SET_NO_NEW_PRIVS) failed: %v\n", errno)
-	}
-}
-
-// applySeccompToChild 在子进程启动前加载 seccomp BPF + PID/网络隔离。
-// sanitizeChildProcess 必须先调用以锁定线程和设置 NO_NEW_PRIVS。
-func applySeccompToChild(cmd *exec.Cmd, profile *SeccompProfile) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig:    syscall.SIGKILL,
 		Unshareflags: syscall.CLONE_NEWNET,
 	}
+}
 
-	if profile != nil {
-		// LockOSThread 已在 sanitizeChildProcess 中调用——当前 goroutine 锁定于此 OS 线程。
-		// prctl(PR_SET_SECCOMP) 应用到当前线程，子进程通过 fork 继承。
-		if err := ApplySeccomp(profile); err != nil {
-			fmt.Printf("[executor] WARNING: ApplySeccomp failed: %v\n", err)
-		}
-	}
+// applySeccompToChild 已废弃（v0.1.0 会议 #63）。
+// seccomp 由子进程在 init 阶段通过 pkg/seccomp.Apply() 自加载。
+// 保留此函数以维持 executor_darwin.go 的接口兼容性。
+func applySeccompToChild(cmd *exec.Cmd, profile interface{}) {
+	// no-op: seccomp is self-applied by child process
 }

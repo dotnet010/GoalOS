@@ -1,4 +1,4 @@
-// Package scheduler — Multi-LLM Verifier v1.1.0。
+// Package scheduler — Multi-LLM Verifier v0.1.0。
 // 真正的多模型验证：N 个 Provider 并行独立审查 → VerdictCombiner 合并裁决。
 //
 // 设计依据：05 架构文档 §3.3、R324。
@@ -17,7 +17,7 @@ import (
 	"github.com/goalos/goalos/internal/missionengine"
 )
 
-// MultiLLMVerifier 并行调用 N 个 LLM Provider 进行代码审查（v1.1.0）。
+// MultiLLMVerifier 并行调用 N 个 LLM Provider 进行代码审查（v0.1.0）。
 type MultiLLMVerifier struct {
 	providers []ProviderClient
 	combiner  *VerdictCombiner
@@ -38,7 +38,7 @@ func NewMultiLLMVerifier(providers []ProviderClient) *MultiLLMVerifier {
 	}
 }
 
-// Verify 并行调用所有 Provider 审查代码，返回合并裁决（v1.1.0）。
+// Verify 并行调用所有 Provider 审查代码，返回合并裁决（v0.1.0）。
 func (mv *MultiLLMVerifier) Verify(code string, actionID string) (*Verdict, error) {
 	if len(mv.providers) == 0 {
 		return &Verdict{Result: "PASS", Consensus: true}, nil

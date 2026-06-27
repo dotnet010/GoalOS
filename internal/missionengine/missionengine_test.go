@@ -114,6 +114,31 @@ func TestMissionEngine_WebSearchActionType(t *testing.T) {
 
 type emptyStubAgent struct{}
 
-func (s *emptyStubAgent) Plan(goal string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
-	return &missionengine.MissionGraph{}, nil
+func (s *emptyStubAgent) Align(goal string, ctx missionengine.Context) (*missionengine.CompletionCriteria, error) {
+	return &missionengine.CompletionCriteria{GoalID: ctx.GoalID, GoalType: "other", SuccessDefinition: goal, Complexity: "medium"}, nil
+}
+func (s *emptyStubAgent) Analyze(criteria *missionengine.CompletionCriteria, ctx missionengine.Context) (*missionengine.TaskAnalysis, error) {
+	return &missionengine.TaskAnalysis{GoalID: ctx.GoalID, Complexity: "medium", SuggestedFlow: "generic-v1"}, nil
+}
+func (s *emptyStubAgent) Plan(criteria *missionengine.CompletionCriteria, analysis *missionengine.TaskAnalysis, flowName string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
+	return &missionengine.MissionGraph{GoalID: ctx.GoalID}, nil
+}
+func (s *emptyStubAgent) PlanLegacy(goal string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
+	return &missionengine.MissionGraph{GoalID: ctx.GoalID}, nil
+}
+
+func (s *emptyStubAgent) Verify(code string, actionID string, ctx missionengine.Context) (*missionengine.VerificationResult, error) {
+	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "stub", Score: 100}, nil
+}
+
+func (s *cycleAgent) Verify(code string, actionID string, ctx missionengine.Context) (*missionengine.VerificationResult, error) {
+	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "stub", Score: 100}, nil
+}
+
+func (s *badEdgeAgent) Verify(code string, actionID string, ctx missionengine.Context) (*missionengine.VerificationResult, error) {
+	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "stub", Score: 100}, nil
+}
+
+func (s *selfLoopAgent) Verify(code string, actionID string, ctx missionengine.Context) (*missionengine.VerificationResult, error) {
+	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "stub", Score: 100}, nil
 }

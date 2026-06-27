@@ -112,7 +112,7 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 		return nil
 	}
 
-		// v1.1.0: output 为空时用 errMsg 填充
+		// v0.1.0: output 为空时用 errMsg 填充
 	displayOutput := result.output
 	if displayOutput == "" && result.errMsg != "" {
 		displayOutput = result.errMsg
@@ -143,6 +143,18 @@ func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 	actionType, _ := evt.Payload["action_type"].(string)
 	target, _ := evt.Payload["target"].(string)
 	params, _ := evt.Payload["params"].(map[string]interface{})
+	riskLevel, _ := evt.Payload["risk_level"].(string) // v0.1.1 H4: 风险等级
+	if riskLevel == "" {
+		if dp, ok := evt.Payload["decision_path"].(map[string]interface{}); ok {
+			if rl, ok := dp["risk"].(string); ok { riskLevel = rl }
+		}
+	}
+	var requiredCaps []string
+	if caps, ok := evt.Payload["required_capabilities"].([]interface{}); ok {
+		for _, c := range caps {
+			if s, ok := c.(string); ok { requiredCaps = append(requiredCaps, s) }
+		}
+	}
 
 	// 查找匹配的 Plugin
 	plugin := r.discovery.Find(actionType)
@@ -156,12 +168,14 @@ func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 		WorkDir:    home + "/Goals/" + evt.GoalID,
 		TmpDir:     "/tmp/goalos/" + actionID,
 		Timeout:    30 * time.Second,
+		RiskLevel:  riskLevel, // v0.1.1 H4: 传递给 SeccompForRiskLevel
 	}
 	action := ActionRequest{
-		ActionID:   actionID,
-		ActionType: actionType,
-		Target:     target,
-		Params:     params,
+		ActionID:             actionID,
+		ActionType:           actionType,
+		Target:               target,
+		Params:               params,
+		RequiredCapabilities: requiredCaps, // v0.1.1 H3: 传入 InitMessage
 	}
 
 	result, err := Execute(cfg, action)

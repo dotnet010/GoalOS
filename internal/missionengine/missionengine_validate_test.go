@@ -57,7 +57,7 @@ func TestMissionGraph_CycleRejected(t *testing.T) {
 // cycleAgent returns a graph with cycle: 1→2→3→1.
 type cycleAgent struct{}
 
-func (a *cycleAgent) Plan(goal string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
+func (a *cycleAgent) Plan(criteria *missionengine.CompletionCriteria, analysis *missionengine.TaskAnalysis, flowName string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
 	return &missionengine.MissionGraph{
 		GoalID: ctx.GoalID,
 		Nodes: []missionengine.GraphNode{
@@ -110,7 +110,7 @@ func TestMissionGraph_InvalidEdgeDropped(t *testing.T) {
 
 type badEdgeAgent struct{}
 
-func (a *badEdgeAgent) Plan(goal string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
+func (a *badEdgeAgent) Plan(criteria *missionengine.CompletionCriteria, analysis *missionengine.TaskAnalysis, flowName string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
 	return &missionengine.MissionGraph{
 		GoalID: ctx.GoalID,
 		Nodes: []missionengine.GraphNode{
@@ -155,7 +155,7 @@ func TestMissionGraph_SelfLoopDropped(t *testing.T) {
 
 type selfLoopAgent struct{}
 
-func (a *selfLoopAgent) Plan(goal string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
+func (a *selfLoopAgent) Plan(criteria *missionengine.CompletionCriteria, analysis *missionengine.TaskAnalysis, flowName string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
 	return &missionengine.MissionGraph{
 		GoalID: ctx.GoalID,
 		Nodes: []missionengine.GraphNode{
@@ -166,4 +166,35 @@ func (a *selfLoopAgent) Plan(goal string, ctx missionengine.Context) (*missionen
 			{From: "1", To: "1", Type: "sequential"},
 		},
 	}, nil
+}
+
+func (a *cycleAgent) Align(goal string, ctx missionengine.Context) (*missionengine.CompletionCriteria, error) {
+	return &missionengine.CompletionCriteria{GoalID: ctx.GoalID, GoalType: "other", SuccessDefinition: goal, Complexity: "medium"}, nil
+}
+func (a *cycleAgent) Analyze(criteria *missionengine.CompletionCriteria, ctx missionengine.Context) (*missionengine.TaskAnalysis, error) {
+	return &missionengine.TaskAnalysis{GoalID: ctx.GoalID, Complexity: "medium", SuggestedFlow: "generic-v1"}, nil
+}
+
+func (a *badEdgeAgent) Align(goal string, ctx missionengine.Context) (*missionengine.CompletionCriteria, error) {
+	return &missionengine.CompletionCriteria{GoalID: ctx.GoalID, GoalType: "other", SuccessDefinition: goal, Complexity: "medium"}, nil
+}
+func (a *badEdgeAgent) Analyze(criteria *missionengine.CompletionCriteria, ctx missionengine.Context) (*missionengine.TaskAnalysis, error) {
+	return &missionengine.TaskAnalysis{GoalID: ctx.GoalID, Complexity: "medium", SuggestedFlow: "generic-v1"}, nil
+}
+
+func (a *selfLoopAgent) Align(goal string, ctx missionengine.Context) (*missionengine.CompletionCriteria, error) {
+	return &missionengine.CompletionCriteria{GoalID: ctx.GoalID, GoalType: "other", SuccessDefinition: goal, Complexity: "medium"}, nil
+}
+func (a *selfLoopAgent) Analyze(criteria *missionengine.CompletionCriteria, ctx missionengine.Context) (*missionengine.TaskAnalysis, error) {
+	return &missionengine.TaskAnalysis{GoalID: ctx.GoalID, Complexity: "medium", SuggestedFlow: "generic-v1"}, nil
+}
+
+func (a *cycleAgent) PlanLegacy(goal string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
+	return a.Plan(nil, nil, "", ctx)
+}
+func (a *badEdgeAgent) PlanLegacy(goal string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
+	return a.Plan(nil, nil, "", ctx)
+}
+func (a *selfLoopAgent) PlanLegacy(goal string, ctx missionengine.Context) (*missionengine.MissionGraph, error) {
+	return a.Plan(nil, nil, "", ctx)
 }

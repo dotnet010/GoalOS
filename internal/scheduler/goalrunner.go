@@ -1,4 +1,4 @@
-// Package scheduler — GoalRunner v1.1.0。
+// Package scheduler — GoalRunner v0.1.0。
 // Goal 级调度器。管理 Goal 生命周期（Draft→Running→Completed/Failed）。
 // 处理暂停/恢复/终止。调用 PipelineRunner.Run(graph)。
 // per-Goal 单线程控制环——每个 Goal 状态转换在单一 goroutine 中串行。
@@ -29,7 +29,7 @@ type GoalRunner struct {
 
 	mu       sync.Mutex
 	state    GoalStatus
-	waitReason string // v1.1.0: "approval"|"dependency"|"resource"。Running 子状态
+	waitReason string // v0.1.0: "approval"|"dependency"|"resource"。Running 子状态
 }
 
 // Goal 是 GoalRunner 的输入。

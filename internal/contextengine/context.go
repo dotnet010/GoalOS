@@ -1,23 +1,31 @@
 // Package contextengine 实现 GoalOS Context Engine——分层上下文管理。
-// 六层上下文包：Immutable/Working Summary/Active Page/Page Table/Experience/Input。
-// 管理 Frontmatter 摘要提取、Page Table 生成、经验文件检索。
+// 二层已实现：PageTable（Frontmatter 提取 + 关键词索引）+ Experience（决策/经验文件生成）。
+// 四层 v1.5 预留：Immutable / Working Summary / Active Page / Input。
 //
-// 设计依据：05 架构文档 §7、R52-R55。
+// 设计依据：05 架构文档 §7、R52-R55、R-360。
 package contextengine
 
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+
+	"github.com/goalos/goalos/internal/eventbus"
+	"github.com/goalos/goalos/pkg/events"
 )
 
 // Engine 是 Context Engine。
 type Engine struct {
-	goalsDir    string // ~/Goals/
-	memoryDir   string // ~/.goalos/memory/
-	pageTableCache map[string]*PageTable // goalID → 文件索引缓存
+	goalsDir        string
+	memoryDir       string
+	bus             *eventbus.EventBus
+	pageTableCache  map[string]*PageTable
+	domainCounts    map[string]*domainPattern // v0.1.0 H10: 领域计数
+	mu              sync.RWMutex
 }
 
 // New 创建 Context Engine。
@@ -178,4 +186,57 @@ func (e *Engine) Search(goalID, query string) ([]FileEntry, error) {
 		}
 	}
 	return results, nil
+}
+
+// Start subscribes to Goal lifecycle events and begins processing（v0.1.1: R-362 wiring fix）。
+func (e *Engine) Start(bus *eventbus.EventBus) {
+	e.bus = bus
+	e.bus.Subscribe(events.TypeGoalCompleted, e.onGoalCompleted)
+	e.bus.Subscribe(events.TypeGoalFailed, e.onGoalFailed)
+	log.Println("[ContextEngine] started, subscribed to GoalCompleted/GoalFailed")
+}
+
+// onGoalCompleted 在 Goal 完成时生成经验文件。
+func (e *Engine) onGoalCompleted(evt events.Event) error {
+	goalID := evt.GoalID
+	log.Printf("[ContextEngine] generating experience for completed goal: %s", goalID)
+	e.WriteDecision(goalID, &DecisionRecord{GoalID: goalID, Title: "Goal completed"})
+	e.WriteLesson(goalID, &LessonRecord{GoalID: goalID, Title: "Goal execution completed"})
+	// v0.1.0 H10: 跨 Goal 模式提炼
+	if goalText, ok := evt.Payload["goal_text"].(string); ok {
+		e.ExtractPattern(goalID, goalText)
+	}
+	return nil
+}
+
+// onGoalFailed 在 Goal 失败时生成经验文件（记录失败原因）。
+func (e *Engine) onGoalFailed(evt events.Event) error {
+	goalID := evt.GoalID
+	reason := ""
+	if r, ok := evt.Payload["error"].(string); ok {
+		reason = r
+	}
+	log.Printf("[ContextEngine] generating lessons for failed goal: %s (%s)", goalID, reason)
+	e.WriteLesson(goalID, &LessonRecord{GoalID: goalID, Title: "Goal failed: " + reason})
+	return nil
+}
+
+// AssembleContext 为 Agent 调用组装结构化上下文（v0.1.1: R-362）。
+func (e *Engine) AssembleContext(goalID string, userInput string) *AgentContext {
+	e.mu.RLock()
+	pt := e.pageTableCache[goalID]
+	e.mu.RUnlock()
+
+	return &AgentContext{
+		GoalID:    goalID,
+		PageTable: pt,
+		UserInput: userInput,
+	}
+}
+
+// AgentContext 是 Agent 调用时的上下文（v0.1.1）。
+type AgentContext struct {
+	GoalID    string
+	PageTable *PageTable
+	UserInput string
 }

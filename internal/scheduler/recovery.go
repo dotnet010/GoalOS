@@ -1,4 +1,4 @@
-// Package scheduler — RecoveryPipeline + BudgetTracker v1.1.0。
+// Package scheduler — RecoveryPipeline + BudgetTracker v0.1.0。
 // 熔断后的自动恢复管线。决策树：exec_crash→RETRY→SWITCH_TOOL→ESCALATE。
 // BudgetTracker: 追踪 Token/费用/重试次数/重复失败模式。
 //
@@ -10,9 +10,12 @@ import (
 	"fmt"
 	"log"
 	"sync"
+
+	"github.com/goalos/goalos/internal/eventbus"
+	"github.com/goalos/goalos/pkg/events"
 )
 
-// RecoveryPipeline 是熔断后的自动恢复管线（v1.1.0）。
+// RecoveryPipeline 是熔断后的自动恢复管线（v0.1.0）。
 // 在 ESCALATE 到用户之前，自动尝试多种技术方案。
 type RecoveryPipeline struct {
 	mu             sync.Mutex
@@ -30,7 +33,7 @@ func NewRecoveryPipeline() *RecoveryPipeline {
 	}
 }
 
-// Decide 分析 ActionFailed 事件，选择恢复路径（v1.1.0 决策树）。
+// Decide 分析 ActionFailed 事件，选择恢复路径（v0.1.0 决策树）。
 func (rp *RecoveryPipeline) Decide(actionID string, errorType string, budget *BudgetTracker, goalID string) RecoveryPath {
 	rp.mu.Lock()
 	defer rp.mu.Unlock()
@@ -89,7 +92,7 @@ func RecoveryEscalate(reason string) RecoveryPath {
 	return RecoveryPath{Action: "ESCALATE", Reason: reason, Escalate: true}
 }
 
-// ErrorContext 是重试时的错误上下文摘要（v1.1.0 ≤200 token）。
+// ErrorContext 是重试时的错误上下文摘要（v0.1.0 ≤200 token）。
 type ErrorContext struct {
 	ErrorType     string `json:"error_type"`     // "exec_crash"|"exec_timeout"|...
 	Message       string `json:"message"`        // 简短描述。≤100 字符
@@ -98,13 +101,14 @@ type ErrorContext struct {
 	PreviousResult string `json:"previous_result,omitempty"` // 上次执行结果。≤50 字符
 }
 
-// BudgetTracker 追踪 LLM Token 消耗和熔断（v1.1.0）。
+// BudgetTracker 追踪 LLM Token 消耗和熔断（v0.1.0）。
 // 仅追踪 LLM Token 和 API 费用——非 LLM 成本由 Action.Result.cost 上报。
 type BudgetTracker struct {
 	mu              sync.Mutex
-	goals           map[string]*GoalBudget // goalID → budget
+	goals           map[string]*GoalBudget
 	totalTokens     int
 	totalCostUSD    float64
+	bus             *eventbus.EventBus // v0.1.0 R-372: TokenUsage 事件发布
 }
 
 // GoalBudget 是单个 Goal 的预算追踪。
@@ -136,6 +140,9 @@ func (bt *BudgetTracker) InitGoal(goalID string, tokenLimit int) {
 	}
 }
 
+// SetEventBus 设置事件总线（v0.1.0 R-372: TokenUsage 事件发布）。
+func (bt *BudgetTracker) SetEventBus(bus *eventbus.EventBus) { bt.bus = bus }
+
 // RecordTokens 记录 Token 消耗。返回 true 表示触发熔断。
 func (bt *BudgetTracker) RecordTokens(goalID string, tokens int) bool {
 	bt.mu.Lock()
@@ -149,6 +156,21 @@ func (bt *BudgetTracker) RecordTokens(goalID string, tokens int) bool {
 
 	b.TokensUsed += tokens
 	bt.totalTokens += tokens
+
+	// v0.1.0 R-372: 发布 TokenUsage 事件
+	if bt.bus != nil {
+		bt.bus.Publish(events.Event{
+			Type:   events.TypeTokenUsage,
+			GoalID: goalID,
+			Source: "budget-tracker",
+			Payload: map[string]interface{}{
+				"tokens_used":   float64(tokens),
+				"total_tokens":  float64(b.TokensUsed),
+				"token_limit":   float64(b.TokenLimit),
+				"tripped":       b.Tripped,
+			},
+		})
+	}
 
 	if b.TokensUsed >= b.TokenLimit {
 		b.Tripped = true

@@ -13,6 +13,7 @@ import (
 
 	goalErr "github.com/goalos/goalos/pkg/errors"
 	"github.com/goalos/goalos/pkg/events"
+	"github.com/goalos/goalos/internal/metrics"
 	"github.com/goalos/goalos/internal/statestore"
 )
 
@@ -32,7 +33,8 @@ type Handler struct {
 	Goals            map[string]*GoalRecord
 	actionResults    map[string]interface{}
 	pendingApprovals map[string]PendingApproval
-		artifacts        map[string][]string // goalID → paths (R-030) // actionID → approval info
+	artifacts        map[string][]string // goalID → paths (R-030)
+	Metrics          *metrics.Registry   // v0.1.0 H8: Prometheus 指标注册表
 	mu               sync.RWMutex
 	port             int
 	startTime        time.Time
@@ -50,12 +52,23 @@ func (h *Handler) SetShutdownHook(fn func()) {
 	h.onShutdown = fn
 }
 
-// GoalRecord 是 Goal 的 API 响应记录。
+// GoalRecord 是 Goal 的 API 响应记录（v0.1.1 UX 增强 R-376）。
 type GoalRecord struct {
-	ID     string `json:"goal_id"`
-	Title  string `json:"title"`
-	Status string `json:"status"`
-	Result interface{} `json:"result,omitempty"` // Goal 完成后的执行结果
+	ID           string      `json:"goal_id"`
+	Title        string      `json:"title"`
+	Status       string      `json:"status"`
+	ActionsDone  int         `json:"actions_done"`
+	ActionsTotal int         `json:"actions_total"`
+	ErrorHint    string      `json:"error_hint,omitempty"`    // R-376: 失败时的人类可读建议
+	OutputPath   string      `json:"output_path,omitempty"`   // R-376: 成功时的产出物路径
+	Suggestions  []Suggestion `json:"suggestions,omitempty"`  // R-381: 失败后的操作建议
+	Result       interface{} `json:"result,omitempty"`
+}
+
+// Suggestion 是失败后的操作建议（R-381）。
+type Suggestion struct {
+	Action string `json:"action"`
+	Label  string `json:"label"`
 }
 
 // NewHandler 创建一个 API Handler。
@@ -170,10 +183,62 @@ func (h *Handler) TrackResult(goalID string, result interface{}) {
 	h.mu.Unlock()
 }
 
-// UpdateGoalStatus 更新 Goal 状态（GoalCompleted 时由 EventBus subscriber 调用）。
+// HandleMetrics 返回 Prometheus 格式的运行时指标（v0.1.0 H8）。
+func (h *Handler) HandleMetrics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	if h.Metrics == nil {
+		w.Write([]byte("# GoalOS metrics not initialized\n"))
+		return
+	}
+	w.Write([]byte(h.Metrics.PrometheusText()))
+}
+
+// UpdateGoalProgress 更新 Goal 执行进度（v0.1.1 产品体验）。
+func (h *Handler) UpdateGoalProgress(goalID string) {
+	h.mu.Lock()
+	if g, ok := h.Goals[goalID]; ok && g.Status == "正在执行" {
+		g.ActionsDone++
+	}
+	h.mu.Unlock()
+}
+
+// SetGoalActionsTotal 在 MissionGenerated 时设置总 Action 数（R-378）。
+func (h *Handler) SetGoalActionsTotal(goalID string, total int) {
+	h.mu.Lock()
+	if g, ok := h.Goals[goalID]; ok {
+		g.ActionsTotal = total
+	}
+	h.mu.Unlock()
+}
+
+// SetGoalErrorHint 设置失败时的人类可读建议（R-377）。
+func (h *Handler) SetGoalErrorHint(goalID string, hint string, suggestions []Suggestion) {
+	h.mu.Lock()
+	if g, ok := h.Goals[goalID]; ok {
+		g.ErrorHint = hint
+		g.Suggestions = suggestions
+	}
+	h.mu.Unlock()
+}
+
+// failHints 映射内部错误类型到人类可读建议（R-377）。
+var failHints = map[string]Suggestion{
+	"execution_error":   {Action: "retry", Label: "重试当前目标"},
+	"llm_timeout":       {Action: "switch_model", Label: "更换更快的模型"},
+	"no_output":         {Action: "simplify", Label: "简化目标描述"},
+	"plugin_not_found":  {Action: "check_plugins", Label: "检查插件配置"},
+}
+
+
+// UpdateGoalStatus 更新 Goal 状态（v0.1.1: failed 不可被 completed 覆盖）。
 func (h *Handler) UpdateGoalStatus(goalID, status string) {
 	h.mu.Lock()
 	if g, ok := h.Goals[goalID]; ok {
+		// GoalFailed 是终态——不可被后续 GoalCompleted 事件覆盖
+		if g.Status == "failed" || g.Status == "已失败" {
+			h.mu.Unlock()
+			return
+		}
 		g.Status = status
 	}
 	h.mu.Unlock()

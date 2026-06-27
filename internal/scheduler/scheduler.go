@@ -17,20 +17,24 @@ import (
 )
 
 // Scheduler 是 Goal 和 Action 状态机的唯一驱动者。
-// 不包含业务逻辑。不直接调用 LLM/Agent/Plugin/Shell/Browser。
 type Scheduler struct {
 	bus              *eventbus.EventBus
 	store            *statestore.Store
 	goalAnchor       *GoalAnchorTracker
+	autonomyLevel    string
+	goalTexts        map[string]string // v0.1.1 fix: goalID→goalText for GoalCompleted payload
 	mu               sync.Mutex
-	completedActions map[string]int        // goalID → 已完成 Action 数
-	failedActions    map[string]int        // goalID → 失败 Action 数
-	totalActions     map[string]int        // goalID → 总 Action 数
-	actionStates     map[string]ActionStatus // actionID → 当前 Action 状态
-	verificationAttempts map[string]int    // actionID → 验证重试次数 (max 3)
-	goalTimers       map[string]*time.Timer // goalID → 30s 超时检测
-	goalProgressed   map[string]bool       // goalID → 是否有 Action 进展
+	completedActions map[string]int
+	failedActions    map[string]int
+	totalActions     map[string]int
+	actionStates     map[string]ActionStatus
+	verificationAttempts map[string]int
+	goalTimers       map[string]*time.Timer
+	goalProgressed   map[string]bool
 }
+
+// SetAutonomyLevel sets autonomy level（v0.1.1）。
+func (s *Scheduler) SetAutonomyLevel(level string) { s.autonomyLevel = level }
 
 // New creates a Scheduler.
 func New(bus *eventbus.EventBus, store *statestore.Store, goalAnchor *GoalAnchorTracker) *Scheduler {
@@ -38,6 +42,7 @@ func New(bus *eventbus.EventBus, store *statestore.Store, goalAnchor *GoalAnchor
 		bus:                  bus,
 		store:                store,
 		goalAnchor:           goalAnchor,
+		goalTexts:            make(map[string]string),
 		completedActions:     make(map[string]int),
 		failedActions:        make(map[string]int),
 		totalActions:         make(map[string]int),
@@ -77,18 +82,33 @@ func (s *Scheduler) handleActionFailed(evt events.Event) error {
 	total := s.totalActions[evt.GoalID]
 	doneOrFailed := s.completedActions[evt.GoalID] + s.failedActions[evt.GoalID]
 	allResolved := total > 0 && doneOrFailed >= total
+	succeeded := s.completedActions[evt.GoalID]
 	s.mu.Unlock()
 
 	if allResolved {
-		log.Printf("[Scheduler] GoalFailed: %s (all %d actions resolved, %d failed)", evt.GoalID, total, s.failedActions[evt.GoalID])
-		s.publish(events.Event{
-			Type:    events.TypeGoalCompleted,
+		if succeeded > 0 {
+			log.Printf("[Scheduler] GoalCompleted: %s (%d/%d succeeded)", evt.GoalID, succeeded, total)
+			s.publish(events.Event{
+				Type:    events.TypeGoalCompleted,
 			GoalID:  evt.GoalID,
 			Source:  "scheduler",
 			Payload: map[string]interface{}{
-				"reason": fmt.Sprintf("all %d actions resolved, %d failed", total, s.failedActions[evt.GoalID]),
-			},
-		})
+				"reason": fmt.Sprintf("%d/%d actions succeeded", succeeded, total),
+					"failed": float64(s.failedActions[evt.GoalID]),
+				},
+			})
+		} else {
+			log.Printf("[Scheduler] GoalFailed: %s (all %d actions failed)", evt.GoalID, total)
+			s.publish(events.Event{
+				Type:    events.TypeGoalFailed,
+				GoalID:  evt.GoalID,
+				Source:  "scheduler",
+				Payload: map[string]interface{}{
+					"reason": fmt.Sprintf("all %d actions failed, 0 succeeded", total),
+					"error":  "no output produced",
+				},
+			})
+		}
 		// 取消超时计时器
 		if t, ok := s.goalTimers[evt.GoalID]; ok { t.Stop(); delete(s.goalTimers, evt.GoalID) }
 		return nil
@@ -155,11 +175,12 @@ func (s *Scheduler) handleGoalCreated(evt events.Event) error {
 		if !progressed {
 			log.Printf("[Scheduler] Goal %s: 30s timeout — no action progress, marking failed", evt.GoalID)
 			s.publish(events.Event{
-				Type:   events.TypeGoalCompleted,
+				Type:   events.TypeGoalFailed,
 				GoalID: evt.GoalID,
 				Source: "scheduler",
 				Payload: map[string]interface{}{
-					"reason": "timeout: 30s 内无 Action 进展",
+					"reason": "timeout: no action progress",
+					"error": "goal timed out",
 				},
 			})
 		}
@@ -168,6 +189,7 @@ func (s *Scheduler) handleGoalCreated(evt events.Event) error {
 
 	// GoalAnchor: 每次 LLM 规划调用计数器+1。达阈值时注入 goal_anchor_check
 	goalText, _ := evt.Payload["title"].(string)
+	s.goalTexts[evt.GoalID] = goalText // v0.1.1 fix: 供 GoalCompleted payload 使用
 	anchorCheck := s.goalAnchor.Increment(evt.GoalID)
 
 	s.publish(events.Event{
@@ -195,11 +217,12 @@ func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 		if !progressed {
 			log.Printf("[Scheduler] Goal %s: 60s execution timeout", evt.GoalID)
 			s.publish(events.Event{
-				Type:   events.TypeGoalCompleted,
+				Type:   events.TypeGoalFailed,
 				GoalID: evt.GoalID,
 				Source: "scheduler",
 				Payload: map[string]interface{}{
-					"reason": "timeout: 60s 内无 Action 进展",
+					"reason": "timeout: execution timeout",
+					"error": "execution timed out",
 				},
 			})
 		}
@@ -216,12 +239,14 @@ func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 		nodeCount = int(nc)
 	}
 
-	// MVP 行为：自动确认 MissionGraph。
-	s.publish(events.Event{
-		Type:   events.TypeUserConfirmed,
-		GoalID: evt.GoalID,
-		Source: "scheduler",
-	})
+	// v0.1.1: autonomous/full 模式下自动确认，否则等待用户通过 Channel Adapter 确认。
+	if s.autonomyLevel == "autonomous" || s.autonomyLevel == "full" {
+		s.publish(events.Event{
+			Type:   events.TypeUserConfirmed,
+			GoalID: evt.GoalID,
+			Source: "scheduler",
+		})
+	}
 
 	// 按节点生成 ActionScheduled
 	for i := 0; i < nodeCount; i++ {
