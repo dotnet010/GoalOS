@@ -1,0 +1,46 @@
+;; goalos-agent.sb — GoalOS macOS Sandbox Profile (Agent Plugin) (R-652)
+;; SHA256: 将在 Week 0 编译时计算并硬编码到 executor_darwin.go
+;;
+;; 适用范围: Agent Plugin（GoalAgent——需要 LLM API 访问 + 可能 fork 子验证进程）
+;; 安全级别: L2（macOS 基础隔离）
+;; 网络白名单: LLM API 端点（从 daemon.yaml 读取）
+
+(version 1)
+(deny default)
+
+;; ── 文件系统 ──
+(allow file-read* file-write*
+    (subpath (param "WORKSPACE_DIR"))
+    (subpath (param "TMP_DIR"))
+    (subpath "/usr/lib")
+    (subpath "/System/Library")
+    (literal "/dev/null")
+    (literal "/dev/zero")
+    (literal "/dev/random")
+    (literal "/dev/urandom"))
+
+(deny file-read* file-write*
+    (subpath (param "HOME_DIR")
+        (require-all
+            (require-any
+                (subpath "/.goalos")
+                (subpath "/.ssh")
+                (subpath "/.aws")
+                (subpath "/.config")))))
+
+;; ── 进程管理 ──
+;; Agent Plugin 可以 fork/clone 来并行执行子验证（Multi-LLM 场景）
+;; KSPP 审计: 允许 fork 意味着 Agent 子进程可能被利用——安全补偿由 Governance 审批提供
+(allow fork)
+(allow process-fork)
+(deny exec)              ;; 不允许执行其他二进制
+(deny process-exec)
+
+;; ── 网络（仅出站到 LLM API 端点） ──
+;; 白名单由 daemon 根据 daemon.yaml 的 llm.provider 和 llm.fallback 动态注入
+(deny network-inbound)
+(deny network*)
+
+;; ── 系统调用 ──
+(deny sysctl-write)
+(deny iokit-open)

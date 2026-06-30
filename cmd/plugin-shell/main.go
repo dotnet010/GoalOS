@@ -41,14 +41,14 @@ type resultMessage struct {
 	Output   string `json:"output,omitempty"`
 	Error    string `json:"error,omitempty"`
 	CostMs   int    `json:"cost_ms"`
-	Hmac     string `json:"hmac,omitempty"`
+	// R-660: Hmac 字段已移除——v0.2.0 两行协议中 HMAC 作为独立行输出，不嵌入 JSON
 }
 
 type errorMessage struct {
 	Type    string `json:"type"`
 	Code    string `json:"code"`
 	Message string `json:"message"`
-	Hmac    string `json:"hmac,omitempty"`
+	// R-660: Hmac 字段已移除——v0.2.0 两行协议中 HMAC 作为独立行输出
 }
 
 var sessionToken string
@@ -123,6 +123,8 @@ func runShellCommand(msg ipcMessage) {
 		return
 	}
 
+	// R-660: shell 命令执行——seccomp 在 init 阶段已加载，限制可用 syscall。
+	// sh -c 是 shell plugin 的核心功能。安全边界由 seccomp+文件系统隔离提供。
 	cmd := exec.Command("sh", "-c", cmdStr)
 	cmd.Dir = msg.Workspace
 	cmd.Env = append(os.Environ(),
@@ -153,17 +155,16 @@ func writeError(code, message string) {
 // signAndWrite 计算 HMAC 并写入 stdout（会议 #63 Zero Trust IPC）。
 func signAndWrite(v interface{}) {
 	data, _ := json.Marshal(v)
-	// 如果已初始化（有 session_token），附加 HMAC
+	// R-660: v0.2.0 两行协议——第一行 HMAC-SHA256 hex，第二行 JSON payload。
+	// HMAC 不嵌入 JSON——作为独立行输出。
 	if sessionToken != "" {
-		var m map[string]interface{}
-		json.Unmarshal(data, &m)
-		m["hmac"] = computeHMAC(data, sessionToken)
-		data, _ = json.Marshal(m)
+		sig := computeHMAC(data, sessionToken)
+		fmt.Println(sig)
 	}
 	fmt.Println(string(data))
 }
 
-// computeHMAC 计算 HMAC-SHA256。
+// computeHMAC 计算 HMAC-SHA256，返回 hex 编码字符串。
 func computeHMAC(payload []byte, token string) string {
 	mac := hmac.New(sha256.New, []byte(token))
 	mac.Write(payload)

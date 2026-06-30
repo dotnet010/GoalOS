@@ -1,0 +1,49 @@
+# GoalOS Spectral 规则集 — Layer 2 结构化规格验证
+# 用法: spectral lint GoalOS/glossary.yaml --ruleset GoalOS/.spectral.yaml
+rules:
+  # ═══ 规则1: 每个术语必须有字段定义或 Schema 引用 ═══
+  term-must-have-schema-or-description:
+    description: "GLOSSARY 中每个术语必须有 Schema 定义或详细描述。has_schema=0 的术语需人工检查。"
+    severity: warn
+    given: "$.terms[*]"
+    then:
+      - field: has_schema
+        function: truthy
+
+  # ═══ 规则2: 术语名不能为空 ═══
+  term-name-required:
+    description: "所有术语必须有名称"
+    severity: error
+    given: "$.terms[*]"
+    then:
+      - field: name
+        function: truthy
+
+  # ═══ 规则3: 术语必须有定义位置 ═══
+  term-must-have-definition-location:
+    description: "所有术语必须标注在哪个文档中定义"
+    severity: error
+    given: "$.terms[*]"
+    then:
+      - field: defined_in
+        function: truthy
+
+  # ═══ 规则4: 术语描述不能过短 ═══
+  term-description-minimum-length:
+    description: "术语描述至少 10 字符——确保不是空占位符"
+    severity: warn
+    given: "$.terms[*]"
+    then:
+      - field: description
+        function: length
+        functionOptions:
+          min: 10
+
+  # ═══ 规则5: events.yaml 每个事件必须有 Publisher ═══
+  event-must-have-publisher:
+    description: "每个注册的事件必须有 Publisher 字段"
+    severity: error
+    given: "$.events[*]"
+    then:
+      - field: publisher
+        function: truthy

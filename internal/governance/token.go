@@ -129,6 +129,19 @@ func splitToken(token string) []string {
 
 // ─── Secret Key 管理 ──────────────────────────────────────────
 
+// revokeToken 将 Token 加入撤销列表。调用方必须持有 revokedMu 锁。
+// R-660: VerifyToken 必须检查撤销列表。
+func revokeToken(revokedTokens map[string]bool, tokenStr string) {
+	if revokedTokens != nil {
+		revokedTokens[tokenStr] = true
+	}
+}
+
+// isTokenRevoked 检查 Token 是否已被撤销。调用方必须持有 revokedMu 锁。
+func isTokenRevoked(revokedTokens map[string]bool, tokenStr string) bool {
+	return revokedTokens != nil && revokedTokens[tokenStr]
+}
+
 // LoadOrGenerateSecret 从 keyPath 加载 daemon 密钥；不存在时生成新密钥并写入文件。
 // 返回 32 字节 HMAC-SHA256 密钥。
 func LoadOrGenerateSecret(keyPath string) ([]byte, error) {

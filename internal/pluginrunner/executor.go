@@ -144,17 +144,40 @@ func readStdout(stdout io.Reader, resultCh chan<- *ExecResult, errCh chan<- erro
 	scanner.Buffer(make([]byte, 65536), 65536)
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		var msg map[string]interface{}
-		if err := json.Unmarshal(line, &msg); err != nil {
-			continue
-		}
 
-		// HMAC 验证（会议 #63 Zero Trust IPC）
-		if sessionToken != "" {
-			if err := verifyHMAC(line, msg, sessionToken); err != nil {
+		// R-660: v0.2.0 两行 HMAC 协议——第一行 HMAC-SHA256 hex，第二行 JSON payload。
+		// HMAC 不嵌入 JSON——作为独立行输出。
+		var msg map[string]interface{}
+		if sessionToken != "" && isHexLine(line) {
+			// 第一行是 HMAC hex——读取第二行（JSON payload）
+			hmacLine := string(line)
+			if !scanner.Scan() {
+				errCh <- fmt.Errorf("ipc_security_violation: expected JSON payload after HMAC line")
+				return
+			}
+			jsonLine := scanner.Bytes()
+			if err := json.Unmarshal(jsonLine, &msg); err != nil {
+				errCh <- fmt.Errorf("ipc_security_violation: invalid JSON after HMAC line: %w", err)
+				return
+			}
+			// 验证 HMAC（基于 JSON payload 原始 bytes + sessionToken）
+			if err := verifyTwoLineHMAC(hmacLine, jsonLine, sessionToken); err != nil {
 				log.Printf("[executor] HMAC verification failed: %v", err)
 				errCh <- fmt.Errorf("ipc_security_violation: HMAC verification failed")
 				return
+			}
+		} else {
+			// 旧协议兼容：单行 JSON（HMAC 嵌入 JSON 或 无 HMAC）
+			if err := json.Unmarshal(line, &msg); err != nil {
+				continue
+			}
+			if sessionToken != "" {
+				// 旧协议：HMAC 在 JSON 的 "hmac" 字段中
+				if err := verifyHMAC(line, msg, sessionToken); err != nil {
+					log.Printf("[executor] HMAC verification failed (legacy protocol): %v", err)
+					errCh <- fmt.Errorf("ipc_security_violation: HMAC verification failed")
+					return
+				}
 			}
 		}
 
@@ -237,4 +260,34 @@ func writeJSON(w io.Writer, v interface{}) error {
 	data = append(data, '\n')
 	_, err = w.Write(data)
 	return err
+}
+
+// isHexLine 判断一行是否是 HMAC hex 签名行（64 字符 hex）。
+func isHexLine(line []byte) bool {
+	if len(line) != 64 {
+		return false
+	}
+	for _, c := range line {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+// verifyTwoLineHMAC 验证 v0.2.0 两行协议的 HMAC 签名。
+// hmacHex: 第一行的 HMAC-SHA256 hex 字符串（64 字符）
+// payload: 第二行的 JSON payload 原始 bytes
+func verifyTwoLineHMAC(hmacHex string, payload []byte, token string) error {
+	expectedHMAC, err := hex.DecodeString(hmacHex)
+	if err != nil {
+		return fmt.Errorf("hmac decode: %w", err)
+	}
+	mac := hmac.New(sha256.New, []byte(token))
+	mac.Write(payload)
+	actualHMAC := mac.Sum(nil)
+	if !hmac.Equal(expectedHMAC, actualHMAC) {
+		return fmt.Errorf("HMAC mismatch")
+	}
+	return nil
 }

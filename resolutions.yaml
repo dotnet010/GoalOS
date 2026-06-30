@@ -1,0 +1,1170 @@
+# GoalOS v0.2.0 决议传播追踪 — 文档正文内容一致性检查
+#
+# CI 两层验证：
+#   层1（元数据追溯）: 每个文件的修改记录必须引用决议编号
+#   层2（正文内容一致性）: 文档正文必须满足 verify 规则——must_exist/must_not_exist
+#
+# verify 格式:
+#   must_exist: [grep -E pattern] — 正文中必须出现此模式（否则决议未传播到正文）
+#   must_not_exist: [grep -E pattern] — 正文中禁止出现此模式（旧概念未清除）
+#   in_file: [filename] — 限制检查范围到指定文件（默认检查 files 列表中所有文件）
+#   reason: [中文说明] — 为什么这条规则存在
+#
+# 设计原则:
+#   1. 每条 verify 规则必须对应一个具体的决议承诺
+#   2. must_not_exist 防止概念回退（旧术语复活）
+#   3. must_exist 保证新概念在文档正文中可找到（非仅修改记录）
+#   4. reason 字段让 CI 失败时开发者能理解"为什么必须改"
+
+resolutions:
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #79: 第一性原理 —— 概念根基
+  # ═══════════════════════════════════════════════════════════════
+
+  R-451:
+    desc: "四原语→三原语。Wait降级为PipelineRunner中间状态"
+    files: [05软件架构文档.md, 01-prd产品需求文档.md, 07事件注册表.md, GLOSSARY.md, 测试规范.md]
+    verify:
+      - must_not_exist: "四原语|4 Primitive|四个 Primitive|四个原语"
+        reason: "全文档禁止使用四原语——三原语(Check/Exec/Decide)是唯一正确表述"
+      - must_not_exist: "Wait 原语|Wait Primitive"
+        in_file: 05软件架构文档.md
+        reason: "Wait不是原语——是PipelineRunner中间状态"
+      - must_not_exist: "Wait 原语|Wait Primitive"
+        in_file: 07事件注册表.md
+        reason: "事件分类中不应出现Wait原语"
+      - must_exist: "3 种：Check/Exec/Decide|三原语|3 Primitive"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY必须定义三原语为3种"
+      - must_exist: "三原语|Check.*Exec.*Decide"
+        in_file: 05软件架构文档.md
+        reason: "05-架构正文必须定义三原语模型"
+
+  R-452:
+    desc: "Event边界精炼——跨模块状态变更→EventBus。模块内部同步→Go接口+审计事件。边界标准=Go package"
+    files: [05软件架构文档.md, 01-prd产品需求文档.md, GLOSSARY.md]
+    verify:
+      - must_exist: "跨模块状态变更.*Event Bus|Event Bus.*跨模块"
+        in_file: 01-prd产品需求文档.md
+        reason: "产品原则2必须精炼Event边界——跨模块状态变更→EventBus"
+      - must_exist: "package.*边界|同 package.*直接|模块内部.*调用"
+        in_file: 05软件架构文档.md
+        reason: "05-架构必须定义Event边界的Go package标准"
+
+  R-464:
+    desc: "Event over Call边界标准——以Go package为边界。同package内可直接调用，跨package必须通过EventBus或显式接口"
+    files: [05软件架构文档.md, 01-prd产品需求文档.md, GLOSSARY.md]
+    verify:
+      - must_exist: "package.*边界|跨 package|同 package"
+        in_file: 05软件架构文档.md
+        reason: "Event边界必须以Go package为明确标准——R-464"
+    desc: "Flow角色重定义——默认推荐路径（非强制牢笼）。REPLAN时可切换FlowTemplate或降级到generic-v1"
+    files: [05软件架构文档.md]
+    verify:
+      - must_exist: "REPLAN.*Flow|降级.*generic-v1|Flow.*推荐路径"
+        in_file: 05软件架构文档.md
+        reason: "Flow必须支持REPLAN时切换/降级——不是强制牢笼"
+
+  R-454:
+    desc: "Completion重定义——Completion=Contract条款满足(≥1 MustHave Action成功+产出物存在)，≠所有Action成功"
+    files: [05软件架构文档.md, GLOSSARY.md, 07事件注册表.md]
+    verify:
+      - must_not_exist: "completedActions == 0"
+        reason: "旧GoalFailed前置条件已废弃。全文档禁止引用"
+      - must_exist: "MustHave.*Action|MustHave.*成功"
+        in_file: 05软件架构文档.md
+        reason: "Completion定义必须基于MustHave Actions"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #76: 第一版顾问反馈 —— 代码与文档修正
+  # ═══════════════════════════════════════════════════════════════
+
+  R-420:
+    desc: "GoalFailed Precondition修正——旧定义completedActions==0已废弃。新定义: 所有未完成Action均失败+RecoveryPipeline耗尽"
+    files: [05软件架构文档.md, 07事件注册表.md, GLOSSARY.md]
+    verify:
+      - must_not_exist: "completedActions == 0"
+        reason: "旧前置条件已废弃——全文档禁止"
+      - must_exist: "RecoveryPipeline.*耗尽|所有.*Action.*失败"
+        in_file: 07事件注册表.md
+        reason: "GoalFailed事件Precondition必须引用新定义"
+
+  R-421:
+    desc: "WebSocket/SSE——统一选SSE，废弃WebSocket。03-高保真全量替换"
+    files: [05软件架构文档.md, 03高保真交互原型.md]
+    verify:
+      - must_not_exist: "ws://localhost:18920/ws"
+        in_file: 03高保真交互原型.md
+        reason: "03-高保真不得使用WebSocket连接URL——必须用SSE(/api/events)"
+      - must_not_exist: "WebSocket 协议|WebSocket 消息格式"
+        in_file: 05软件架构文档.md
+        reason: "05-架构不得描述WebSocket——已统一为SSE"
+      - must_exist: "SSE|Server-Sent Events|/api/events"
+        in_file: 05软件架构文档.md
+        reason: "05-架构必须定义SSE协议替代WebSocket"
+
+  R-416:
+    desc: "Recovery退避策略——从指数退避(1s/2s/4s)改为线性退避(1s/2s/3s)"
+    files: [05软件架构文档.md]
+    verify:
+      - must_not_exist: "指数退避.*1s.*2s.*4s|exponential backoff"
+        in_file: 05软件架构文档.md
+        reason: "Recovery退避必须改用线性退避——禁止指数退避出现在Recovery上下文中"
+      - must_exist: "线性退避|1s.*2s.*3s|linear backoff"
+        in_file: 05软件架构文档.md
+        reason: "必须定义Recovery线性退避参数"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #80: 第三次顾问反馈 —— IPC/安全/状态
+  # ═══════════════════════════════════════════════════════════════
+
+  R-456:
+    desc: "IPC改用FD3控制通道。FD0/FD1/FD2留给标准I/O。控制协议与日志绝对隔离"
+    files: [08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "FD.?3|fd3|文件描述符.*3"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08-沙箱必须定义FD3控制通道"
+      - must_exist: "FD.?0.*stdin|FD.?1.*stdout|FD.?2.*stderr"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08-沙箱必须明确FD0/1/2的用途(标准I/O,非IPC)"
+
+  R-458:
+    desc: "MustHave Actions区分。Completed=所有MustHave成功+产出物非空。Failed=所有MustHave失败+RecoveryPipeline耗尽"
+    files: [05软件架构文档.md, GLOSSARY.md, 07事件注册表.md]
+    verify:
+      - must_exist: "MustHave"
+        in_file: 05软件架构文档.md
+        reason: "05-架构Meyer契约表必须包含MustHave Actions行"
+
+  R-465:
+    desc: "Snapshot不含PipelineState——PipelineState从events.jsonl PipelinePaused事件重放重建"
+    files: [05软件架构文档.md]
+    verify:
+      - must_exist: "PipelineState.*events.jsonl|重放.*重建.*PipelineState|不含.*PipelineState"
+        in_file: 05软件架构文档.md
+        reason: "05-架构必须明确PipelineState的重建来源——不是Snapshot,是events.jsonl"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #78-#79: 用户可见 + 架构精炼
+  # ═══════════════════════════════════════════════════════════════
+
+  R-419:
+    desc: "用户可见状态Failed→'未完成'（非'失败'或'已失败'）"
+    files: [GLOSSARY.md]
+    verify:
+      - must_not_exist: "已失败"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY用户可见状态不得使用'已失败'——必须用'未完成'"
+      - must_exist: "未完成"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY必须定义用户可见状态为'未完成'"
+
+  R-455:
+    desc: "三原语概念漂移修复——所有基石文档统一三原语表述"
+    files: [05软件架构文档.md, 01-prd产品需求文档.md, 07事件注册表.md, GLOSSARY.md]
+    verify:
+      - must_not_exist: "四原语|4 Primitive|四个 Primitive"
+        reason: "残留的四原语引用必须全部清除"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #81-#82: 根源修复 —— CI 基础设施
+  # ═══════════════════════════════════════════════════════════════
+
+  R-481:
+    desc: "CI决议传播两层检查——层1修改记录追溯+层2正文内容一致性"
+    files: [架构会议规范.md, 开发就绪检查清单.md]
+  R-482:
+    desc: "Go interface架构约束——StateChangeNotifier/Layered/Primitive/Projection/CoreLayerHandler/HotPath/EventPayload七个编译器级约束接口"
+    files: [05软件架构文档.md]
+  R-483:
+    desc: "端到端设计审查——IPC/三原语/Goal生命周期三个子系统逐层走查"
+    files: [08沙箱隔离与进程通信规范.md, 05软件架构文档.md]
+  R-484:
+    desc: "文档开发就绪清单v2.0——5大类16项可自动验证。CI全绿→可进入开发"
+    files: [开发就绪检查清单.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #84: 五顾问审计讨论 —— 21 新决议 R-490~R-510
+  # ═══════════════════════════════════════════════════════════════
+
+  # --- P0: 阻塞项 ---
+  R-490:
+    desc: "PluginRunner Go interface提取+ExecRedTest。Week 0 RED→Week 2 GREEN"
+    files: [开发计划/v0.2.0/v0.2.0-4-开发计划.md, 开发计划/v0.2.0/v0.2.0-4-测试计划.md]
+    verify:
+      - must_exist: "TestIntegration_ExecRedTest"
+        in_file: 开发计划/v0.2.0/v0.2.0-4-测试计划.md
+        reason: "Week 0 ExecRedTest必须在测试计划中定义"
+
+  R-491:
+    desc: "PipelineRunner hot path Publish层标注+L5基准——状态变更→核心层同步,审计/指标→副作用层异步"
+    files: [05软件架构文档.md, 开发计划/v0.2.0/v0.2.0-4-开发计划.md]
+
+  R-492:
+    desc: "seccomp syscall审计——strace -c plugin-binary 30s→比对08-沙箱白名单"
+    files: [开发计划/v0.2.0/v0.2.0-4-开发计划.md, 06安全模型文档.md]
+
+  R-493:
+    desc: ".sb模板hash硬编码(executor_darwin.go)+sandbox-exec -n语法验证。不合规→拒绝启动"
+    files: [08沙箱隔离与进程通信规范.md, 开发计划/v0.2.0/v0.2.0-4-开发计划.md]
+    verify:
+      - must_exist: "sandbox-exec|\.sb.*hash|Seatbelt"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08-沙箱必须定义sandbox-exec和.sb规则文件的验证机制"
+
+  R-494:
+    desc: "STRIDE P0发现→Phase A修复(即使延期)。P1/P2→stub追踪清单→v0.3.0"
+    files: [开发计划/v0.2.0/v0.2.0-4-开发计划.md, 06安全模型文档.md]
+
+  R-495:
+    desc: "EventBus核心层Invariant: handler<1ms。禁止I/O/锁等待/网络调用。L5基准测试验证"
+    files: [05软件架构文档.md, 开发计划/v0.2.0/v0.2.0-4-测试计划.md]
+    verify:
+      - must_exist: "核心层.*<1ms|handler.*<.*1ms|1ms"
+        in_file: 05软件架构文档.md
+        reason: "EventBus核心层Invariant必须在05-架构§2.2中定义"
+
+  # --- P1: 高优先 ---
+  R-496:
+    desc: "静态分析pass推迟Week4——go/analysis扫描import路径,低层import高层→CI失败"
+    files: [开发计划/v0.2.0/v0.2.0-4-开发计划.md]
+
+  R-497:
+    desc: "S6 Daemon优雅关闭序列——SIGTERM→停止新Goal→30s超时等PipelineRunner→SaveSnapshot→子进程SIGTERM→Exit 0"
+    files: [05软件架构文档.md]
+    verify:
+      - must_exist: "优雅关闭|graceful.shutdown|SIGTERM.*关闭"
+        in_file: 05软件架构文档.md
+        reason: "Daemon关闭序列必须在05-架构§2.2中定义(与14步启动序列对等)"
+
+  R-498:
+    desc: "Week 0 Makefile——build/test/test-race/lint/ci 五个target"
+    files: [开发计划/v0.2.0/v0.2.0-4-开发计划.md]
+
+  R-499:
+    desc: "包路径迁移——pkg/context/→internal/context/(内部), pkg/events/→goalos/events/(未来Plugin SDK引用)"
+    files: [05软件架构文档.md, 开发计划/v0.2.0/v0.2.0-4-开发计划.md, GLOSSARY.md]
+    verify:
+      - must_exist: "goalos/events|internal/context"
+        in_file: 开发计划/v0.2.0/v0.2.0-4-开发计划.md
+        reason: "开发计划必须使用新包路径(非pkg/)"
+
+  R-500:
+    desc: "EventPayload interface——EventType() string + Validate() error。M1-M8在Validate()中统一验证"
+    files: [开发计划/v0.2.0/v0.2.0-4-开发计划.md]
+    verify:
+      - must_exist: "EventPayload.*interface|EventType.*Validate"
+        in_file: 开发计划/v0.2.0/v0.2.0-4-开发计划.md
+        reason: "开发计划B2实现细节必须包含EventPayload interface定义"
+
+  R-501:
+    desc: "StateStore.BatchAppend接口预留——当前=循环Append, v0.3.0实现50ms buffer+批量writev"
+    files: [05软件架构文档.md]
+
+  R-502:
+    desc: "WARN决策矩阵→16种组合(4×4全量覆盖)。每格独立分支路径"
+    files: [开发计划/v0.2.0/v0.2.0-4-测试计划.md]
+    verify:
+      - must_exist: "16.*组合|16.*种|4.*×.*4|4x4"
+        in_file: 开发计划/v0.2.0/v0.2.0-4-测试计划.md
+        reason: "测试计划WARN决策矩阵必须覆盖16种组合(R-502)"
+
+  R-503:
+    desc: "session_token——32字节 + crypto/rand.Read() + contract_test验证entropy≥256bit"
+    files: [08沙箱隔离与进程通信规范.md, 开发计划/v0.2.0/v0.2.0-4-开发计划.md]
+    verify:
+      - must_exist: "crypto/rand|32.*字节|entropy.*256"
+        in_file: 开发计划/v0.2.0/v0.2.0-4-开发计划.md
+        reason: "开发计划A8实现细节必须指定crypto/rand+32字节"
+
+  R-504:
+    desc: "S4 Exec超时副作用处理决策表——idempotency_token状态判定+Decider路径选择"
+    files: [05软件架构文档.md]
+
+  R-505:
+    desc: "安全回归测试套件——M2/M4/M6/C13/F4 contract_test。CI每次commit强制运行"
+    files: [开发计划/v0.2.0/v0.2.0-4-测试计划.md]
+    verify:
+      - must_exist: "安全回归|security regression|M2.*M4.*M6"
+        in_file: 开发计划/v0.2.0/v0.2.0-4-测试计划.md
+        reason: "测试计划必须显式标注安全回归套件"
+
+  R-506:
+    desc: "L6发布就绪第12项——govulncheck ./... 无已知漏洞"
+    files: [开发计划/v0.2.0/v0.2.0-4-测试计划.md]
+    verify:
+      - must_exist: "govulncheck|12.*项|12 项"
+        in_file: 开发计划/v0.2.0/v0.2.0-4-测试计划.md
+        reason: "测试计划L6必须包含govulncheck作为第12项"
+
+  R-507:
+    desc: "06-安全§6安全事件响应——daemon_secret_key泄露处理: ①stop ②rm secrets.enc ③start(自动生成新密钥) ④旧Token全失效"
+    files: [06安全模型文档.md]
+    verify:
+      - must_exist: "泄露|compromised|安全事件|security incident|secrets\.enc.*删除|rm.*secrets"
+        in_file: 06安全模型文档.md
+        reason: "安全事件响应流程必须在06-安全§6正文中定义(非仅修改记录)"
+
+  # --- P2: 优化项 ---
+  R-508:
+    desc: "mockgen推迟v0.3.0。当前手写mock可接受"
+    files: []
+
+  R-509:
+    desc: "AgentError实现Unwrap() error。errors.Is(err, ErrTimeout)替代isTimeout()字符串匹配"
+    files: [05软件架构文档.md, GLOSSARY.md]
+    verify:
+      - must_exist: "Unwrap|errors\.Is.*ErrTimeout"
+        in_file: 开发计划/v0.2.0/v0.2.0-4-开发计划.md
+        reason: "开发计划S4必须明确AgentError的Unwrap()语义"
+
+  R-510:
+    desc: "A26 Pattern异步化goroutine timeout=30s。超时→取消提取→记录日志。不阻塞EventBus"
+    files: [05软件架构文档.md, 开发计划/v0.2.0/v0.2.0-4-开发计划.md]
+    verify:
+      - must_exist: "timeout.*30s|30.*秒.*超时|goroutine.*timeout"
+        in_file: 开发计划/v0.2.0/v0.2.0-4-开发计划.md
+        reason: "开发计划A26必须指定goroutine timeout=30s"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 元数据追溯（以下决议仅需修改记录引用——无正文内容 verify 规则）
+  # 决议传播已通过层1验证。层2无需额外规则。
+  # ═══════════════════════════════════════════════════════════════
+  #
+  # 决议编号断档审计（会议 #86 R-541）:
+  #   R-395: 空号——会议 #74 讨论中合并到 R-394。1个预留号未使用
+  #   R-399~R-403: 空号——会议 #75 顾问反馈合并处理。5个预留号未使用
+  #   R-410~R-411: 空号——会议 #75 Week 0 任务合并。2个预留号未使用
+  #   R-414: 空号——会议 #76 讨论中合并到 R-413。1个预留号未使用
+  #   R-422~R-433: 空号——会议 #76-#78 顾问反馈合并+拒绝项。12个预留号未使用
+  #   R-436: 空号——会议 #78 讨论中合并到 R-435。1个预留号未使用
+  #   R-439~R-450: 空号——会议 #78-#79 间无会议。12个号码跳过（R-451 开始新议题: 第一性原理）
+  #   R-453: 空号——会议 #79 讨论中合并到 R-452。1个预留号未使用
+  #   R-459~R-461: 空号——会议 #80 顾问反馈合并处理。3个预留号未使用
+  #   R-466~R-480: 空号——会议 #80-#81 间无会议。15个号码跳过（R-481 开始新议题: 根源修复）
+  #   R-485~R-489: 空号——会议 #82-#83 间无会议。5个号码跳过（R-490 开始新议题: 五顾问审计）
+  #   R-508: 空决议——mockgen推迟v0.3.0，无文件变更。files:[]占位
+  #
+  # R-543 编号纪律: ①连续分配 ②合并决议显式声明 ③空号必须有原因注释
+
+  R-394:
+    desc: "v0.2.0 开发规划批准——A类/B类分类体系确立。先修A后做B"
+    files: [05软件架构文档.md, 会议纪要.md, stub追踪清单.md]
+  R-396:
+    desc: "Phase A闸口——A类全修+contract_test全绿→Meyer签字→进Phase B"
+    files: [05软件架构文档.md, 开发计划/v0.2.0/v0.2.0-3-开发计划.md]
+  R-397:
+    desc: "contract_test 9模块——每模块至少3 MUST+contract_test文件"
+    files: [测试规范.md, 开发计划/v0.2.0/v0.2.0-3-测试计划.md]
+  R-398:
+    desc: "外部依赖不可信——LLM/Plugin/用户输入/文件系统/HTTP API 5边界Meyer契约"
+    files: [05软件架构文档.md, 06安全模型文档.md, GLOSSARY.md]
+  R-404:
+    desc: "B7拆分——B7a Week1最小输入框 + B7b Week7 SSE实时卡片"
+    files: [01-prd产品需求文档.md, 开发计划/v0.2.0/v0.2.0-3-开发计划.md]
+  R-405:
+    desc: "A6+A7全链路错误传播——AgentError Code/RetryPolicy/Suggestion/Technical/Err五字段"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-406:
+    desc: "A13 IPC两行协议——第一行HMAC-SHA256 hex + 第二行JSON payload"
+    files: [08沙箱隔离与进程通信规范.md, GLOSSARY.md]
+  R-407:
+    desc: "A16 PageTable→pkg/context(现internal/context)——消除missionengine↔contextengine循环依赖"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-408:
+    desc: "A8 exec→requestExecution——命名诚实性改进,发布ActionExecutionRequested事件"
+    files: [05软件架构文档.md, 07事件注册表.md, GLOSSARY.md]
+  R-409:
+    desc: "Week 0 STRIDE——5外部边界威胁建模。产出→06-安全§1.1 Threat→Mitigation表"
+    files: [06安全模型文档.md, 开发计划/v0.2.0/v0.2.0-3-开发计划.md]
+  R-412:
+    desc: "四文档交叉引用——验收标准↔测试计划↔开发计划↔顾问审计 相互引用一致"
+    files: [开发计划/v0.2.0/v0.2.0-3-预期目标与验收标准.md, 开发计划/v0.2.0/v0.2.0-3-测试计划.md, 开发计划/v0.2.0/v0.2.0-3-开发计划.md]
+  R-413:
+    desc: "分层依赖铁律A1——Dashboard→API→Scheduler→GoalRunner→PipelineRunner→PluginRunner"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-415:
+    desc: "Wait竞态修复C1——先SubscribeForGoal订阅唤醒事件再调用Run()。消除fsync期间事件丢失窗口"
+    files: [05软件架构文档.md]
+  R-417:
+    desc: "macOS安全诚实标注——seccomp仅Linux。macOS降级L2+独立PID+0700。Dashboard显示平台安全级别"
+    files: [06安全模型文档.md, 08沙箱隔离与进程通信规范.md]
+  R-418:
+    desc: "CompletionContract struct C3——Criteria+Version+ConfirmedAt。ConfirmedAt非零→Immutable"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-434:
+    desc: "IPC背压修复D1——删除丢弃中间部分方案。Plugin SDK层限制output≤64KB。超限→ErrPayloadTooLarge+SIGTERM"
+    files: [08沙箱隔离与进程通信规范.md]
+  R-435:
+    desc: "Flow/REPLAN死锁修复D2——Decide.REPLAN时FlowComposer跳过required强校验,降级builtin/generic-v1"
+    files: [05软件架构文档.md]
+  R-437:
+    desc: "failHints映射表——Jobs提供8→10种error_type→用户可读中文+操作按钮"
+    files: [开发计划/v0.2.0/v0.2.0-3-预期目标与验收标准.md]
+  R-438:
+    desc: "AgentError附录A——05-架构§5补充AgentError struct完整定义"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-457:
+    desc: "恢复流程Subscribe优先F7——崩溃恢复顺序: Subscribe→Load Snapshot→Replay events。消除Wait事件丢失窗口"
+    files: [05软件架构文档.md]
+  R-462:
+    desc: "macOS sandbox-exec——用Seatbelt profiles替代seccomp降级。编写.sb规则文件实现文件系统隔离"
+    files: [06安全模型文档.md, 08沙箱隔离与进程通信规范.md]
+  R-463:
+    desc: "Completion层次F6——CompletionCriteria⊆CompletionContract⊆GoalContract。GoalLevelVerificationGate验证CompletionSignal"
+    files: [05软件架构文档.md, GLOSSARY.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #85: 外部顾问审计讨论 (G/C/K 三顾问) —— 30 新决议 R-511~R-540
+  # ═══════════════════════════════════════════════════════════════
+
+  # --- P0 (13项) ---
+  R-511:
+    desc: "B15 Two-Phase Commit执行语序修正——events.jsonl append→fsync→EventBus Publish→StateStore投影更新。投影不可先于真相落盘"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-512:
+    desc: "Audit Engine三级背压策略——①≥80%扩容2x(上限8000)②硬上限同步阻塞写入③发布InvariantViolated"
+    files: [05软件架构文档.md, 06安全模型文档.md]
+  R-513:
+    desc: "IPC JSON Payload紧凑单行契约——json.Marshal产物直接输出。Plugin SDK WriteMessage()强制保证"
+    files: [08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "紧凑单行|compact.*单行|WriteMessage"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08-沙箱必须定义JSON Payload紧凑单行契约"
+  R-514:
+    desc: "MultiLLMConfig增加arbitration_provider+arbitration_model可选字段。未配置→降级severity_weighted_majority"
+    files: [05软件架构文档.md]
+  R-515:
+    desc: "FlowComposer.ValidatePlan()增加GateSpec深度结构对比——Agent不可增删改Flow模板定义的Gate"
+    files: [05软件架构文档.md]
+  R-516:
+    desc: "02/03原型Planned状态页面增加CompletionContract展示区域(SuccessDefinition/AcceptanceCriteria/MustHave Artifacts/Constraints)"
+    files: [02低保真原型.md, 03高保真交互原型.md]
+  R-517:
+    desc: "GraphNode增加must_have:bool字段(默认true)。GoalState增加MustHaveActionIDs。accept_criteria YAML增加must_have"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-518:
+    desc: "Telegram Bot降级v0.3.0。v0.2.0 MVP通道=Dashboard+CLI。B12从Phase B移除"
+    files: [01-prd产品需求文档.md]
+  R-519:
+    desc: "三原语措辞全文档统一——清除四原语/4种/唯一异步原语。PrimitiveWait→PipelineWait。07-事件标题修正"
+    files: [05软件架构文档.md, 07事件注册表.md, GLOSSARY.md]
+    verify:
+      - must_not_exist: "四原语|4 Primitive|四个 Primitive|四个原语|唯一异步原语"
+        in_file: 05软件架构文档.md
+        reason: "R-519: 05-架构正文必须统一三原语措辞"
+  R-520:
+    desc: "GoalRunner终态判定算法——①所有MustHave Completed+产出物非空→Completed②任一MustHave Failed+Recovery耗尽→Failed③部分成功+部分失败→不是Completed,是Running"
+    files: [05软件架构文档.md]
+  R-521:
+    desc: "07-事件注册表所有事件增加layer:core|side_effect字段。完整分类表"
+    files: [07事件注册表.md]
+  R-522:
+    desc: "GoalRunner伪代码select语义——waitForWakeupEvent同时监听唤醒+控制指令。控制指令优先。savePipelineState发布PipelinePaused事件"
+    files: [05软件架构文档.md]
+  R-523:
+    desc: "Action双重含义GLOSSARY定义——①MissionGraph节点(规划层)②Capability执行单元(执行层)。1-N映射"
+    files: [GLOSSARY.md]
+
+  # --- P1 (8项) ---
+  R-524:
+    desc: "TokenBudget初始值——daemon.yaml policy.token_budget默认1M。Agent.Analyze()可产出估算值覆盖"
+    files: [01-prd产品需求文档.md, 05软件架构文档.md]
+  R-525:
+    desc: "HumanInterventionRequested UI补充到02/03原型——含简化方案/更换模型/继续等待/取消四个选项"
+    files: [02低保真原型.md, 03高保真交互原型.md]
+  R-526:
+    desc: "CircuitBreaker重置条件——用户介入后计数器清零。Goal级别计数器。回到Draft→清零"
+    files: [05软件架构文档.md]
+  R-527:
+    desc: "Flow三级约束强度——Hard(required=true,缺失→拒绝),Soft(required=false,缺失→WARN),Hint(global_gates始终执行)"
+    files: [05软件架构文档.md]
+  R-528:
+    desc: "Multi-LLM Provider独立性判定——不同公司=不同Provider。同一公司不同端点=同一Provider。同一Ollama实例=同一Provider"
+    files: [05软件架构文档.md]
+  R-529:
+    desc: "Persona推理层强制执行——PromptBuilder作为LLM调用唯一入口。Agent Plugin不可绕过直接调用LLMClient"
+    files: [05软件架构文档.md]
+  R-530:
+    desc: "Snapshot与events.jsonl冲突时events.jsonl优先。过期=Snapshot.seq<最新PipelinePaused.seq"
+    files: [05软件架构文档.md]
+  R-531:
+    desc: "seccomp分级与风险等级映射——Governance返回risk_level→Plugin Runner选profile→子进程exec时加载。不可动态改"
+    files: [06安全模型文档.md, 08沙箱隔离与进程通信规范.md]
+
+  # --- P2/P3 (9项) ---
+  R-532:
+    desc: "测试规范同步R-519三原语修正——Wait测试归入pipelinerunner_contract_test.go"
+    files: [测试规范.md]
+  R-533:
+    desc: "Goal Title生成——Goal Normalization Step 5由LLM生成。作为GoalCreated payload title字段"
+    files: [01-prd产品需求文档.md, 05软件架构文档.md]
+  R-534:
+    desc: "DisambiguationPolicy信息增益——隐喻义。LLM判断。Prompt模板补充05-架构§5"
+    files: [05软件架构文档.md]
+  R-535:
+    desc: "开发计划首页增加当前状态声明——v0.1.x已完成N项,v0.2.0进入Phase A(共36项A类)"
+    files: [开发计划/v0.2.0/v0.2.0-4-开发计划.md]
+  R-536:
+    desc: "CLI版本兼容——v0.2.0仅实现新命令。旧命令alias映射(不重复实现)"
+    files: [04命令行界面设计规范.md]
+  R-537:
+    desc: "产出物目录非空判定——含≥1个非隐藏非.tmp文件且大小>0字节"
+    files: [05软件架构文档.md]
+  R-538:
+    desc: "Token追加语义——叠加(new=old+N)。仅Paused状态。保持Paused(需显式resume)。Failed不可追加"
+    files: [01-prd产品需求文档.md]
+  R-539:
+    desc: "经验文件生成——GoalCompleted后异步生成。失败重试3次。不影响Goal状态。Markdown格式见ContextEngine补充规范"
+    files: [05软件架构文档.md]
+  R-540:
+    desc: "Pattern文件格式——YAML Frontmatter(domain/keywords/goal_ids)+Markdown正文。Week 0 S5补充"
+    files: [05软件架构文档.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #86: 决议编号断档深层次审查
+  # ═══════════════════════════════════════════════════════════════
+
+  R-541:
+    desc: "空号审计——resolutions.yaml每个断档区间增加原因注释。不回收号码(追溯链保留)"
+    files: [GoalOS/resolutions.yaml]
+  R-542:
+    desc: "元数据追溯条目升级——P0/P1项分配独立编号+verify规则。消除CI盲区"
+    files: [GoalOS/resolutions.yaml]
+  R-543:
+    desc: "决议编号纪律三规则——①连续分配不留空号②合并决议显式声明③空号必须有原因注释"
+    files: [架构会议规范.md]
+  R-544:
+    desc: "CI幽灵决议检测——文档引用的R-xxx必须在resolutions.yaml中存在(会议纪要为历史记录，排除)"
+    files: [GoalOS/scripts/check-resolution-propagation.sh]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #87: 外部顾问审计讨论 (G/K 二顾问 v0.2.0-5) —— 17 新决议 R-545~R-561
+  # ═══════════════════════════════════════════════════════════════
+
+  # --- P0 (13项 —— 12 决议，P0-13 合并到 R-547) ---
+  R-545:
+    desc: "Snapshot写入时序统一——PipelinePaused fsync→EventBus Publish→StateStore消费→Snapshot写入。Invariant: Snapshot.seq时刻投影与events.jsonl一致。删除'Wait开始时写入'"
+    files: [05软件架构文档.md]
+    verify:
+      - must_not_exist: "Wait.*开始时.*写入|Wait 开始时"
+        in_file: 05软件架构文档.md
+        reason: "旧Snapshot写入时机已删除——统一为R-545时序"
+  R-546:
+    desc: "I1-I12逐项审计——已落地项(I2/I3/I7/I9/I10)标注。仅一句话项(I4/I5/I6/I8/I11/I12)Week0补充设计规范"
+    files: [05软件架构文档.md, 开发计划/v0.2.0/v0.2.0-5-开发计划.md]
+  R-547:
+    desc: "macOS多层防御——Governance审批(第一层)+sandbox-exec(第二层,F4后)+文件权限(辅助层)。F4前macOS标注'开发环境安全级别'"
+    files: [06安全模型文档.md, 08沙箱隔离与进程通信规范.md]
+  R-548:
+    desc: "GoalCompleted统一严格标准——所有MustHave成功+产出物非空。可选Action失败→partial_artifacts,不影响Completed。GLOSSARY+07事件同步"
+    files: [GLOSSARY.md, 07事件注册表.md, 05软件架构文档.md]
+  R-549:
+    desc: "Wait→Resume Token续期——Wait进入→旧Token撤销。唤醒→重新过Governance→签发新Token(新TTL)。不延长旧TTL"
+    files: [06安全模型文档.md, 05软件架构文档.md]
+  R-550:
+    desc: "BudgetTracker术语统一——删除CircuitBreaker独立概念。CircuitBreaker为BudgetTracker内部熔断逻辑。PRD/GLOSSARY/05架构同步"
+    files: [05软件架构文档.md, GLOSSARY.md, 01-prd产品需求文档.md]
+    verify:
+      - must_not_exist: "BudgetTracker \+ CircuitBreaker|CircuitBreaker \+ BudgetTracker"
+        in_file: 05软件架构文档.md
+        reason: "CircuitBreaker不再作为独立概念与BudgetTracker并列(+号表示并列关系)"
+  R-551:
+    desc: "Action→capAction变量名+07事件增加mission_node_id字段。1个MissionNode→N个Capability Action时ID关联"
+    files: [05软件架构文档.md, 07事件注册表.md]
+  R-552:
+    desc: "05架构§3.1标题修正——'(外加Wait状态)'→'(Wait为PipelineRunner中间状态)'。PRD修改记录v5.7保留(历史不改)"
+    files: [05软件架构文档.md]
+  R-553:
+    desc: "IPC ProgressMessage协议——可选keep-alive心跳(非阻塞)。Plugin SDK预留ProgressMessage类型。v0.2.0长任务≤timeout"
+    files: [08沙箱隔离与进程通信规范.md]
+  R-554:
+    desc: "LLM格式化失败→ActionFailed(error_type='parse_error')——不触发generic-retry(消耗Token无意义)。Decide原语决定路径"
+    files: [05软件架构文档.md]
+  R-555:
+    desc: "Daemon启动序列步骤0——扫描/proc(PID树)或sysctl(macOS)→清理孤儿子进程+释放文件锁→进入正常启动序列"
+    files: [05软件架构文档.md, 08沙箱隔离与进程通信规范.md]
+  R-556:
+    desc: "TokenBudget流式响应Graceful Wait——允许当前请求完成(透支≤1次max_tokens)→下次循环拦截。不硬截断"
+    files: [05软件架构文档.md]
+  R-557:
+    desc: "K顾问P1-1~P1-5推迟v0.3.0——不阻塞v0.2.0。含Token追加原子性/Persona Level0.5 enforcement/Flow降级+PlanningCircuitBreaker交互/Provider可靠性追踪/Working Summary"
+    files: []
+  R-558:
+    desc: "工作量重新估算——Week 0按当前3倍调整。M3全链路错误传播1.5d→5d。B1 contract_test全量0.5d→3d"
+    files: [开发计划/v0.2.0/v0.2.0-5-开发计划.md]
+  R-559:
+    desc: "预留标记标准化——24处'预留'→标注为'xxx(预留v1.5+)'或'xxx(预留v2.0)'——明确版本"
+    files: [05软件架构文档.md, 06安全模型文档.md, 01-prd产品需求文档.md]
+  R-560:
+    desc: "事件版本兼容性测试→v0.3.0。当前所有事件v1.0——无兼容性测试需求"
+    files: []
+  R-561:
+    desc: "AUTO_FIX语义漂移防护——accept_criteria_not_met→最多2次。第1次auto_tests。第2次必须过behavioral_tests。失败→直接ESCALATE"
+    files: [05软件架构文档.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #88: 开发计划制定+测试先行铁律 —— 10 新决议 R-562~R-571
+  # ═══════════════════════════════════════════════════════════════
+
+  R-562:
+    desc: "工作量重估算——关键任务按实际3倍调整。M3: 1.5d→5d。A8: 2d→3d。B1: 3d→15d"
+    files: []
+  R-563:
+    desc: "Phase A P0+P1优先——A-P2 7项+I/J P2 5项=12项推迟v0.3.0。已被R-579替代——A-P2全部回归v0.2.0"
+    files: []
+  R-564:
+    desc: "Week 1 contract_test先行——M1-M8 contract_test骨架RED在Week1第一天写完→Ken验收→代码实现GREEN"
+    files: [GoalOS/测试规范.md]
+  R-565:
+    desc: "Week 4集成测试窗口——不排新任务。全量回归+L3+L4快速E2E+WARN16组合+静态分析pass+Meyer闸口"
+    files: []
+  R-568:
+    desc: "CI反欺骗检查——三层自动化: ①覆盖率≥80% ②空壳检测(return nil+<3行无error处理) ③assertion≥MUST数。28个A类历史遗留的根因防护"
+    files: [GoalOS/scripts/check-anti-cheat.sh]
+  R-570:
+    desc: "Beck五条测试规则——①契约测试=MUST精确翻译②否定测试=禁止行为验证③命名=行为契约④Meyer每周审查测试⑤CI三重反欺骗"
+    files: [GoalOS/测试规范.md]
+  R-571:
+    desc: "测试先行铁律+Ken第一责任人——测试在代码之前(Beck写→Ken验收→代码开发)。Ken对v0.2.0交付质量负全责。Job一票否决。写入架构会议规范§3.5"
+    files: [架构会议规范.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #89: 五顾问审计逐条讨论 —— 7 新决议 R-572~R-578
+  # ═══════════════════════════════════════════════════════════════
+
+  R-572:
+    desc: "Exec原语从同步阻塞改为select+goroutine+channel。新增ProgressUpdate事件(side_effect层)。接口契约不变。Linus审计发现——本版本解决"
+    files: [05软件架构文档.md, 07事件注册表.md, 08沙箱隔离与进程通信规范.md]
+  R-573:
+    desc: "Week 0引入gomock+mockgen——生成4个核心mock。撤销R-508。Rob Pike审计发现——本版本解决"
+    files: [GoalOS/测试规范.md]
+  R-574:
+    desc: "EventBus基准测试从空handler扩展为真实handler。>1ms→调整核心层边界。Carmack审计发现——本版本解决"
+    files: [05软件架构文档.md, GoalOS/测试规范.md]
+  R-575:
+    desc: "Week 0部署最小化sandbox-exec——executor_minimal.sb(3条规则硬编码)。KSPP审计发现——本版本解决"
+    files: [08沙箱隔离与进程通信规范.md, 06安全模型文档.md]
+  R-576:
+    desc: "STRIDE威胁建模立即执行(不等Week 0)。Lipner审计发现——本版本解决"
+    files: [06安全模型文档.md]
+  R-577:
+    desc: "06-安全§8补充Plugin安全事件响应——sandbox违规→InvariantViolated→≥3次升级CRITICAL→暂停Goal"
+    files: [06安全模型文档.md]
+  R-578:
+    desc: "架构会议规范§0新增'本版本解决原则'——问题默认当前版本解决。推迟需Jobs+Meyer双重批准。写入§0.4"
+    files: [架构会议规范.md]
+  R-579:
+    desc: "A-P2 7项全部回归v0.2.0 Phase A Week 4——A22(GoalCompleted重复发布)/A23(状态恢复)/A24(注释修正)/A25(时间戳)/A26(Pattern异步)/A27(文件大小限制)/A28(goal_text sanitization)。零推迟——P3也不能接受推迟"
+    files: []
+  R-580:
+    desc: "I10/I11/I12保持Phase B原计划(非推迟)。J6(ProgressMessage)被R-572 ProgressUpdate事件替代——从追踪清单移除"
+    files: [开发文档/stub追踪清单.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #90: 前置工作执行 (STRIDE+基准+交叉核验) —— 2 新决议 R-582~R-583
+  # ═══════════════════════════════════════════════════════════════
+
+  R-581:
+    desc: "5项前置工作执行方案——STRIDE(R-582/R-583)+真实handler基准(R-574)+交叉核验+stub对齐+送审。全部完成→文档冻结→开始第六版开发计划讨论"
+    files: [架构会议规范.md]
+  R-582:
+    desc: "STRIDE发现: LLM生成Action绕过审批→Action增加source字段(llm|user|system)→LLM来源风险+1→L2→L3触发人工审批"
+    files: [07事件注册表.md, 05软件架构文档.md]
+  R-583:
+    desc: "STRIDE发现: 磁盘满→events.jsonl不可写入→InvariantViolated(CRITICAL)→停止新Goal→Dashboard提示→优雅关闭"
+    files: [05软件架构文档.md, 06安全模型文档.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #91: v0.2.0第六版开发计划制定 —— 3 新决议 R-584~R-586
+  # ═══════════════════════════════════════════════════════════════
+
+  R-584:
+    desc: "每任务三标注——📖基石文档引用+🧪contract_test函数名+✓验收MUST条款。开发者拿到任务不需要推断任何东西"
+    files: []
+  R-585:
+    desc: "Phase A每周20%缓冲+Week4集成窗口不排新任务+Phase B必修4项(B1/B2/B7b/B15)其余28项弹性"
+    files: []
+  R-586:
+    desc: "开发计划定稿前必须通过§5.5交叉核验。Meyer验收。未通过→不得定稿"
+    files: [架构会议规范.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #92: 五顾问审计逐条讨论 —— 10 新决议 R-587~R-596
+  # ═══════════════════════════════════════════════════════════════
+
+  R-587:
+    desc: "真实handler基准测试→出数字→P95>1ms调整核心层边界。Linus发现——本版本解决"
+    files: [05软件架构文档.md]
+  R-588:
+    desc: "Phase A降级路径——P0必修(M1-M8+A8/A4/A13+I2/I3/J1/J2/J3/J5)。P1应该完成。P2 Week4集中。全在v0.2.0"
+    files: []
+  R-589:
+    desc: "Exec伪代码time.After→time.NewTimer+Reset复用timer。防止goroutine timer泄漏。Linus发现"
+    files: [05软件架构文档.md]
+  R-590:
+    desc: "EventPayload interface从internal/kernel/移到goalos/events/。constraints.go只保留架构约束。Rob Pike发现"
+    files: [05软件架构文档.md]
+  R-591:
+    desc: "mock策略——简单场景func类型mock。复杂场景gomock。Week1优先func mock。Rob Pike发现"
+    files: [GoalOS/测试规范.md]
+  R-592:
+    desc: "AgentError.Error()→返回Technical字段。errors.Is()类型判断。Suggestion独立暴露。Rob Pike发现"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-593:
+    desc: "Week2-3按模块分配——Brad=PipelineRunner全链路。Russ=GoalRunner全链路。降低认知负载。Carmack发现"
+    files: []
+  R-594:
+    desc: "CI反欺骗Layer B增强——检测return nil,nil/return \"\",nil等零值返回+函数体<3行+无error处理。Carmack发现"
+    files: [GoalOS/测试规范.md]
+  R-595:
+    desc: "Week 0 sandbox-exec必须实测验证——子进程cat secrets.enc→拦截→InvariantViolated。KSPP发现"
+    files: [08沙箱隔离与进程通信规范.md]
+  R-596:
+    desc: "ProgressUpdate必修(非可选)。R-583正文写入05§2.2。发布安全审查人:Brad Cox。KSPP+Lipner发现"
+    files: [05软件架构文档.md, 06安全模型文档.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #93: v0.2.0第六版开发计划制定 —— 5 新决议 R-597~R-601
+  # ═══════════════════════════════════════════════════════════════
+
+  R-597:
+    desc: "第六版开发计划结构——每任务📖🧪✓三标注。Phase A 48项必修。Phase B 4必修+28弹性。Week4集成窗口"
+    files: []
+  R-598:
+    desc: "架构宪法五条——分层依赖/Event边界/Snapshot时序/OS级强制/错误不吞掉。任何代码违反→Meyer否决"
+    files: []
+  R-599:
+    desc: "Week2-3按模块分配——Brad=PipelineRunner全链路。Russ=GoalRunner全链路。降低认知负载"
+    files: []
+  R-600:
+    desc: "Meyer否决15条——第15条为R-571测试先行闸口。全部15条写入开发计划"
+    files: []
+  R-601:
+    desc: "计划定稿前§5.5交叉核验——四份文档TC/Week/版本号一致。Meyer签字"
+    files: [架构会议规范.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #94: 五顾问终版审计讨论 —— 9 新决议 R-602~R-610
+  # ═══════════════════════════════════════════════════════════════
+
+  R-602:
+    desc: "make constitution-check——五条宪法统一验证入口。全绿/全红。Linus建议"
+    files: [05软件架构文档.md]
+  R-603:
+    desc: "Phase A闸口——48项任一项未完成→Phase B不启动→A延期→B弹性压缩。Linus建议"
+    files: []
+  R-604:
+    desc: "Exec伪代码timer.Reset前Stop+排空channel。Rob Pike发现"
+    files: [05软件架构文档.md]
+  R-605:
+    desc: "constraints.go PrimitiveName→typed constant。Rob Pike建议"
+    files: [05软件架构文档.md]
+  R-606:
+    desc: "Phase A增加20%全局调试缓冲。P2 7项可移Phase B弹性区。Carmack建议"
+    files: []
+  R-607:
+    desc: "CI反欺骗透传空壳检测——调下游无事件/状态变更/错误处理→告警。Carmack建议。Week4"
+    files: [05软件架构文档.md]
+  R-608:
+    desc: "08-沙箱§3.2增加HMAC威胁模型明确声明——防传输错误/完整性。不防MITM。KSPP建议"
+    files: [08沙箱隔离与进程通信规范.md]
+  R-609:
+    desc: "ProgressUpdate事件payload只含元数据(elapsed/output_lines/status)。不含内容行。KSPP建议"
+    files: [07事件注册表.md]
+  R-610:
+    desc: "CI Layer D——MUST覆盖自动验证(assertion数≥MUST数)。Lipner建议。Week0"
+    files: [05软件架构文档.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #95: 开发计划与测试计划协同制定 —— 5 新决议 R-611~R-615
+  # ═══════════════════════════════════════════════════════════════
+
+  R-611:
+    desc: "开发计划五层验收链——Ken→Beck(测试策略)→Brad+Russ(可执行)→Meyer(MUST覆盖)→Jobs(产品价值)。缺一层不可定稿。写入§5.1.2"
+    files: [架构会议规范.md]
+  R-612:
+    desc: "L2 contract_test与L3集成测试严格分层。contract_test只测单模块(mock≤2)。CI检查import数量"
+    files: [架构会议规范.md]
+  R-613:
+    desc: "CI增量测试——根据模块依赖图自动决定重跑范围。下游变更→上游重跑"
+    files: [架构会议规范.md]
+  R-614:
+    desc: "CI测试时序检查——contract_test git timestamp<实现文件。违反→CI告警(R-571铁律)"
+    files: [架构会议规范.md]
+  R-615:
+    desc: "Week 1 Smoke Test——最小用户旅程(MockLLM+MockPlugin)。输入→CompletionCriteria→确认→执行→产出物。不通过→Week2不启动"
+    files: [开发计划/v0.2.0/v0.2.0-6-开发计划.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #96: 三顾问 v0.2.0-6 审计讨论 —— 12 新决议 R-616~R-627
+  # ═══════════════════════════════════════════════════════════════
+
+  R-616:
+    desc: "InitMessage增加hmac_key字段——32B crypto/rand。子进程用其对stdout做HMAC签名。与daemon_secret_key完全独立"
+    files: [08沙箱隔离与进程通信规范.md]
+  R-617:
+    desc: "CompletionContract UI完整规格——Jobs提供: 成功标准+验收条件+必须产出物+约束条件四个卡片"
+    files: [03高保真交互原型.md]
+  R-618:
+    desc: "05-架构附录C——核心数据结构Schema: FlowTemplate/CompletionContract/NormalizedGoal字段契约。AgentErrorCode完整枚举(10种)"
+    files: [05软件架构文档.md]
+  R-619:
+    desc: "AUTO_FIX全文档统一为R-561标准——最多2次。§3.13/§3.12同步修正"
+    files: [05软件架构文档.md]
+  R-620:
+    desc: "Snapshot时序统一R-545标准。版本B触发条件保留但附加Invariant"
+    files: [05软件架构文档.md]
+  R-621:
+    desc: "Wait语义残留清除——§3.1表格四列→三列。07事件注释更新"
+    files: [05软件架构文档.md, 07事件注册表.md]
+  R-622:
+    desc: "B15重命名'事件原子写入协议'——StateStore协调者。准备=append/提交=fsync/完成=Publish/回滚=不发布"
+    files: [05软件架构文档.md]
+  R-623:
+    desc: "AgentErrorCode 10种完整枚举——TIMEOUT/PARSE_ERROR/LLM_ERROR/INVALID_OUTPUT/IPC_ERROR/SECCOMP_VIOLATION/POLICY_DENIED/BUDGET_EXCEEDED/EXEC_TIMEOUT/EXEC_CRASH。标注Retryable/Recoverable/Fatal"
+    files: [05软件架构文档.md]
+  R-624:
+    desc: "Plugin生命周期五阶段状态机——Init→Health→Execute→Shutdown→Recover。每阶段超时+Heartbeat契约"
+    files: [08沙箱隔离与进程通信规范.md]
+  R-625:
+    desc: "Crash Matrix——5种崩溃场景×恢复策略。Cancellation传播——Goal Stop→Plugin/LLM/Recovery Cancel顺序"
+    files: [05软件架构文档.md]
+  R-626:
+    desc: "开发计划任务引用统一使用TC编号。§〇增加TC→任务映射表"
+    files: [开发计划/v0.2.0/v0.2.0-6-开发计划.md]
+  R-627:
+    desc: "05-架构附录C——模块依赖DAG(单向无环)+Interface Owner(每个interface唯一Owner)"
+    files: [05软件架构文档.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #97+#98: 七类规格空白抽象+CI三层方案 —— 8 新决议 R-628~R-635
+  # ═══════════════════════════════════════════════════════════════
+
+  R-628:
+    desc: "五类规格空白写入§5.1.3七标准——数据结构Schema/枚举穷举/协议步骤/UI交互/组件生命周期/跨文档一致/Error Contract"
+    files: [架构会议规范.md]
+  R-629:
+    desc: "七标准CI自动化——check-doc-completeness.sh。每次commit运行。任一条不通过→CI红色"
+    files: [架构会议规范.md]
+  R-630:
+    desc: "开发规范§2任务完成定义——每个任务必须包含Schema+枚举+协议+交互(如适用)。缺失→标记规格不完整"
+    files: [GoalOS/开发规范.md]
+  R-631:
+    desc: "验收规范§4五标准闸口——Phase A/B前Meyer逐条核对七标准。任一条未通过→闸口不启动"
+    files: [架构会议规范.md]
+  R-632:
+    desc: "CI三层方案——Layer1文本模式(check-doc-completeness) Week0Day1。Layer2结构化(Spectral+glossary.yaml) Week0Day3。Layer3代码交叉验证 Week3-4"
+    files: [架构会议规范.md]
+  R-633:
+    desc: "GLOSSARY.md保留Markdown。CI自动导出glossary.yaml。Spectral验证字段完整性。YAML与MD不一致→CI失败"
+    files: [架构会议规范.md]
+  R-634:
+    desc: "Layer1增加placeholder/TBD检测——终版文档中出现'待补充/TODO/TBD/placeholder标注'→CI失败"
+    files: [架构会议规范.md]
+  R-635:
+    desc: "架构会议规范§5.1.3七标准更新为三层CI验证方案——每层明确工具、覆盖问题、上线时间"
+    files: [架构会议规范.md]
+
+  # 会议 #99: 附录C补充——4 struct+Error Contract+Wait-Resume+Cancellation —— 6 新决议 R-636~R-641
+  # ═══════════════════════════════════════════════════════════════
+
+  R-636:
+    desc: "附录C新增RecoveryStrategy+ArbitrationPolicy struct——RecoveryStrategy(7字段+恢复决策树)+ArbitrationPolicy(5字段+Provider可靠性追踪)"
+    files: [05软件架构文档.md]
+  R-637:
+    desc: "附录C新增VerificationPrecedence struct——5级优先级链(BehavioralTest→SemanticMetaVerification→RiskOverride→SeverityWeightedMajority→AutoTest)"
+    files: [05软件架构文档.md]
+  R-638:
+    desc: "附录C新增FlowSelectionPolicy struct——7字段(含match_strategy/category_tree_depth/vector_threshold/fallback_flow)+FlowRecommender.Match决策树"
+    files: [05软件架构文档.md]
+  R-639:
+    desc: "附录C Error Contract扩展——GoalRunner.Execute(6 error codes)+PluginRunner.Execute(8 error codes+竞态防护伪代码)"
+    files: [05软件架构文档.md]
+  R-640:
+    desc: "附录C新增C.6 Wait-Resume失败路径——7失败场景矩阵(W1~W7)+完整流程含失败分支+恢复时ResumePoint分支"
+    files: [05软件架构文档.md]
+  R-641:
+    desc: "附录C新增C.7 Cancellation协议——4触发源+4阶段(请求/审查/执行/确认)+4不变量"
+    files: [05软件架构文档.md]
+
+  # 会议 #99 Phase 1 审查: 孤儿项整合 —— 1 新决议 R-642
+  # ═══════════════════════════════════════════════════════════════
+
+  R-642:
+    desc: "stub追踪清单孤儿项整合——12孤儿项重新分类：6重复→去除+5已解决/已推迟→去除+1唯一(K1对抗性欺骗测试)→并入主分类。统计更新：81项待消除"
+    files: [stub追踪清单.md]
+
+  # 会议 #100: 五顾问审计逐条讨论 —— 15 新决议 R-643~R-657
+  # ═══════════════════════════════════════════════════════════════
+
+  R-643:
+    desc: "Linus P0-1: 05-架构附录C.8新增GoalRunner+PipelineRunner Go struct定义——含字段列表+关键方法签名+依赖注入构造器"
+    files: [05软件架构文档.md]
+  R-644:
+    desc: "Linus P0-2: 05-架构附录C.8新增Primitive接口定义——CheckPrimitive/ExecPrimitive/DecidePrimitive——含函数签名+返回值类型"
+    files: [05软件架构文档.md]
+  R-645:
+    desc: "Linus P1: 05-架构附录C.9新增Daemon恢复算法伪代码——含Goal状态判定+回放终止条件+孤儿Action unknown处理"
+    files: [05软件架构文档.md]
+  R-646:
+    desc: "Rob Pike P1-1: EventBus.SubscribeForGoal返回(Subscription,error)——Subscription含Unsubscribe()+Events()方法。Week 2 C1实现"
+    files: [05软件架构文档.md]
+  R-647:
+    desc: "Rob Pike P1-2: typed event payload核心struct提前至Week 2——GoalCreatedPayload/ActionScheduledPayload/ActionCompletedPayload/ActionFailedPayload/GoalCompletedPayload。剩余Week 5-6"
+    files: [v0.2.0-7-开发计划.md]
+  R-648:
+    desc: "Rob Pike P1-3: 包路径统一规则——对外暴露类型→goalos/ package。内部实现→internal/ package。规则写入05-架构C.4"
+    files: [05软件架构文档.md]
+  R-649:
+    desc: "Carmack P0: Multi-LLM裁决算法修正——公式从sum(weight)/N改为sum(weight)/(N×3)归一化到[0,1]。阈值≤0.33→PASS,>0.33≤0.67→WARN,>0.67→FAIL。消除全PASS误判WARN的bug"
+    files: [05软件架构文档.md]
+  R-650:
+    desc: "Carmack P1-1: BudgetTracker流式响应增加HTTP层传输字节计数——超max_tokens×4 bytes/token上限→强制断开TCP。不依赖软约束"
+    files: [05软件架构文档.md]
+  R-651:
+    desc: "Carmack P1-2: Audit Engine ring buffer可配置化——daemon.yaml新增audit.buffer_size(默认2000)+audit.buffer_hard_limit(默认16000)"
+    files: [05软件架构文档.md, 06安全模型文档.md]
+  R-652:
+    desc: "KSPP P1-1: macOS sandbox-exec .sb模板编写——文件系统限制(仅allow ~/Goals/+ /tmp/goalos/)+网络禁止+进程禁止fork/exec。SHA256 hash硬编码。Week 0 #3 状态改为待完成"
+    files: [08沙箱隔离与进程通信规范.md]
+  R-653:
+    desc: "KSPP P1-2: Token续期seccomp风险——新risk_level比原Action高1级以上→现有子进程SIGTERM→ActionFailed(risk_level_changed)→重新ActionScheduled→新子进程正确seccomp profile"
+    files: [05软件架构文档.md, 06安全模型文档.md]
+  R-654:
+    desc: "KSPP P1-3: IPC非对称密钥提前至v0.3.0——Ed25519密钥对。daemon持私钥→子进程持公钥。私钥永不离开daemon。原计划v2.0"
+    files: [08沙箱隔离与进程通信规范.md]
+  R-655:
+    desc: "Lipner P1-1: STRIDE威胁建模产出写入06-安全§1.2——5外部边界×6威胁类型=30单元格矩阵。每格标注缓解措施+残余风险"
+    files: [06安全模型文档.md]
+  R-656:
+    desc: "Lipner P1-2: H14安全回归套件分配TC编号TC-SEC-REG-001。CI每次commit强制运行"
+    files: [stub追踪清单.md]
+  R-657:
+    desc: "Lipner P1-3: govulncheck从Nightly CI移至每次commit CI（增量模式——仅检查变更import路径）"
+    files: [05软件架构文档.md]
+
+  # 会议 #101: 外部五顾问(K/GK/G/C/Q)审计逐条讨论 —— 22 新决议 R-658~R-663
+  # ═══════════════════════════════════════════════════════════════
+
+  R-658:
+    desc: "工作量调整——Week 2 Russ移出J5(Token续期)+J2(AUTO_FIX漂移)到Week 3(55h→40h)。Week 1 contract_test前移至Week 0周四/周五。Week 0新增#14 Beck写M1-M8+S1-S4初稿"
+    files: [v0.2.0-7-开发计划.md]
+  R-659:
+    desc: "Multi-LLM算法修正——全ABSTAIN(count==N)→ERROR_FALLBACK不返回PASS。覆盖规则修正:全部FAIL→FAIL(无论原因是否重叠)。部分FAIL且原因不重叠→WARN"
+    files: [05软件架构文档.md]
+  R-660:
+    desc: "安全实现闸口——Phase A新增4安全contract_test(S1:Token撤销,S2:FD3协议,S3:HMAC失败→ipc_security_violation,S4:macOS安全降级诚实标注)。与M1-M8同优先级Week 1完成。plugin-websearch+plugin-shell HMAC修复纳入Week 2"
+    files: [v0.2.0-7-开发计划.md]
+  R-661:
+    desc: "C顾问6项接口修复——StateStore新增Append+Fsync。EventBus.SubscribeForGoal返回Subscription。R-number标签修正(ArbitrationPolicy R-637/VerificationPrecedence R-638/FlowSelectionPolicy R-639)。K1分类统一A类。B.6标记预留。ActionRetryScheduled YAML闭合"
+    files: [05软件架构文档.md, stub追踪清单.md, 07事件注册表.md]
+  R-662:
+    desc: "语义安全强化——FlowSelectionPolicy移除category_tree(数据结构不存在)。AUTO_FIX behavioral_tests空→cross_model_review替代。detectCheating升级阻断条件(echo/skip/true→MissionGraphRejected)。AUTO_FIX期间must_have不可减少(checksum验证)"
+    files: [05软件架构文档.md]
+  R-663:
+    desc: "流程强化——CI<10min标注待实测。五层签字跨文档统一。闸口准出条件CI自动验证15条"
+    files: [v0.2.0-7-开发计划.md, 架构会议规范.md]
+
+  # 会议 #102: C 顾问审计逐条讨论 —— 14 新决议 R-664~R-677
+  # ═══════════════════════════════════════════════════════════════
+
+  R-664:
+    desc: "CompletionContract UI规格——Week 0 Jobs补充到03-高保真§2.2。展示字段/折叠逻辑/编辑交互。Week 7实现（B7b分阶段交付）"
+    files: [03高保真交互原型.md]
+  R-665:
+    desc: "HumanInterventionRequested UI规格——Week 0 Jobs补充到03-高保真§2.7。模态弹窗4按钮（继续等待/简化方案/更换模型/取消目标）含行为定义"
+    files: [03高保真交互原型.md]
+  R-666:
+    desc: "failHints 10种映射表——Week 0 Jobs补充到01-PRD§17.9。10 AgentErrorCode→中文建议→操作按钮→按钮行为定义"
+    files: [01-prd产品需求文档.md]
+  R-667:
+    desc: "Wait归属明确——C.8 PipelineRunner新增Wait()私有方法。Wait是PipelineRunner内部方法非Primitive接口。Check/Exec/Decide是Primitive接口"
+    files: [05软件架构文档.md]
+  R-668:
+    desc: "Wait超时统一路径——C.6三处文档矛盾统一：审批超时→HumanInterventionRequested。资源超时→DegradeFlow。依赖超时→ActionFailed。完整路径写入C.6"
+    files: [05软件架构文档.md]
+  R-669:
+    desc: "GraphNode Go struct定义——C.1新增。含MustHave bool字段。GoalRunner.allMustHaveCompleted()遍历MustHave=true节点→检查ActionCompleted"
+    files: [05软件架构文档.md]
+  R-670:
+    desc: "订阅清理路径——C.8 GoalRunner新增unsubscribeForWakeup()。非WAITING时subscription.Unsubscribe()。C.9恢复算法增加订阅清理"
+    files: [05软件架构文档.md]
+  R-671:
+    desc: "Dashboard前端技术选型——React 18+（Jobs拍板）。删除03§7.1'任一'。CSS变量+SSE EventSource+React Testing Library"
+    files: [03高保真交互原型.md]
+  R-672:
+    desc: "FlowRecommender与FlowSelectionPolicy边界——§3.11补充关系声明。FlowRecommender是匹配引擎实现。FlowSelectionPolicy是daemon.yaml可配策略"
+    files: [05软件架构文档.md]
+  R-673:
+    desc: "Rollback语义修正——CLI goalos restore→resume-checkpoint。Dashboard按钮'回滚'→'回到此步骤'。增加诚实说明：已产生的文件变更不会被撤销"
+    files: [04命令行界面设计规范.md, 03高保真交互原型.md, 01-prd产品需求文档.md]
+  R-674:
+    desc: "Persona/Layer 0冲突优先级——§4.3.1补充Layer 0>Layer 0.5>Style Persona。'目标完整性不可侵犯'优先级高于Persona渲染"
+    files: [05软件架构文档.md]
+  R-675:
+    desc: "Multi-LLM审批合并弹窗——03§2.10更新为合并弹窗（risk+data_sharing一个弹窗）。UI层合并展示，Governance逻辑不变"
+    files: [03高保真交互原型.md]
+  R-676:
+    desc: "3并发Goal Dashboard——03新增§2.11多Goal并发视图。左侧列表按优先级排序（ESCALATE>Running>Paused>Completed）。点击切换主内容区"
+    files: [03高保真交互原型.md]
+  R-677:
+    desc: "GLOSSARY更新v7.6——补充FlowSelectionPolicy/VerificationPrecedence/ArbitrationPolicy/RecoveryStrategy术语条目"
+    files: [GLOSSARY.md]
+
+  # 会议 #103: D 顾问审计逐条讨论 —— 23 新决议 R-678~R-700
+  # ═══════════════════════════════════════════════════════════════
+
+  R-678:
+    desc: "GLOSSARY区分GateSpec(Flow规划层门控定义)和Gate接口(PipelineRunner执行层门控评估)。Gate.Evaluate(ctx,action,artifacts)→GateResult"
+    files: [GLOSSARY.md]
+  R-679:
+    desc: "07-事件FlowStarted/FlowCompleted Publisher从PipelineRunner改为FlowComposer"
+    files: [07事件注册表.md]
+  R-680:
+    desc: "全文档grep'熔断'→统一为'BudgetTracker触发熔断'。熔断是BudgetTracker的行为非独立概念"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-681:
+    desc: "06-安全§4补充声明与授权关系——Token.capability⊆Plugin.declared_capabilities。声明≠授权"
+    files: [06安全模型文档.md]
+  R-682:
+    desc: "Phase A Week 3新增TestPB_LLM_SoleEntry——验证Agent Plugin所有LLM调用经过PromptBuilder+Immutable Layer 0注入"
+    files: [v0.2.0-7-开发计划.md]
+  R-683:
+    desc: "GoalFailed Precondition统一为GLOSSARY版本——'所有未完成Action均失败+RecoveryPipeline耗尽'。07-事件同步修正"
+    files: [GLOSSARY.md, 07事件注册表.md, 01-prd产品需求文档.md]
+  R-684:
+    desc: "GLOSSARY新增Flow/Skill/Gate三层关系集中条目——Flow=WHEN(编排层),Gate=WHAT(检查层),Skill=HOW(能力层)"
+    files: [GLOSSARY.md]
+  R-685:
+    desc: "05-架构GoalRunner伪代码补充cancelPendingApprovals()——遍历pendingActionIDs→逐个发布ActionRejected(state_changed)→同步完成"
+    files: [05软件架构文档.md]
+  R-686:
+    desc: "EventBus Publish同步阻塞说明——同一Goal的GoalCompleted和GoalFailed不可能同时发布。先到者修改State→后到者检查终态→拒绝"
+    files: [05软件架构文档.md]
+  R-687:
+    desc: "BudgetTracker.AddBudget使用sync.Mutex保护原子操作——b.budget[goalID]+=amount在锁内完成"
+    files: [05软件架构文档.md]
+  R-688:
+    desc: "PolicyConfig补充tool_alternatives字段——map[string][]string。SWITCH_TOOL从此配置读取替代工具列表"
+    files: [05软件架构文档.md]
+  R-689:
+    desc: "data_sharing/risk审批关系明确——data_sharing被拒绝→整个审批被拒绝。两者不是独立的。合并弹窗(R-675已覆盖)"
+    files: [06安全模型文档.md]
+  R-690:
+    desc: "03-高保真补充6事件UI映射——PlanRequested/TaskAnalysisCompleted/UserConfirmed/UserRejected/ActionRejected/ProgressUpdate/FlowStarted"
+    files: [03高保真交互原型.md]
+  R-691:
+    desc: "Snapshot N=100触发条件澄清——N=100或ActionCompleted/ActionFailed后或MissionGraph节点完成后。OR关系。N计数范围为全事件"
+    files: [05软件架构文档.md]
+  R-692:
+    desc: "C.9恢复算法补充Snapshot/events.jsonl交叉验证——Snapshot.seq<最新events.jsonl seq→忽略Snapshot.PipelineState→从events.jsonl重放"
+    files: [05软件架构文档.md]
+  R-693:
+    desc: "PluginProcessTerminated只撤销status=active的Token。已完成Action的Token已变为used不受影响"
+    files: [06安全模型文档.md]
+  R-694:
+    desc: "C.4依赖DAG修正——internal/governance/→eventbus(非scheduler)。Governance订阅ActionScheduled事件不import Scheduler包"
+    files: [05软件架构文档.md]
+  R-695:
+    desc: "ContextEngine容错策略——Agent输出连续2次解析失败→Context标记stale→下次使用原始Goal描述重建。不回退到过时版本"
+    files: [05软件架构文档.md]
+  R-696:
+    desc: "07-事件MissionGraphRejected.attempt补充注释——ValidatePlan()校验次数。与PlanningCircuitBreaker阈值对齐：≥3→熔断"
+    files: [07事件注册表.md]
+  R-697:
+    desc: "LLMClient.Chat伪代码补充预算检查——调用前BudgetTracker.CheckBudget→不足→ErrBudgetExceeded。非流式用max_tokens估算"
+    files: [05软件架构文档.md]
+  R-698:
+    desc: "05-架构§3.1 Exec timer.Reset代码修正——if !timer.Stop(){select{case<-timer.C:default:}}防止阻塞"
+    files: [05软件架构文档.md]
+  R-699:
+    desc: "05-架构§0补充说明——模块级MUST 46条+子系统级MUST 13条=全量59 MUST"
+    files: [05软件架构文档.md]
+  R-700:
+    desc: "C.9恢复算法补充函数签名——hasPipelinePaused/rebuildPipelineState/goalFromEvents"
+    files: [05软件架构文档.md]
+
+  # 会议 #104: G 顾问审计逐条讨论 —— 6 新决议 R-701~R-706
+  # ═══════════════════════════════════════════════════════════════
+
+  R-701:
+    desc: "GoalRunner伪代码修正——savePipelineState→Fsync()→Publish(PipelinePaused)。事件在fsync之后发布。事件是持久化成功的影子（G顾问Dual-Write Dilemma修正）"
+    files: [05软件架构文档.md]
+  R-702:
+    desc: "GoalRunner select两阶段模式——第一阶段非阻塞检查controlChan(default)→第二阶段多路复用select(wakeupChan+controlChan)。Pause/Stop绝对优先（G顾问Go runtime伪随机修正）"
+    files: [05软件架构文档.md]
+  R-703:
+    desc: "M3描述修正——'子进程stdout验证'→'子进程FD3控制通道验证'。stdout=日志，FD3=协议数据。边界明确"
+    files: [v0.2.0-7-开发计划.md, 08沙箱隔离与进程通信规范.md]
+  R-704:
+    desc: "IPC线缆协议升级——从换行符切分→长度前缀编码(Length-Prefixed Framing)。4字节大端序Payload长度+Payload字节流。HMAC基于Payload字节流。FD1/FD2保持人类可读日志"
+    files: [08沙箱隔离与进程通信规范.md]
+  R-705:
+    desc: "附录C HumanIntervention四按钮→内核状态机映射。重试→RETRY(重置Action StateStore),简化→REPLAN(PlanContext{IsReplan:true}),换模型→SWITCH_MODEL,停止→ABORT"
+    files: [05软件架构文档.md]
+  R-706:
+    desc: "CI修正——R-614从git时间戳→PR review checklist。反欺骗层B增加行为变异检测——核心函数否定测试分支覆盖率>60%"
+    files: [check-anti-cheat.sh, 架构会议规范.md]
+
+  # 会议 #105: K 顾问审计逐条讨论 —— 16 新决议 R-707~R-722
+  # ═══════════════════════════════════════════════════════════════
+
+  R-707:
+    desc: "Event Bus真同步——Publish内部WaitGroup等待所有同步handler完成。SubscribeSync(eventType,handler)+SubscribeAsync(eventType,handler)。core事件走同步路径"
+    files: [05软件架构文档.md]
+  R-708:
+    desc: "附录C.4替换为完整Go package结构图——internal/eventbus/scheduler/statestore/governance/missionengine/pluginrunner/daemon。跨package规则明确"
+    files: [05软件架构文档.md]
+  R-709:
+    desc: "Wait类型与Token关系——Wait(approval)→ResumePrimitive=Decide→不需要新Token。Wait(dependency)→ResumePrimitive=Check→需要新Token。Wait(token_renewal)→需要新Token(R-549)"
+    files: [05软件架构文档.md]
+  R-710:
+    desc: "GateSpec校验multi_llm和roles互斥——同时非空→MissionGraphRejected(reason=multi_llm_and_roles_mutually_exclusive)"
+    files: [05软件架构文档.md]
+  R-711:
+    desc: "AgentError.Err改为私有cause error。Unwrap()暴露cause。Error()返回Suggestion(用户可读)。消除与Go error接口命名冲突"
+    files: [05软件架构文档.md, GLOSSARY.md]
+  R-712:
+    desc: "FlowSelectionPolicy.match_strategy'exact'→'rule'(精确匹配,v0.1.0)。hybrid=rule+vector(v1.2)。更准确描述确定性匹配"
+    files: [05软件架构文档.md]
+  R-713:
+    desc: "CI分层——pre-commit(<2min):L2+反欺骗A/B/C+constitution-check。pre-push(<10min):+L3+L4快速+govulncheck。Nightly:+L4真实LLM+L5+L6"
+    files: [v0.2.0-7-开发计划.md, 架构会议规范.md]
+  R-714:
+    desc: "附录C.8新增PrimitiveName类型化常量——type PrimitiveName string; const(PrimitiveCheck/PrimitiveExec/PrimitiveDecide PrimitiveName=...)"
+    files: [05软件架构文档.md]
+  R-715:
+    desc: "E1范围明确——删除WaitPrimitive接口引用+更新注释标注Wait为'调度机制非Primitive'。Wait逻辑保留不变"
+    files: [05软件架构文档.md]
+  R-716:
+    desc: "Event seq per-Goal单调递增——每个Goal的events.jsonl独立维护seq。全局排序通过(goal_id,seq)元组。EventStore.Append负责分配"
+    files: [05软件架构文档.md, 07事件注册表.md]
+  R-717:
+    desc: "Token验证边界——PluginRunner调用CapabilityEngine.VerifyToken(token)→bool。跨模块同步查询(Go接口非EventBus)。CapabilityEngine唯一持有daemon_secret_key"
+    files: [06安全模型文档.md]
+  R-718:
+    desc: "Scheduler维护map[goalID]*GoalRunner——每个Goal独立goroutine。Scheduler负责创建/清理GoalRunner实例。sync.RWMutex保护并发访问"
+    files: [05软件架构文档.md]
+  R-719:
+    desc: "数据外发确认触发条件——risk_level≥L4(无论cross_model_review) OR cross_model_review=true(无论risk_level)。满足任一即触发确认"
+    files: [06安全模型文档.md]
+  R-720:
+    desc: "Exec双计时器独立——execTimeoutTimer(不可重置,到达timeout→SIGTERM)。progressCheckTimer(可重置,30s无输出→Signal(0)→ProgressUpdate)"
+    files: [05软件架构文档.md]
+  R-721:
+    desc: "Skill v0.1.0校验——FlowComposer.ValidatePlan()检查len(gate.Skills)>1→MissionGraphRejected('v0.1.0不支持多Skill')。skill_mode必须为空或'merge'"
+    files: [05软件架构文档.md]
+  R-722:
+    desc: "constitution-check定义——6条宪法规则快速检查(<30s)。make ci=constitution-check+测试+安全扫描(完整CI)"
+    files: [05软件架构文档.md, v0.2.0-7-开发计划.md]
+
+  # Jobs 裁定: Code Review + 单元测试铁律 —— 1 新决议 R-723
+  # ═══════════════════════════════════════════════════════════════
+
+  R-723:
+    desc: "Code Review+单元测试铁律——每次commit必须至少一人Review(核心模块Ken或Brad+Russ双人)。Review检查5项(规格匹配/MUST覆盖/错误处理/空壳/安全路径)。单元测试覆盖率核心≥90%其他≥80%。验收规范Phase 0新增Code Review闸口。开发规范§2.3-2.5新增铁律。05-架构§0开发启动许可清单新增。开发计划铁律新增。代码审计发现16项规格中15项代码缺失——此决议防止再次发生"
+    files: [05软件架构文档.md, 开发规范.md, 验收规范.md, v0.2.0-8-开发计划.md]

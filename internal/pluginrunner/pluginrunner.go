@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/goalos/goalos/internal/eventbus"
@@ -15,22 +16,30 @@ import (
 	"github.com/goalos/goalos/pkg/events"
 )
 
+// TokenVerifier 是 Token 验证接口。R-660: 支持撤销检查。
+type TokenVerifier interface {
+	VerifyToken(tokenStr string) (*governance.TokenClaims, error)
+}
+
 // Runner manages Plugin subprocess lifecycle.
 type Runner struct {
-	bus       *eventbus.EventBus
-	discovery *PluginDiscovery
-	secretKey []byte
-	seq       int
+	bus           *eventbus.EventBus
+	discovery     *PluginDiscovery
+	secretKey     []byte
+	tokenVerifier TokenVerifier // R-660: 支持撤销检查的 Token 验证器
+	seq           int
 }
 
 // New creates a Plugin Runner with the given plugins directory and token secret.
-func New(bus *eventbus.EventBus, secretKey []byte) *Runner {
+// tokenVerifier 可选——如果为 nil，使用 governance.VerifyToken（无撤销检查）。
+func New(bus *eventbus.EventBus, secretKey []byte, tokenVerifier TokenVerifier) *Runner {
 	home, _ := osUserHomeDir()
 	pluginsDir := home + "/.goalos/plugins"
 	return &Runner{
-		bus:       bus,
-		discovery: NewPluginDiscovery(pluginsDir),
-		secretKey: secretKey,
+		bus:           bus,
+		discovery:     NewPluginDiscovery(pluginsDir),
+		secretKey:     secretKey,
+		tokenVerifier: tokenVerifier,
 	}
 }
 
@@ -60,9 +69,15 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 
 	log.Printf("[PluginRunner] executing: %s (%s)", actionID, actionType)
 
-	// Token 验证：如果 payload 含 token_id→校验签名和过期
-	if tokenStr, _ := evt.Payload["token"].(string); tokenStr != "" && len(r.secretKey) > 0 {
-		claims, err := governance.VerifyToken(tokenStr, r.secretKey)
+	// Token 验证：如果 payload 含 token→校验签名+过期+撤销状态（R-660）
+	if tokenStr, _ := evt.Payload["token"].(string); tokenStr != "" {
+		var claims *governance.TokenClaims
+		var err error
+		if r.tokenVerifier != nil {
+			claims, err = r.tokenVerifier.VerifyToken(tokenStr) // R-660: 含撤销检查
+		} else if len(r.secretKey) > 0 {
+			claims, err = governance.VerifyToken(tokenStr, r.secretKey) // fallback: 无撤销检查
+		}
 		if err != nil {
 			log.Printf("[PluginRunner] token verification failed: %v", err)
 			r.publish(events.Event{
@@ -106,7 +121,7 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 				"action_id": actionID,
 				"result":    map[string]interface{}{"status": "failure", "output": fmt.Sprintf("no plugin for: %s", actionType)},
 				"error":     fmt.Sprintf("execution failed: %v", err),
-				"error_type": "execution_error",
+				"error_type": errorTypeFrom(err),
 			},
 		})
 		return nil
@@ -179,6 +194,23 @@ func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 	}
 
 	result, err := Execute(cfg, action)
+	// R-660: 子进程退出后发布 PluginProcessTerminated——Capability Engine 监听此事件撤销所有 Token
+	exitCode := 0
+	reason := "completed"
+	if err != nil {
+		exitCode = -1
+		reason = errorTypeFrom(err)
+	}
+	r.publish(events.Event{
+		Type:   events.TypePluginProcessTerminated,
+		GoalID: evt.GoalID,
+		Source: "plugin-runner",
+		Payload: map[string]interface{}{
+			"plugin_name": plugin.Manifest.Name,
+			"exit_code":   exitCode,
+			"reason":      reason,
+		},
+	})
 	if err != nil {
 		return execResult{}, err
 	}
@@ -223,3 +255,24 @@ func (r *Runner) publish(evt events.Event) {
 // ─── OS Helper ───
 
 var osUserHomeDir = os.UserHomeDir
+
+// errorTypeFrom 从 error 消息推断正确的 error_type。
+// R-660+R-703: HMAC/IPC 安全违规必须返回 "ipc_security_violation"——非 "execution_error"。
+func errorTypeFrom(err error) string {
+	if err == nil {
+		return "execution_error"
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "ipc_security_violation") || strings.Contains(strings.ToLower(msg), "hmac"):
+		return "ipc_security_violation"
+	case strings.Contains(msg, "seccomp"):
+		return "seccomp_violation"
+	case strings.Contains(msg, "timeout"):
+		return "timeout"
+	case strings.Contains(msg, "crash") || strings.Contains(msg, "signal") || strings.Contains(msg, "killed"):
+		return "crash"
+	default:
+		return "execution_error"
+	}
+}

@@ -1,0 +1,77 @@
+# GoalOS GLOSSARY — 机器可读 YAML（从 开发文档/GLOSSARY.md 自动生成）
+# 生成时间: 2026-06-29T02:08:49Z
+# 真相来源: 开发文档/GLOSSARY.md — 本文件是其派生文件。不一致时以 Markdown 为准。
+
+terms:
+  - name: 'IPC'
+    description: '— | **v0.2.0 两行协议**：第一行 HMAC-SHA256 hex string，第二行 JSON payload。HMAC 基于第二行原始 bytes 计算。替代旧版"每行完整 JSON 消息"协议（会议 #75 KSPP #8） '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'Primitive'
+    description: 'Kernel 理解的原子操作。**3 种：Check/Exec/Decide**（会议 #78 第一性原理修正：从四原语改为三原语）。Wait 是 PipelineRunner 中间状态，不是 Primitive '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Wait'
+    description: '**PipelineRunner 中间状态**（会议 #78 修正：不是 Primitive）。订阅外部事件并等待。PipelineRunner 进入 Wait 后保存 PipelineState→发布 PipelinePaused→退出 Run()。GoalRunner 等待唤醒事件后重新调用 Run()。唤醒事件映射：Approval→UserApprovedAction / Dependency→ActionCompleted / Resource→ResourceAvailable '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Persona'
+    description: '系统的消息渲染层。Core 产中性事件。Persona 决定措辞、语气、风格。**只影响"怎么说"，不影响"怎么判断"** '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '推理层 (Reasoning)'
+    description: 'Persona **不应进入**的域。Agent.Plan()/Check()/Decide()。需中性客观 prompt。可含角色人设 (安全/性能/UX 视角) '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'M1-M7（契约闸口）'
+    description: 'Meyer 契约式设计的 7 个代码级验证闸口。M1: LLM输出字段非空。M2: Plugin stdout 枚举验证。M3: 全链路 error 传播。M4: EventBus GoalID 非空。M5: GoalCompleted 产出物验证。M6: HTTP API goal 验证。M7: ContextEngine 文件大小限制。全部不通过→v0.2.0 不发布 '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'Meyer闸口'
+    description: 'Phase A 完成后 Meyer 的最终审核。未通过→不进 Phase B。Meyer 有一票否决权（R-396） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'A类/B类分类'
+    description: 'Stub 追踪清单分类体系。A类=历史遗留修复（v0.1.x 架构要求但未实现）。B类=v0.2.0 新增特性。先修 A 后做 B（R-394） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'typed event payload'
+    description: 'v0.2.0 类型安全改进（TC-TYPE-001）。Go struct（如 GoalCreatedPayload）替代 `map[string]interface{}`。编译期类型安全。定义于 `pkg/events/` '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'IPC两行协议'
+    description: 'v0.2.0 IPC 协议改进（会议 #75 KSPP #8）。第一行: HMAC-SHA256 hex string。第二行: JSON payload。HMAC 基于第二行原始 bytes。替代旧版"每行完整 JSON 消息" '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'requestExecution'
+    description: 'PipelineRunner 的 Exec 阶段触发方法（原名 exec）。发布 ActionExecutionRequested 事件，由 PluginRunner 异步执行。命名诚实性改进（会议 #75 Linus #1） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'ActionExecutionRequested'
+    description: 'v0.2.0 新增事件（A8）。PipelineRunner.requestExecution() 发布。标记 Action 已进入执行请求阶段。Publisher: PipelineRunner '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'api_contract_test'
+    description: 'v0.2.0 新增第 10 个契约测试文件。验证 HTTP API M6（goal 非空 + len<10000）。Meyer M6 的 L2 测试 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'STRIDE威胁建模'
+    description: 'v0.2.0 开发前安全活动（Week 0）。针对 5 个外部边界（LLM/Plugin/用户输入/文件系统/HTTP API）做轻量级威胁建模。产出同步到 06 安全模型文档 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'E2E分层'
+    description: 'v0.2.0 测试执行策略。快速套件（3 scenarios, MockLLM, <2min）每次 commit 运行。完整套件（3 scenarios, 真实 LLM）nightly 运行。发布前手动 FT-1/FT-2 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'pkg/context/'
+    description: 'v0.2.0 新增公共类型包（A16）。存放 PageTable、FileEntry、SectionEntry。消除 missionengine↔contextengine 循环依赖（会议 #75 Rob Pike #4） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'failHints'
+    description: 'v0.2.0 用户可见失败建议映射（B9）。定义于 `daemon/api.go`。将内部错误类型（TIMEOUT/PARSE_ERROR/LLM_ERROR）映射为用户可读的中文建议和操作按钮 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'B7a/B7b 拆分'
+    description: 'Dashboard 分阶段交付方案（会议 #75 R-404）。B7a: Week 1 最小可用输入框。B7b: Week 7 SSE 实时卡片 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'

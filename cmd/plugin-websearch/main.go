@@ -5,6 +5,9 @@ package main
 
 import (
 	"bufio"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -84,6 +87,8 @@ const (
 	braveEndpoint   = "https://api.search.brave.com/res/v1/web/search"
 )
 
+var sessionToken string // R-660: HMAC signing token from InitMessage
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 65536), 65536)
@@ -101,6 +106,13 @@ func main() {
 			if msg.Workspace == "" {
 				writeError("init_failed", "missing workspace path")
 				os.Exit(1)
+			}
+			// R-660: 提取 session_token 用于 HMAC 签名
+			var initMsg struct {
+				SessionToken string `json:"session_token"`
+			}
+			if err := json.Unmarshal(line, &initMsg); err == nil && initMsg.SessionToken != "" {
+				sessionToken = initMsg.SessionToken
 			}
 		case "execute":
 			handleExecute(msg)
@@ -237,7 +249,9 @@ type serperResult struct {
 }
 
 func callSerperAPI(query, apiKey string) (*searchOutput, error) {
-	body := fmt.Sprintf(`{"q":"%s","num":10}`, query)
+	// R-660: 使用 json.Marshal 防 JSON 注入——非 fmt.Sprintf
+	bodyBytes, _ := json.Marshal(map[string]interface{}{"q": query, "num": 10})
+	body := string(bodyBytes)
 	req, err := http.NewRequest("POST", serperEndpoint, strings.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create: %w", err)
@@ -348,7 +362,15 @@ func writeError(code, message string) {
 	})
 }
 
+// writeJSON 使用 v0.2.0 两行 HMAC 协议：第一行 HMAC-SHA256 hex，第二行 JSON payload。
+// R-660: 每条 IPC 消息必须有 HMAC 签名。
 func writeJSON(v interface{}) {
 	data, _ := json.Marshal(v)
+	if sessionToken != "" {
+		mac := hmac.New(sha256.New, []byte(sessionToken))
+		mac.Write(data)
+		sig := hex.EncodeToString(mac.Sum(nil))
+		fmt.Println(sig)
+	}
 	fmt.Println(string(data))
 }

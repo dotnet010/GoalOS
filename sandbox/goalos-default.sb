@@ -1,0 +1,59 @@
+;; goalos-default.sb — GoalOS macOS Sandbox Profile (R-652)
+;; SHA256: 将在 Week 0 编译时计算并硬编码到 executor_darwin.go
+;; 审计: KSPP (安全充分性) / Rob Pike (实现结构)
+;;
+;; 适用范围: Capability Plugin（shell.execute, fs.write, browser.* 等）
+;; 默认动作: 拒绝所有。白名单模式。
+;; 安全级别: L2（macOS 基础隔离——不含系统调用过滤）
+;;
+;; 参数传递（executor_darwin.go）:
+;;   cmd := exec.Command("sandbox-exec", "-f", profile, "-D", "WORKSPACE_DIR="+workspace,
+;;                        "-D", "TMP_DIR="+tmpDir, "-D", "HOME_DIR="+homeDir, "--", binary, args...)
+;;   profile 为编译期硬编码的 .sb 内容（const sandboxProfile = `...`）
+;;   SHA256 编译时通过 go:generate sha256sum 计算并硬编码为 const sandboxProfileHash
+
+(version 1)
+(deny default)
+
+;; ── 文件系统 ──
+;; 仅允许读写工作目录和临时目录
+(allow file-read* file-write*
+    (subpath (param "WORKSPACE_DIR"))     ;; ~/Goals/<目标名>/
+    (subpath (param "TMP_DIR"))           ;; /tmp/goalos/<action_id>/
+    (subpath "/usr/lib")                  ;; 动态链接库
+    (subpath "/System/Library")           ;; macOS 系统库
+    (literal "/dev/null")
+    (literal "/dev/zero")
+    (literal "/dev/random")
+    (literal "/dev/urandom"))
+
+;; ── 禁止访问 GoalOS 系统目录 ──
+(deny file-read* file-write*
+    (subpath (param "HOME_DIR")           ;; 拒绝访问 ~/.goalos/ 及整个 HOME
+        (require-all
+            (require-any
+                (subpath "/.goalos")
+                (subpath "/.ssh")
+                (subpath "/.aws")
+                (subpath "/.config")))))
+
+;; ── 进程管理 ──
+;; 禁止创建新进程——防止 fork bomb 和权限提升
+(deny fork)
+(deny exec)
+(deny process-exec)
+(deny process-fork)
+
+;; ── 网络 ──
+;; 完全禁止网络访问
+(deny network*)
+
+;; ── 系统调用 ──
+;; 禁止危险的系统操作
+(deny sysctl-write)
+(deny iokit-open)
+(deny mach-lookup)
+(deny signal (target self))  ;; 允许 Signal(0) 存活检查
+
+;; ── 资源限制 ──
+;; 内存/CPU/磁盘由 cgroup/ulimit 控制，不在 sandbox profile 中

@@ -1,0 +1,49 @@
+;; goalos-network.sb — GoalOS macOS Sandbox Profile (Network) (R-652)
+;; SHA256: 将在 Week 0 编译时计算并硬编码到 executor_darwin.go
+;;
+;; 适用范围: 需要网络访问的 Capability Plugin（web.search, browser.* 等）
+;; 安全级别: L2（macOS 基础隔离）
+;; 网络白名单: 由 daemon 根据 plugin.json 的 network_allowlist 动态生成
+
+(version 1)
+(deny default)
+
+;; ── 文件系统（同 default） ──
+(allow file-read* file-write*
+    (subpath (param "WORKSPACE_DIR"))
+    (subpath (param "TMP_DIR"))
+    (subpath "/usr/lib")
+    (subpath "/System/Library")
+    (literal "/dev/null")
+    (literal "/dev/zero")
+    (literal "/dev/random")
+    (literal "/dev/urandom"))
+
+(deny file-read* file-write*
+    (subpath (param "HOME_DIR")
+        (require-all
+            (require-any
+                (subpath "/.goalos")
+                (subpath "/.ssh")
+                (subpath "/.aws")
+                (subpath "/.config")))))
+
+;; ── 进程管理 ──
+(deny fork)
+(deny exec)
+(deny process-exec)
+(deny process-fork)
+
+;; ── 网络（白名单由 daemon 动态生成） ──
+;; 默认禁止所有入站连接
+(deny network-inbound)
+
+;; 仅允许出站连接到白名单域名（由 daemon 根据 plugin.json network_allowlist 注入）
+;; 示例:
+;; (allow network-outbound (remote tcp "*:443"))
+;; 实际规则在子进程启动前由 PluginRunner 动态生成——不在模板中硬编码
+(deny network*)
+
+;; ── 系统调用 ──
+(deny sysctl-write)
+(deny iokit-open)
