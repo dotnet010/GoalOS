@@ -8,10 +8,7 @@ package missionengine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -31,8 +28,8 @@ type OllamaClient struct {
 
 // NewOllamaClient 创建 Ollama 客户端。
 // baseURL: Ollama 服务基础 URL（如 "http://localhost:11434"）。
-// 自动从 Ollama 获取模型上下文长度。
-func NewOllamaClient(model, baseURL string) *OllamaClient {
+// maxTokens: 显式配置的最大生成 Token 数。0 表示自动推断。
+func NewOllamaClient(model, baseURL string, maxTokens int) *OllamaClient {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -43,29 +40,80 @@ func NewOllamaClient(model, baseURL string) *OllamaClient {
 		client:  openai.NewClientWithConfig(cfg),
 		baseURL: baseURL,
 	}
-	o.maxTokens = o.fetchContextLength()
+	if maxTokens > 0 {
+		o.maxTokens = maxTokens
+	} else {
+		o.maxTokens = inferOllamaMaxTokens(model)
+	}
 	return o
 }
 
-// fetchContextLength 从 Ollama /api/show 端点获取模型的上下文窗口大小。
-// 减去 4096 作为安全余量。
-func (o *OllamaClient) fetchContextLength() int {
-	resp, err := http.Post(o.baseURL+"/api/show", "application/json",
-		strings.NewReader(`{"model":"`+o.model+`"}`))
-	if err != nil {
-		return 8192
+// inferOllamaMaxTokens 根据模型名推断合理的 maxTokens。
+// 基于公开的模型上下文窗口规格，预留 4096 prompt 余量。
+// 未知模型返回保守默认值 8192。
+func inferOllamaMaxTokens(model string) int {
+	// 按模型系列匹配（大小写不敏感前缀匹配）
+	m := strings.ToLower(model)
+
+	// 128K 上下文窗口系列
+	if strings.Contains(m, "llama3.2") || strings.Contains(m, "llama3.3") ||
+		strings.Contains(m, "llama3-") || strings.Contains(m, "llama-4") ||
+		strings.Contains(m, "command-r") {
+		return 124000 // 128K - 4K prompt 余量
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	var result struct {
-		ModelInfo map[string]interface{} `json:"model_info"`
+	if strings.Contains(m, "llama3") || strings.Contains(m, "llama-3") {
+		return 124000 // Llama 3 系列: 128K 上下文
 	}
-	if json.Unmarshal(body, &result) != nil {
-		return 8192
+
+	// 32K 上下文窗口系列
+	if strings.Contains(m, "mistral") || strings.Contains(m, "mixtral") {
+		return 28000 // 32K - 4K 余量
 	}
-	if ctxLen, ok := result.ModelInfo["context_length"].(float64); ok && ctxLen > 0 {
-		return int(ctxLen) - 4096
+	if strings.Contains(m, "codestral") || strings.Contains(m, "nemo") {
+		return 28000
 	}
+
+	// Qwen 系列
+	if strings.Contains(m, "qwen2.5") || strings.Contains(m, "qwen3") {
+		return 124000 // Qwen 2.5/3: 128K 上下文
+	}
+	if strings.Contains(m, "qwen2") || strings.Contains(m, "qwen") {
+		return 28000
+	}
+
+	// DeepSeek 系列
+	if strings.Contains(m, "deepseek-v3") || strings.Contains(m, "deepseek-r1") {
+		return 60000 // DeepSeek V3/R1: ~64K 上下文
+	}
+	if strings.Contains(m, "deepseek") {
+		return 28000
+	}
+
+	// Gemma 系列
+	if strings.Contains(m, "gemma3") || strings.Contains(m, "gemma-3") {
+		return 124000
+	}
+	if strings.Contains(m, "gemma2") || strings.Contains(m, "gemma") {
+		return 7800 // Gemma 2: 8K 上下文 - 200 余量
+	}
+
+	// Phi 系列
+	if strings.Contains(m, "phi-4") || strings.Contains(m, "phi4") {
+		return 124000
+	}
+	if strings.Contains(m, "phi-3") || strings.Contains(m, "phi3") {
+		return 124000
+	}
+	if strings.Contains(m, "phi") {
+		return 3700 // Phi-2: 4K 上下文 - 300 余量; 保守
+	}
+
+	// Yi 系列
+	if strings.Contains(m, "yi-") {
+		return 195000 // Yi-Large: 200K
+	}
+
+	// 保守默认值——未知模型
 	return 8192
 }
 

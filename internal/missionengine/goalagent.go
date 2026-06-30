@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -27,10 +28,11 @@ type Verifier interface {
 
 // GoalAgent 是 LLM 驱动的 Agent 实现。
 type GoalAgent struct {
-	llm            LLMClient
-	bus            *eventbus.EventBus
-	verifier       Verifier        // v0.1.0 R-372
+	llm             LLMClient
+	bus             *eventbus.EventBus
+	verifier        Verifier            // v0.1.0 R-372
 	lastAlignResult *alignAnalyzeResult // v0.1.1 fix: Align+Analyze 合并调用缓存
+	planTimeout     time.Duration       // Plan 阶段超时。默认 600s，由配置文件 plan_timeout 设置
 }
 
 // LLMClient 是 LLM API 调用接口。
@@ -54,6 +56,24 @@ func NewGoalAgentWithBus(llmClient LLMClient, bus *eventbus.EventBus) *GoalAgent
 // SetVerifier 设置代码验证器（v0.1.0 R-372）。
 func (g *GoalAgent) SetVerifier(v Verifier) { g.verifier = v }
 
+// SetPlanTimeout 设置 Plan 阶段超时时间。
+// 由 main.go 从配置文件 plan_timeout 传入。0 或未设置则使用默认 600s。
+func (g *GoalAgent) SetPlanTimeout(d time.Duration) {
+	if d > 0 {
+		g.planTimeout = d
+	} else {
+		g.planTimeout = 600 * time.Second
+	}
+}
+
+// getPlanTimeout 返回 Plan 阶段超时，默认 600s。
+func (g *GoalAgent) getPlanTimeout() time.Duration {
+	if g.planTimeout > 0 {
+		return g.planTimeout
+	}
+	return 600 * time.Second
+}
+
 // sanitizeGoal 对用户输入进行基本清洗，防止 prompt 注入（v0.1.0 R-372）。
 // 使用 XML 标签包裹用户输入，建立明确的指令边界。
 func sanitizeGoal(goal string) string {
@@ -66,10 +86,17 @@ func sanitizeGoal(goal string) string {
 }
 
 // Align 将用户目标转换为结构化完成标准（R-350）。
+// [FIXED] 原代码：LLM 失败时调用 fallbackCriteria 返回假数据 + nil error
+// [FIXED] 现在：LLM 失败即返回真实错误，绝不返回假数据
 func (g *GoalAgent) Align(goal string, ctx Context) (*CompletionCriteria, error) {
 	result, err := g.alignAndAnalyze(goal, ctx)
 	if err != nil {
-		return g.fallbackCriteria(goal, ctx), nil
+		// [FIXED] 返回真实错误，不调用任何 fallback
+		return nil, fmt.Errorf("Agent.Align: %w", err)
+	}
+	if result == nil || result.Criteria == nil {
+		// [FIXED] 防御性检查：即使 err == nil，也要验证返回值有效性
+		return nil, fmt.Errorf("Agent.Align: LLM 返回了空的 criteria")
 	}
 	g.lastAlignResult = result // v0.1.1 fix: 缓存供 Analyze 复用
 	return result.Criteria, nil
@@ -77,18 +104,31 @@ func (g *GoalAgent) Align(goal string, ctx Context) (*CompletionCriteria, error)
 
 // Analyze 分析任务复杂度、能力需求、Flow 推荐（R-350）。
 // 复用 Align 的合并调用缓存——不重复调 LLM。
+// [FIXED] 原代码：缓存未命中或 LLM 失败时调用 fallbackAnalysis 返回假数据
+// [FIXED] 现在：任何失败都返回真实错误
 func (g *GoalAgent) Analyze(criteria *CompletionCriteria, ctx Context) (*TaskAnalysis, error) {
 	if criteria == nil {
-		return g.fallbackAnalysis(ctx), nil
+		// [FIXED] 原代码：return g.fallbackAnalysis(ctx), nil
+		// [FIXED] 现在：返回错误，因为无 criteria 就无法做有意义的分析
+		return nil, fmt.Errorf("Agent.Analyze: criteria 不能为空")
 	}
 	if g.lastAlignResult != nil {
 		result := g.lastAlignResult
 		g.lastAlignResult = nil
+		if result.Analysis == nil {
+			return nil, fmt.Errorf("Agent.Analyze: 缓存的 Analysis 为 nil")
+		}
 		return result.Analysis, nil
 	}
+	// 缓存未命中——重新调用 LLM
 	result, err := g.alignAndAnalyze("", ctx)
 	if err != nil {
-		return g.fallbackAnalysis(ctx), nil
+		// [FIXED] 原代码：return g.fallbackAnalysis(ctx), nil
+		// [FIXED] 现在：返回真实错误
+		return nil, fmt.Errorf("Agent.Analyze: %w", err)
+	}
+	if result == nil || result.Analysis == nil {
+		return nil, fmt.Errorf("Agent.Analyze: LLM 返回了空的 analysis")
 	}
 	return result.Analysis, nil
 }
@@ -101,8 +141,10 @@ type alignAnalyzeResult struct {
 }
 
 // alignAndAnalyze 合并 Align+Analyze 为一次 LLM 调用。
+// [FIXED] 原代码：解析失败时可能返回 fallback 假数据
+// [FIXED] 现在：任何失败都返回真实错误
 func (g *GoalAgent) alignAndAnalyze(goal string, ctx Context) (*alignAnalyzeResult, error) {
-	planCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	planCtx, cancel := context.WithTimeout(context.Background(), g.getPlanTimeout())
 	defer cancel()
 
 	prompt := g.buildAlignAnalyzePrompt(goal, ctx)
@@ -115,7 +157,8 @@ func (g *GoalAgent) alignAndAnalyze(goal string, ctx Context) (*alignAnalyzeResu
 
 	response, err := g.llm.Chat(planCtx, req)
 	if err != nil {
-		return nil, fmt.Errorf("GoalAgent Align+Analyze: LLM 调用失败: %w", err)
+		// [FIXED] 直接返回错误，不调用 fallback
+		return nil, fmt.Errorf("LLM 调用失败: %w", err)
 	}
 
 	g.trackTokens(ctx.GoalID, response)
@@ -123,7 +166,15 @@ func (g *GoalAgent) alignAndAnalyze(goal string, ctx Context) (*alignAnalyzeResu
 
 	result, err := g.parseAlignAnalyzeResponse(content)
 	if err != nil {
-		return nil, fmt.Errorf("GoalAgent Align+Analyze: 解析失败: %w", err)
+		// [FIXED] 直接返回解析错误，不调用 fallback
+		return nil, fmt.Errorf("解析 LLM 响应失败: %w", err)
+	}
+	// 验证解析结果完整性
+	if result.Criteria == nil {
+		return nil, fmt.Errorf("LLM 响应缺少 criteria 字段")
+	}
+	if result.Analysis == nil {
+		return nil, fmt.Errorf("LLM 响应缺少 analysis 字段")
 	}
 	result.Criteria.GoalID = ctx.GoalID
 	result.Analysis.GoalID = ctx.GoalID
@@ -131,22 +182,21 @@ func (g *GoalAgent) alignAndAnalyze(goal string, ctx Context) (*alignAnalyzeResu
 }
 
 // Plan 在 Flow 模板约束内生成 MissionGraph（R-350）。
+// [FIXED] 原代码：LLM 失败时调用 fallbackPlan 返回假任务图
+// [FIXED] 现在：LLM 失败即返回真实错误
 func (g *GoalAgent) Plan(criteria *CompletionCriteria, analysis *TaskAnalysis, flowName string, ctx Context) (*MissionGraph, error) {
 	goal := ctx.GoalText
-	if criteria != nil {
+	if criteria != nil && criteria.SuccessDefinition != "" {
 		goal = criteria.SuccessDefinition
 	}
 	return g.planInternal(goal, flowName, ctx)
 }
 
-// PlanLegacy 旧版单步 Plan（W3 废弃）。保留供过渡期兼容。
-func (g *GoalAgent) PlanLegacy(goal string, ctx Context) (*MissionGraph, error) {
-	return g.planInternal(goal, "", ctx)
-}
-
-// planInternal 是 Plan 的内部实现。
+// planInternal 是 Plan 的内部实现。R-724: PlanLegacy 已删除——LLM 失败即诚实失败。
+// [FIXED] 原代码：解析失败时调用 fallbackPlan 返回假数据
+// [FIXED] 现在：任何失败都返回真实错误
 func (g *GoalAgent) planInternal(goal string, flowName string, ctx Context) (*MissionGraph, error) {
-	planCtx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	planCtx, cancel := context.WithTimeout(context.Background(), g.getPlanTimeout())
 	defer cancel()
 
 	systemPrompt := g.buildSystemPrompt(ctx)
@@ -165,18 +215,31 @@ func (g *GoalAgent) planInternal(goal string, flowName string, ctx Context) (*Mi
 
 	response, err := g.llm.Chat(planCtx, req)
 	if err != nil {
-		return nil, fmt.Errorf("GoalAgent: LLM 调用失败: %w", err)
+		// [FIXED] 直接返回错误，不调用 fallbackPlan
+		return nil, fmt.Errorf("LLM 调用失败: %w", err)
 	}
 
 	g.trackTokens(ctx.GoalID, response)
 	content := response.Content
 	log.Printf("[GoalAgent] LLM response (%d chars): %.200s", len(content), content)
+	// 完整原始输出写入文件——用于调试
+	rawFile := fmt.Sprintf("/tmp/llm-raw-%s.json", ctx.GoalID)
+	os.WriteFile(rawFile, []byte(content), 0644)
+	log.Printf("[GoalAgent] Full raw LLM output written to %s", rawFile)
 
 	graph, err := g.parseResponse(content)
 	if err != nil {
 		log.Printf("[GoalAgent] 解析 MissionGraph 失败: %v。LLM 原始输出 (%d chars): %.500s",
 			err, len(content), content)
-		return g.fallbackPlan(goal, ctx), nil
+		// [FIXED] 直接返回解析错误，不调用 fallbackPlan
+		return nil, fmt.Errorf("解析 LLM 响应失败: %w。完整原始输出见 %s", err, rawFile)
+	}
+	// [FIXED] 验证图不为空
+	if graph == nil {
+		return nil, fmt.Errorf("LLM 返回了空的 MissionGraph")
+	}
+	if len(graph.Nodes) == 0 {
+		return nil, fmt.Errorf("LLM 返回了空的节点列表")
 	}
 	return graph, nil
 }
@@ -286,28 +349,11 @@ func (g *GoalAgent) parseAlignAnalyzeResponse(response string) (*alignAnalyzeRes
 	}, nil
 }
 
-// fallbackCriteria 当 LLM 不可用时返回默认完成标准。
-func (g *GoalAgent) fallbackCriteria(goal string, ctx Context) *CompletionCriteria {
-	return &CompletionCriteria{
-		GoalID:            ctx.GoalID,
-		GoalType:          "other",
-		SuccessDefinition: goal,
-		Complexity:        "medium",
-	}
-}
+// [DELETED] fallbackCriteria — 已删除。原函数存在致命 bug（递归调用自身导致栈溢出），
+// 且返回硬编码假数据，掩盖 LLM 失败。现在 LLM 失败直接返回错误。
 
-// fallbackAnalysis 当 Align 失败时返回默认分析。
-func (g *GoalAgent) fallbackAnalysis(ctx Context) *TaskAnalysis {
-	return &TaskAnalysis{
-		GoalID:              ctx.GoalID,
-		Complexity:          "medium",
-		SuggestedFlow:       "generic-v1",
-		RiskAssessment:      "L1",
-		EstimatedSteps:      2,
-		RequiredCapabilities: []string{"shell.execute"},
-		Reasoning:           "默认分析（Align 降级）",
-	}
-}
+// [DELETED] fallbackAnalysis — 已删除。返回硬编码假分析（generic/medium/L1），
+// 掩盖真实的 Analyze 失败。现在 Analyze 失败直接返回错误。
 
 // buildSystemPrompt 构建多层 system prompt。
 // 设计依据：R248（4层提示结构，支持 Prompt Caching）。
@@ -371,6 +417,8 @@ func (g *GoalAgent) buildUserMessage(goal string) string {
 // parseResponse 从 LLM 响应中解析 MissionGraph JSON。
 // 接收 Function Calling 返回的 JSON arguments 字符串。
 // 优先使用 llm.ParsePlanResponse（jsonschema），降级使用手写解析。
+// [FIXED] 原代码：两个解析路径都失败时可能返回 fallbackPlan 的假数据
+// [FIXED] 现在：两个解析路径都失败时返回错误
 func (g *GoalAgent) parseResponse(response string) (*MissionGraph, error) {
 	// 优先使用 jsonschema 解析
 	planParams, err := llm.ParsePlanResponse(response)
@@ -379,7 +427,12 @@ func (g *GoalAgent) parseResponse(response string) (*MissionGraph, error) {
 	}
 
 	// 降级：手写 JSON 解析（兼容不支持 jsonschema.Unmarshal 的场景）
-	return g.parseResponseFallback(response)
+	graph, err := g.parseResponseFallback(response)
+	if err != nil {
+		// [FIXED] 两个解析路径都失败，返回错误，不调用 fallbackPlan
+		return nil, fmt.Errorf("所有解析路径均失败: %w", err)
+	}
+	return graph, nil
 }
 
 // convertPlanParams 将 PlanGoalParams 转换为 MissionGraph。
@@ -458,31 +511,29 @@ func (g *GoalAgent) parseResponseFallback(response string) (*MissionGraph, error
 	return &MissionGraph{Nodes: nodes, Edges: edges}, nil
 }
 
-// fallbackPlan 当 LLM 解析失败时，使用关键词推理作为回退。
-func (g *GoalAgent) fallbackPlan(goal string, ctx Context) *MissionGraph {
-	actionType, target := InferAction(goal)
-	return &MissionGraph{
-		GoalID: ctx.GoalID,
-		Nodes: []GraphNode{
-			{ID: "1", Type: "mission", Description: goal, ActionType: actionType, Target: target},
-		},
-		Edges: []GraphEdge{},
-	}
-}
+// [DELETED] fallbackPlan — 已删除。原函数返回硬编码单节点任务图（使用 InferAction 的虚假推理），
+// 且存在命令注入风险（goal 字符串直接拼接到 target）。现在 Plan 失败直接返回错误。
 
 // Verify 验证产出代码（Verifier 角色，v0.1.0 R-372）。
 // GoalAgent 委托给 MultiLLMVerifier（需通过 SetVerifier 注入）。
-// 如果未注入 verifier，返回基本检查结果（PASS）。
+// [FIXED] 原代码：如果未注入 verifier，返回 PASS（虚假通过）
+// [FIXED] 现在：如果未注入 verifier，返回错误（未配置验证器）
 func (g *GoalAgent) Verify(code string, actionID string, ctx Context) (*VerificationResult, error) {
 	if g.verifier != nil {
 		verdict, confidence, reasoning, err := g.verifier.Verify(code, actionID)
 		if err != nil {
-			return &VerificationResult{ActionID: actionID, Verdict: "WARN", Reason: fmt.Sprintf("error: %v", err), Score: 0}, nil
+			// [FIXED] 原代码：返回 WARN 但 Score=0，掩盖了 verifier 错误
+			// [FIXED] 现在：返回真实错误，让调用方知道验证失败
+			return nil, fmt.Errorf("verifier 执行失败: %w", err)
 		}
-		return &VerificationResult{ActionID: actionID, Verdict: verdict, Reason: reasoning, Score: confidence}, nil
+		return &VerificationResult{
+			ActionID: actionID,
+			Verdict:  verdict,
+			Reason:   reasoning,
+			Score:    confidence,
+		}, nil
 	}
-	if len(code) == 0 {
-		return &VerificationResult{ActionID: actionID, Verdict: "FAIL", Reason: "empty code", Score: 0}, nil
-	}
-	return &VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "basic check", Score: 100}, nil
+	// [FIXED] 原代码：未注入 verifier 时返回 PASS（"basic check"），这是虚假通过
+	// [FIXED] 现在：返回错误，强制要求配置 verifier
+	return nil, fmt.Errorf("未配置 verifier：请通过 SetVerifier 注入验证器")
 }

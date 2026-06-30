@@ -9,7 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-"os/signal"
+	"os/signal"
 	"strings"
 	"syscall"
 	"time"
@@ -18,11 +18,11 @@ import (
 	"github.com/goalos/goalos/internal/contextengine"
 	"github.com/goalos/goalos/internal/daemon"
 	"github.com/goalos/goalos/internal/eventbus"
-	"github.com/goalos/goalos/internal/healthcheck"
 	"github.com/goalos/goalos/internal/governance"
+	"github.com/goalos/goalos/internal/healthcheck"
 	"github.com/goalos/goalos/internal/metrics"
-	"github.com/goalos/goalos/internal/persona"
 	"github.com/goalos/goalos/internal/missionengine"
+	"github.com/goalos/goalos/internal/persona"
 	"github.com/goalos/goalos/internal/pluginrunner"
 	"github.com/goalos/goalos/internal/scheduler"
 	"github.com/goalos/goalos/internal/skills"
@@ -53,17 +53,22 @@ func main() {
 		goalOSDir + "/cache", goalOSDir + "/config", goalOSDir + "/logs",
 	}
 	for _, d := range rootDirs {
-		if err := os.MkdirAll(d, 0700); err != nil { log.Fatalf("[Daemon] create dir %s: %v", d, err) }
+		if err := os.MkdirAll(d, 0700); err != nil {
+			log.Fatalf("[Daemon] create dir %s: %v", d, err)
+		}
 	}
 	for _, d := range subDirs {
-		if err := os.MkdirAll(d, 0755); err != nil { log.Fatalf("[Daemon] create dir %s: %v", d, err) }
+		if err := os.MkdirAll(d, 0755); err != nil {
+			log.Fatalf("[Daemon] create dir %s: %v", d, err)
+		}
 	}
 	log.Println("[Daemon] Step 1: directory tree created")
 
 	cfg, err := config.Load(home + "/" + defaultConfigPath)
-	if err != nil { cfg = config.Default() }
+	if err != nil {
+		cfg = config.Default()
+	}
 	log.Printf("[Daemon] Step 2: config loaded (port=%d)", cfg.Daemon.Port)
-
 
 	// Step 2.5: 启动自检（v0.1.1）
 	pluginsDir := home + "/.goalos/plugins/capability"
@@ -78,7 +83,10 @@ func main() {
 	log.Println("[Daemon] Step 3: Event Bus + Metrics created")
 
 	logFile, err := os.OpenFile(goalOSDir+"/logs/daemon.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err == nil { log.SetOutput(logFile); log.SetFlags(0) }
+	if err == nil {
+		log.SetOutput(logFile)
+		log.SetFlags(log.LstdFlags)
+	}
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 4: logger initialized"}`, time.Now().Format(time.RFC3339))
 
 	store := statestore.New(goalOSDir + "/events")
@@ -90,39 +98,54 @@ func main() {
 	sched.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 6: Scheduler registered"}`, time.Now().Format(time.RFC3339))
 
-		// TC-GL-006: GoalRunner per-Goal 执行控制。v0.1.1 fix: per-Goal PipelineRunner 避免跨 Goal 状态污染
-		bus.Subscribe(events.TypeGoalCreated, func(evt events.Event) error {
-			pr := scheduler.NewPipelineRunner(bus, store)
-			if cfg.MultiLLM.Enabled && len(cfg.MultiLLM.Providers) > 0 {
-				var providers []scheduler.ProviderClient
-				for _, p := range cfg.MultiLLM.Providers {
-					providers = append(providers, scheduler.ProviderClient{Name: p.Name, Model: p.Model,
-						Client: missionengine.NewCloudLLMClient(p.BaseURL, p.APIKey, p.Model)})
+	// TC-GL-006: GoalRunner per-Goal 执行控制。v0.1.1 fix: per-Goal PipelineRunner 避免跨 Goal 状态污染
+	bus.Subscribe(events.TypeGoalCreated, func(evt events.Event) error {
+		pr := scheduler.NewPipelineRunner(bus, store)
+		if cfg.MultiLLM.Enabled && len(cfg.MultiLLM.Providers) > 0 {
+			var providers []scheduler.ProviderClient
+			for _, p := range cfg.MultiLLM.Providers {
+				// [FIXED] 增加 maxTokens 参数（从配置读取，默认 8192）
+				maxTokens := p.MaxTokens
+				if maxTokens == 0 {
+					maxTokens = 16384
 				}
-				pr.SetMultiLLM(scheduler.NewMultiLLMVerifier(providers))
+				providers = append(providers, scheduler.ProviderClient{Name: p.Name, Model: p.Model,
+					Client: missionengine.NewCloudLLMClient(p.BaseURL, p.APIKey, p.Model, maxTokens)})
 			}
-			gr := scheduler.NewGoalRunner(scheduler.Goal{ID: evt.GoalID, Title: fmt.Sprint(evt.Payload["title"])}, bus, store, pr, goalAnchor)
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("[GoalRunner] goal=%s PANIC: %v", evt.GoalID, r)
-						bus.Publish(events.Event{Type: events.TypeGoalFailed, GoalID: evt.GoalID, Source: "goalrunner",
-							Payload: map[string]interface{}{"reason": fmt.Sprintf("panic: %v", r), "error": "internal error"}})
-					}
-				}()
-				log.Printf("[GoalRunner] goal=%s started", evt.GoalID); gr.Execute()
+			pr.SetMultiLLM(scheduler.NewMultiLLMVerifier(providers))
+		}
+		gr := scheduler.NewGoalRunner(scheduler.Goal{ID: evt.GoalID, Title: fmt.Sprint(evt.Payload["title"])}, bus, store, pr, goalAnchor)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[GoalRunner] goal=%s PANIC: %v", evt.GoalID, r)
+					bus.Publish(events.Event{Type: events.TypeGoalFailed, GoalID: evt.GoalID, Source: "goalrunner",
+						Payload: map[string]interface{}{"reason": fmt.Sprintf("panic: %v", r), "error": "internal error"}})
+				}
 			}()
-			return nil
-		})
+			log.Printf("[GoalRunner] goal=%s started", evt.GoalID)
+			gr.Execute()
+		}()
+		return nil
+	})
 
 	// R-383 P0接线修复 #2-4: Flow/Snapshot/BudgetTracker
 	flowReg := scheduler.NewFlowRegistry()
 	_ = scheduler.NewFlowComposer(flowReg) // v1.5: MissionEngine接入
-	store.SetSnapshotCallback(func(goalID string) { state, _ := store.LoadState(goalID); if state != nil { store.SaveSnapshot(goalID, state) } })
-	bt := scheduler.NewBudgetTracker(); bt.SetEventBus(bus); _ = bt
+	store.SetSnapshotCallback(func(goalID string) {
+		state, _ := store.LoadState(goalID)
+		if state != nil {
+			store.SaveSnapshot(goalID, state)
+		}
+	})
+	bt := scheduler.NewBudgetTracker()
+	bt.SetEventBus(bus)
+	_ = bt
 
 	secretKey, err := governance.LoadOrGenerateSecret(goalOSDir + "/secrets.enc")
-	if err != nil { log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err) }
+	if err != nil {
+		log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err)
+	}
 	gov := governance.New(bus, secretKey)
 	gov.SetApprovalTimeout(time.Duration(cfg.Policy.ApprovalTimeout) * time.Second)
 	gov.SetAutonomyLevel(cfg.Daemon.AutonomyLevel)
@@ -130,7 +153,7 @@ func main() {
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered"}`, time.Now().Format(time.RFC3339))
 
 	ctxEng := contextengine.New(home+"/Goals", home+"/.goalos/memory")
-	ctxEng.Start(bus) // R-362
+	ctxEng.Start(bus)            // R-362
 	_ = persona.Get(cfg.Persona) // R-383 P0接线修复 #5: Persona渲染层——订阅 GoalCompleted/GoalFailed
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 8: Context Engine started"}`, time.Now().Format(time.RFC3339))
 
@@ -158,7 +181,7 @@ func main() {
 		if baseURL == "" {
 			baseURL = "http://localhost:11434"
 		}
-		ollamaClient := missionengine.NewOllamaClient(model, baseURL)
+		ollamaClient := missionengine.NewOllamaClient(model, baseURL, cfg.LLM.MaxTokens)
 		agent = missionengine.NewGoalAgentWithBus(ollamaClient, bus)
 		agentName = "GoalAgent+Ollama(" + model + ")"
 
@@ -167,7 +190,13 @@ func main() {
 		if u := os.Getenv("GOALOS_LLM_BASE_URL"); u != "" {
 			baseURL = u
 		}
-		apiKey := os.Getenv(cfg.LLM.APIKeyEnv); if apiKey == "" { apiKey = cfg.LLM.APIKey }; if apiKey == "" { apiKey = cfg.LLM.APIKey }
+		apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
+		if apiKey == "" {
+			apiKey = cfg.LLM.APIKey
+		}
+		if apiKey == "" {
+			apiKey = cfg.LLM.APIKey
+		}
 		if k := os.Getenv("GOALOS_LLM_API_KEY"); k != "" {
 			apiKey = k
 		}
@@ -175,15 +204,24 @@ func main() {
 		if m := os.Getenv("GOALOS_LLM_MODEL"); m != "" {
 			model = m
 		}
-		cloudClient := missionengine.NewCloudLLMClient(baseURL, apiKey, model)
+		// [FIXED] 增加 maxTokens 参数（从配置读取，默认 8192）
+		maxTokens := cfg.LLM.MaxTokens
+		if maxTokens == 0 {
+			maxTokens = 16384
+		}
+		cloudClient := missionengine.NewCloudLLMClient(baseURL, apiKey, model, maxTokens)
 		agent = missionengine.NewGoalAgentWithBus(cloudClient, bus)
 		agentName = "GoalAgent+Cloud(" + model + ")"
+	}
+	// Plan 阶段超时通过配置文件 plan_timeout 设置
+	if ga, ok := agent.(*missionengine.GoalAgent); ok {
+		ga.SetPlanTimeout(cfg.LLM.PlanTimeout)
 	}
 	missionEng := missionengine.New(bus, agent)
 	missionEng.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (%s)"}`, time.Now().Format(time.RFC3339), agentName)
 
-	runner := pluginrunner.New(bus, secretKey)
+	runner := pluginrunner.New(bus, secretKey, nil) // R-660: tokenVerifier=nil→fallback 无撤销检查。Week 3 注入 Engine
 	runner.Start()
 	for _, p := range runner.DiscoveredPlugins() {
 		gov.RegisterCapabilities(p.Manifest.Name, p.Manifest.DeclaredCapabilities)
@@ -199,14 +237,18 @@ func main() {
 
 	pidFile := goalOSDir + "/goalos.pid"
 	pidLock, err := acquirePIDLock(pidFile)
-	if err != nil { log.Fatalf("Step 12: PID lock failed") }
+	if err != nil {
+		log.Fatalf("Step 12: PID lock failed")
+	}
 	defer os.Remove(pidFile)
 	defer pidLock.Close()
 
 	api := daemon.NewHandler()
 	api.Metrics = mreg // v0.1.0 H8: 指标注册表
-	api.SetPort(cfg.Daemon.Port); api.SetStartTime(startTime)
-	daemon.SetEventBus(bus); daemon.SetStateStore(store)
+	api.SetPort(cfg.Daemon.Port)
+	api.SetStartTime(startTime)
+	daemon.SetEventBus(bus)
+	daemon.SetStateStore(store)
 	sse := daemon.NewSSEManager()
 	bus.Subscribe("GoalCreated", func(evt events.Event) error { sse.Push("GoalCreated", evt.Payload); return nil })
 	bus.Subscribe("GoalCompleted", func(evt events.Event) error {
@@ -216,7 +258,8 @@ func main() {
 		} else {
 			api.UpdateGoalStatus(evt.GoalID, "已完成")
 		}
-		sse.Push("GoalCompleted", evt.Payload); return nil
+		sse.Push("GoalCompleted", evt.Payload)
+		return nil
 	})
 	bus.Subscribe("GoalFailed", func(evt events.Event) error {
 		api.UpdateGoalStatus(evt.GoalID, "已失败")
@@ -229,11 +272,13 @@ func main() {
 		suggestions = append(suggestions, daemon.Suggestion{Action: "retry", Label: "重试当前目标"})
 		suggestions = append(suggestions, daemon.Suggestion{Action: "new_goal", Label: "重新描述目标"})
 		api.SetGoalErrorHint(evt.GoalID, hint, suggestions)
-		sse.Push("GoalFailed", evt.Payload); return nil
+		sse.Push("GoalFailed", evt.Payload)
+		return nil
 	})
 	// v0.1.1 进度状态：用户可见的中间状态
 	bus.Subscribe("PlanRequested", func(evt events.Event) error {
-		api.UpdateGoalStatus(evt.GoalID, "正在分析目标"); return nil
+		api.UpdateGoalStatus(evt.GoalID, "正在分析目标")
+		return nil
 	})
 	bus.Subscribe("MissionGenerated", func(evt events.Event) error {
 		api.UpdateGoalStatus(evt.GoalID, "正在执行")
@@ -243,24 +288,28 @@ func main() {
 		return nil
 	})
 	bus.Subscribe("ActionScheduled", func(evt events.Event) error {
-		api.UpdateGoalProgress(evt.GoalID); return nil
+		api.UpdateGoalProgress(evt.GoalID)
+		return nil
 	})
 	// v0.1.1 fix: 移除重复订阅——已有 events.TypeActionCompleted 版本
 	bus.Subscribe("ActionFailed", func(evt events.Event) error {
-		api.UpdateGoalProgress(evt.GoalID); return nil
+		api.UpdateGoalProgress(evt.GoalID)
+		return nil
 	})
 	bus.Subscribe("ActionRetrying", func(evt events.Event) error {
-		api.UpdateGoalStatus(evt.GoalID, "正在重试"); return nil
+		api.UpdateGoalStatus(evt.GoalID, "正在重试")
+		return nil
 	})
 	bus.Subscribe("HumanInterventionRequested", func(evt events.Event) error {
-		api.UpdateGoalStatus(evt.GoalID, "需要你的帮助"); return nil
+		api.UpdateGoalStatus(evt.GoalID, "需要你的帮助")
+		return nil
 	})
 	bus.Subscribe("ActionPendingApproval", func(evt events.Event) error {
 		sse.Push("ActionPendingApproval", evt.Payload)
 		api.TrackPendingApproval(daemon.PendingApproval{
 			ActionID: fmt.Sprint(evt.Payload["action_id"]), GoalID: evt.GoalID,
 			ActionType: fmt.Sprint(evt.Payload["action_description"]),
-			RiskLevel: fmt.Sprint(evt.Payload["risk_level"]),
+			RiskLevel:  fmt.Sprint(evt.Payload["risk_level"]),
 		})
 		return nil
 	})
@@ -274,10 +323,12 @@ func main() {
 		return nil
 	})
 	bus.Subscribe(events.TypeActionApproved, func(evt events.Event) error {
-		api.RemovePendingApproval(fmt.Sprint(evt.Payload["action_id"])); return nil
+		api.RemovePendingApproval(fmt.Sprint(evt.Payload["action_id"]))
+		return nil
 	})
 	bus.Subscribe(events.TypeActionRejected, func(evt events.Event) error {
-		api.RemovePendingApproval(fmt.Sprint(evt.Payload["action_id"])); return nil
+		api.RemovePendingApproval(fmt.Sprint(evt.Payload["action_id"]))
+		return nil
 	})
 
 	mux := http.NewServeMux()
@@ -285,54 +336,101 @@ func main() {
 	mux.HandleFunc("/api/events", sse.HandleSSE)
 	mux.HandleFunc("/api/health", api.HandleHealth)
 	mux.HandleFunc("/api/goals", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost { api.HandleCreateGoal(w, r) } else { api.HandleListGoals(w, r) }
+		if r.Method == http.MethodPost {
+			api.HandleCreateGoal(w, r)
+		} else {
+			api.HandleListGoals(w, r)
+		}
 	})
 	mux.HandleFunc("/api/goals/", func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimPrefix(r.URL.Path, "/api/goals/"); id = strings.Split(id, "/")[0]; r.SetPathValue("id", id)
+		id := strings.TrimPrefix(r.URL.Path, "/api/goals/")
+		id = strings.Split(id, "/")[0]
+		r.SetPathValue("id", id)
 		switch {
-		case strings.HasSuffix(r.URL.Path, "/pause"): api.HandlePauseGoal(w, r)
-		case strings.HasSuffix(r.URL.Path, "/resume"): api.HandleResumeGoal(w, r)
-		case strings.HasSuffix(r.URL.Path, "/stop"): api.HandleStopGoal(w, r)
-		case strings.HasSuffix(r.URL.Path, "/log"): api.HandleGoalLog(w, r)
-		case strings.HasSuffix(r.URL.Path, "/events"): api.HandleGoalEvents(w, r)
-		default: api.HandleGetGoal(w, r)
+		case strings.HasSuffix(r.URL.Path, "/pause"):
+			api.HandlePauseGoal(w, r)
+		case strings.HasSuffix(r.URL.Path, "/resume"):
+			api.HandleResumeGoal(w, r)
+		case strings.HasSuffix(r.URL.Path, "/stop"):
+			api.HandleStopGoal(w, r)
+		case strings.HasSuffix(r.URL.Path, "/log"):
+			api.HandleGoalLog(w, r)
+		case strings.HasSuffix(r.URL.Path, "/events"):
+			api.HandleGoalEvents(w, r)
+		default:
+			api.HandleGetGoal(w, r)
 		}
 	})
 	mux.HandleFunc("/api/approvals", api.HandleListApprovals)
 	mux.HandleFunc("/api/approvals/", func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimPrefix(r.URL.Path, "/api/approvals/"); id = strings.Split(id, "/")[0]; r.SetPathValue("id", id)
-		if strings.HasSuffix(r.URL.Path, "/approve") { api.HandleApprove(w, r) } else if strings.HasSuffix(r.URL.Path, "/reject") { api.HandleReject(w, r) } else { http.Error(w, `{"error":{"code":"INVALID_REQUEST"}}`, http.StatusNotFound) }
+		id := strings.TrimPrefix(r.URL.Path, "/api/approvals/")
+		id = strings.Split(id, "/")[0]
+		r.SetPathValue("id", id)
+		if strings.HasSuffix(r.URL.Path, "/approve") {
+			api.HandleApprove(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/reject") {
+			api.HandleReject(w, r)
+		} else {
+			http.Error(w, `{"error":{"code":"INVALID_REQUEST"}}`, http.StatusNotFound)
+		}
 	})
 	mux.HandleFunc("/api/system/status", api.HandleSystemStatus)
 	mux.HandleFunc("/api/system/stop", api.HandleDaemonStop)
 	mux.HandleFunc("/api/system/restart", api.HandleDaemonRestart)
 	mux.HandleFunc("/metrics", api.HandleMetrics) // v0.1.0 H8: Prometheus 格式指标端点
 	mux.HandleFunc("/api/system/reload", func(w http.ResponseWriter, r *http.Request) {
-			configPath := home + "/.goalos/config/daemon.yaml"
-			if err := cfg.Reload(configPath); err != nil {
-				http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"`+err.Error()+`"}}`, http.StatusInternalServerError)
-				return
-			}
-			apiKey := os.Getenv(cfg.LLM.APIKeyEnv); if apiKey == "" { apiKey = cfg.LLM.APIKey }; if apiKey == "" { apiKey = cfg.LLM.APIKey }
-			if k := os.Getenv("GOALOS_LLM_API_KEY"); k != "" { apiKey = k }
-			cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, cfg.LLM.Model)
-			newAgent := missionengine.NewGoalAgentWithBus(cloudClient, bus)
-			missionEng.SetAgent(newAgent)
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `"}`))
-			log.Printf("[Daemon] hot-reloaded: model=%s, agent swapped", cfg.LLM.Model)
-		})
+		configPath := home + "/.goalos/config/daemon.yaml"
+		if err := cfg.Reload(configPath); err != nil {
+			http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"`+err.Error()+`"}}`, http.StatusInternalServerError)
+			return
+		}
+		apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
+		if apiKey == "" {
+			apiKey = cfg.LLM.APIKey
+		}
+		if apiKey == "" {
+			apiKey = cfg.LLM.APIKey
+		}
+		if k := os.Getenv("GOALOS_LLM_API_KEY"); k != "" {
+			apiKey = k
+		}
+		// [FIXED] 增加 maxTokens 参数（从配置读取，默认 8192）
+		maxTokens := cfg.LLM.MaxTokens
+		if maxTokens == 0 {
+			maxTokens = 16384
+		}
+		cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, cfg.LLM.Model, maxTokens)
+		newAgent := missionengine.NewGoalAgentWithBus(cloudClient, bus)
+		newAgent.SetPlanTimeout(cfg.LLM.PlanTimeout)
+		missionEng.SetAgent(newAgent)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `"}`))
+		log.Printf("[Daemon] hot-reloaded: model=%s, agent swapped", cfg.LLM.Model)
+	})
 	server := &http.Server{Addr: fmt.Sprintf("localhost:%d", cfg.Daemon.Port), Handler: mux}
 	go func() {
 		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13: HTTP on localhost:%d"}`, time.Now().Format(time.RFC3339), cfg.Daemon.Port)
-		if err := server.ListenAndServe(); err != http.ErrServerClosed { log.Fatalf("HTTP: %v", err) }
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatalf("HTTP: %v", err)
+		}
 	}()
 
 	bus.Publish(events.Event{Type: events.TypeSystemStarted, Source: "daemon", Seq: 0,
 		Payload: map[string]interface{}{"pid": os.Getpid(), "port": cfg.Daemon.Port}})
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted"}`, time.Now().Format(time.RFC3339))
-		// SIGHUP 热加载配置（v0.1.0 UX1）
-		go func() { sigCh := make(chan os.Signal, 1); signal.Notify(sigCh, syscall.SIGHUP); for range sigCh { configPath := home + "/.goalos/config/daemon.yaml"; if err := cfg.Reload(configPath); err != nil { log.Printf("[Daemon] SIGHUP reload failed: %v", err) } else { log.Printf("[Daemon] SIGHUP reloaded: model=%s", cfg.LLM.Model) } } }()
+	// SIGHUP 热加载配置（v0.1.0 UX1）
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGHUP)
+		for range sigCh {
+			configPath := home + "/.goalos/config/daemon.yaml"
+			if err := cfg.Reload(configPath); err != nil {
+				log.Printf("[Daemon] SIGHUP reload failed: %v", err)
+			} else {
+				log.Printf("[Daemon] SIGHUP reloaded: model=%s", cfg.LLM.Model)
+			}
+		}
+	}()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	<-ctx.Done()
@@ -346,7 +444,9 @@ func main() {
 
 func acquirePIDLock(path string) (*os.File, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil { return nil, fmt.Errorf("pid lock: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("pid lock: %w", err)
+	}
 	fmt.Fprintf(f, "%d\n", os.Getpid())
 	return f, nil
 }

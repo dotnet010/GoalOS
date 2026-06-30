@@ -1,6 +1,10 @@
 package llm
 
 import (
+	"encoding/json"
+	"fmt"
+	"log"
+
 	"github.com/sashabaranov/go-openai/jsonschema"
 )
 
@@ -19,7 +23,7 @@ type PlanGoalNode struct {
 	ID          string `json:"id" jsonschema_description:"节点唯一标识符（数字字符串，如 '1', '2'）"`
 	Type        string `json:"type" jsonschema:"enum=mission,enum=action,enum=approval,enum=condition,enum=sub_goal,enum=clarification" jsonschema_description:"节点类型：mission-任务，action-动作，approval-审批，condition-条件，sub_goal-子目标，clarification-澄清"`
 	Description string `json:"description" jsonschema_description:"人类可读的任务描述"`
-	ActionType  string `json:"action_type" jsonschema:"enum=shell.execute,enum=web.search,enum=fs.read,enum=fs.write,enum=browser.open,enum=browser.click" jsonschema_description:"执行动作类型"`
+	ActionType  string `json:"action_type" jsonschema:"enum=shell.execute,enum=fs.read,enum=fs.write,enum=browser.open,enum=browser.click" jsonschema_description:"执行动作类型。代码生成任务必须用shell.execute"`
 	Target      string `json:"target" jsonschema_description:"操作目标：shell 命令、搜索查询、文件路径或 URL"`
 }
 
@@ -52,10 +56,15 @@ func GeneratePlanSchema() *jsonschema.Definition {
 // 使用 jsonschema 的 Unmarshal 方法，相比手写 JSON 解析更可靠。
 // 返回解析后的 PlanGoalParams，由调用者转换为 MissionGraph。
 func ParsePlanResponse(content string) (*PlanGoalParams, error) {
+	// 优先使用 jsonschema 解析（严格模式）
 	schema := GeneratePlanSchema()
 	var result PlanGoalParams
 	if err := schema.Unmarshal(content, &result); err != nil {
-		return nil, err
+		// R-724: jsonschema 解析失败→降级为标准 JSON 解析（兼容 LLM 输出格式差异）
+		log.Printf("[llm] jsonschema unmarshal failed: %v — falling back to standard JSON", err)
+		if jsonErr := json.Unmarshal([]byte(content), &result); jsonErr != nil {
+			return nil, fmt.Errorf("所有解析路径均失败: jsonschema=%w, json=%w", err, jsonErr)
+		}
 	}
 	if len(result.Nodes) == 0 {
 		return nil, &PlanParseError{Reason: "MissionGraph 无节点"}

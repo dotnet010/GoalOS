@@ -16,7 +16,7 @@ import (
 
 // CanonicalVersion 是项目权威版本号（R-361）。
 // 所有输出版本号的代码必须引用此常量。CI 检查与最新 git tag 一致。
-const CanonicalVersion = "0.1.2"
+const CanonicalVersion = "0.1.3"
 
 // Config 是 GoalOS 完整配置。
 type Config struct {
@@ -49,6 +49,7 @@ type MultiLLMProvider struct {
 	APIKey     string   `yaml:"api_key"`
 	BaseURL    string   `yaml:"base_url"`
 	AllowedFor []string `yaml:"allowed_for"`
+	MaxTokens  int      `yaml:"max_tokens"` // [FIXED] 新增：模型上下文长度，默认 8192
 }
 
 // PolicyConfig 是运行时策略配置（v0.1.0）。
@@ -69,9 +70,10 @@ type LLMConfig struct {
 	APIKeyEnv     string        `yaml:"api_key_env"`     // API Key 环境变量名。默认 "ANTHROPIC_API_KEY"
 	APIKey        string        `yaml:"api_key"`         // v0.1.0: 直接配置 API Key（优先级低于环境变量）
 	BaseURL       string        `yaml:"base_url"`        // API 基础 URL。Cloud 和 Ollama 均可配置
-	MaxTokens     int           `yaml:"max_tokens"`      // 最大 Token 数。默认 8192
+	MaxTokens     int           `yaml:"max_tokens"`      // 最大 Token 数。默认 16384
 	Temperature   float32       `yaml:"temperature"`     // LLM 温度参数。0~2，默认 0.3
 	Timeout       time.Duration `yaml:"timeout"`         // 请求超时。默认 120s
+	PlanTimeout   time.Duration `yaml:"plan_timeout"`    // Plan 阶段超时。默认 600s
 }
 
 // Default 返回默认配置。
@@ -88,9 +90,10 @@ func Default() *Config {
 			Model:       "claude-sonnet-4-6",
 			APIKeyEnv:   "ANTHROPIC_API_KEY",
 			BaseURL:     "", // 空表示使用默认 API 端点
-			MaxTokens:   8192,
+			MaxTokens:   16384,
 			Temperature: 0.3,
 			Timeout:     120 * time.Second,
+			PlanTimeout: 600 * time.Second,
 		},
 			Policy: PolicyConfig{
 				ApprovalTimeout: 300, TokenBudget: 1_000_000, TokenWarning: 0.8,
@@ -197,6 +200,9 @@ func loadYAML(path string, cfg *Config) error {
 	}
 	if fileCfg.LLM.Timeout != 0 {
 		cfg.LLM.Timeout = fileCfg.LLM.Timeout
+	}
+	if fileCfg.LLM.PlanTimeout != 0 {
+		cfg.LLM.PlanTimeout = fileCfg.LLM.PlanTimeout
 	if fileCfg.Policy.ApprovalTimeout != 0 { cfg.Policy.ApprovalTimeout = fileCfg.Policy.ApprovalTimeout }
 	if fileCfg.Policy.TokenBudget != 0 { cfg.Policy.TokenBudget = fileCfg.Policy.TokenBudget }
 	if fileCfg.Policy.TokenWarning != 0 { cfg.Policy.TokenWarning = fileCfg.Policy.TokenWarning }

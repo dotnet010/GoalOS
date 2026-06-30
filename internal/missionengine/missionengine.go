@@ -10,10 +10,11 @@ import (
 	"strings"
 
 	"github.com/goalos/goalos/internal/eventbus"
+	"github.com/goalos/goalos/internal/trace"
 	"github.com/goalos/goalos/pkg/events"
 )
 
-// Agent is the planning + verification interface (v0.1.0: Planner + Verifier 双角色)。
+// Agent is the planning + verification interface (v0.1.0: Planner + Verifier 双角色）。
 // 提供两个实现: GoalAgent (LLM 驱动，生产环境)、StubAgent (LLM 不可用时的回退，测试/CI)。
 //
 // Planner 角色（R-350）:
@@ -30,7 +31,7 @@ type Agent interface {
 	Align(goal string, ctx Context) (*CompletionCriteria, error)
 	Analyze(criteria *CompletionCriteria, ctx Context) (*TaskAnalysis, error)
 	Plan(criteria *CompletionCriteria, analysis *TaskAnalysis, flowName string, ctx Context) (*MissionGraph, error)
-	PlanLegacy(goal string, ctx Context) (*MissionGraph, error)
+	// R-724: PlanLegacy 已从接口移除——LLM 失败即诚实失败
 
 	// ── Verifier 角色（v0.1.0 R-372）──
 	// Verify 对产出代码进行验证。由 PipelineRunner Check 原语通过 QualityGate 调用。
@@ -40,9 +41,9 @@ type Agent interface {
 // VerificationResult 是 Agent.Verify() 的返回结果（v0.1.0 R-372）。
 type VerificationResult struct {
 	ActionID string `json:"action_id"`
-	Verdict  string `json:"verdict"`  // "PASS" | "WARN" | "FAIL"
-	Reason   string `json:"reason"`   // 判定理由
-	Score    int    `json:"score"`    // 0-100
+	Verdict  string `json:"verdict"` // "PASS" | "WARN" | "FAIL"
+	Reason   string `json:"reason"`  // 判定理由
+	Score    int    `json:"score"`   // 0-100
 }
 
 // Context is the planning context.
@@ -66,13 +67,13 @@ type CompletionCriteria struct {
 
 // TaskAnalysis is the output of Agent.Analyze()（R-350）。
 type TaskAnalysis struct {
-	GoalID              string   `json:"goal_id"`
-	Complexity          string   `json:"complexity"`           // low | medium | high | extreme
+	GoalID               string   `json:"goal_id"`
+	Complexity           string   `json:"complexity"`            // low | medium | high | extreme
 	RequiredCapabilities []string `json:"required_capabilities"` // 需要的 capability action_types
-	SuggestedFlow       string   `json:"suggested_flow"`       // 推荐的 Flow 模板名（如 "code-project-v1"）
-	RiskAssessment      string   `json:"risk_assessment"`      // L0-L5 风险等级
-	EstimatedSteps      int      `json:"estimated_steps"`      // 预估步骤数
-	Reasoning           string   `json:"reasoning"`            // 推荐理由
+	SuggestedFlow        string   `json:"suggested_flow"`        // 推荐的 Flow 模板名（如 "code-project-v1"）
+	RiskAssessment       string   `json:"risk_assessment"`       // L0-L5 风险等级
+	EstimatedSteps       int      `json:"estimated_steps"`       // 预估步骤数
+	Reasoning            string   `json:"reasoning"`             // 推荐理由
 }
 
 // MissionGraph is the output of Agent.plan().
@@ -116,7 +117,13 @@ func (e *Engine) Start() {
 	log.Println("[MissionEngine] started, subscribed to PlanRequested")
 }
 
+// handlePlanRequested 处理 PlanRequested 事件。
+// [FIXED] 原代码：Analyze 失败时仍调用 Plan 并发布图（假成功）
+// [FIXED] 现在：任何阶段失败都终止流程并发布 GoalFailed
 func (e *Engine) handlePlanRequested(evt events.Event) error {
+	t := trace.Start(evt.GoalID)
+	t.StageStart("PlanRequested.received")
+	log.Printf("[MissionEngine] handlePlanRequested RECEIVED: goal=%s text=%.50s", evt.GoalID, fmt.Sprint(evt.Payload["goal_text"]))
 	goalText, _ := evt.Payload["goal_text"].(string)
 	anchorCheck, _ := evt.Payload["goal_anchor_check"].(bool)
 	flowName, _ := evt.Payload["flow_name"].(string) // v0.1.0: Flow 模板约束
@@ -128,48 +135,60 @@ func (e *Engine) handlePlanRequested(evt events.Event) error {
 	}
 
 	// v0.1.0 三步规划（R-350）：Align → Analyze → Plan
+	// R-724: 删除 PlanLegacy 回退——LLM 失败即诚实失败，不伪造产出物
+	t.StageStart("Agent.Align")
 	criteria, err := e.agent.Align(goalText, ctx)
 	if err != nil {
-		log.Printf("[MissionEngine] Agent.Align failed: %v", err)
-		if isTimeout(err) {
-			// R-387: LLM 超时 → 诚实失败。不降级 PlanLegacy，不伪造产出物
-			e.publishGoalFailed(evt.GoalID, "LLM 规划超时（Align 阶段）。建议：换用更快的模型，或简化目标描述。")
-			return nil
-		}
-		// LLM 完全不可用 → PlanLegacy 最小可用路径
-		graph, err := e.agent.PlanLegacy(goalText, ctx)
-		if err != nil {
-			e.publishRejected(evt.GoalID, err.Error(), 1)
-			return nil
-		}
-		e.publishGraph(evt.GoalID, graph)
+		t.StageFail("Agent.Align", err)
+		t.Summary()
+		e.publishGoalFailed(evt.GoalID, fmt.Sprintf("LLM 规划失败（Align 阶段）: %v", err))
 		return nil
 	}
+	// [FIXED] 防御性校验：即使 err == nil，也要验证返回值不为 nil
+	if criteria == nil {
+		err := fmt.Errorf("Agent.Align 返回了 nil criteria 但没有错误")
+		t.StageFail("Agent.Align", err)
+		t.Summary()
+		e.publishGoalFailed(evt.GoalID, "LLM 规划失败（Align 阶段返回空数据）")
+		return nil
+	}
+	t.StageOK("Agent.Align")
 
+	// [FIXED] 原代码：Analyze 失败时（err != nil），仍调用 Plan(criteria, nil, ...) 并发布图
+	// 这是致命 bug：Analyze 失败意味着没有有效的分析结果，但系统仍生成"假任务图"
+	// [FIXED] 现在：Analyze 失败即终止流程，发布 GoalFailed
+	t.StageStart("Agent.Analyze")
 	analysis, err := e.agent.Analyze(criteria, ctx)
 	if err != nil {
-		log.Printf("[MissionEngine] Agent.Analyze failed: %v", err)
+		t.StageFail("Agent.Analyze", err)
+		t.Summary()
 		if isTimeout(err) {
 			e.publishGoalFailed(evt.GoalID, "LLM 规划超时（Analyze 阶段）。建议：换用更快的模型，或简化目标描述。")
-			return nil
+		} else {
+			e.publishGoalFailed(evt.GoalID, fmt.Sprintf("LLM 规划失败（Analyze 阶段）: %v", err))
 		}
-		graph, err := e.agent.Plan(criteria, nil, flowName, ctx)
-		if err != nil {
-			e.publishRejected(evt.GoalID, err.Error(), 1)
-			return nil
-		}
-		e.publishGraph(evt.GoalID, graph)
 		return nil
 	}
+	// [FIXED] 防御性校验
+	if analysis == nil {
+		err := fmt.Errorf("Agent.Analyze 返回了 nil analysis 但没有错误")
+		t.StageFail("Agent.Analyze", err)
+		t.Summary()
+		e.publishGoalFailed(evt.GoalID, "LLM 规划失败（Analyze 阶段返回空数据）")
+		return nil
+	}
+	t.StageOK("Agent.Analyze")
 
 	// 如果 FlowRecommender 未指定模板，使用 Agent 推荐的 Flow
 	if flowName == "" {
 		flowName = analysis.SuggestedFlow
 	}
 
+	t.StageStart("Agent.Plan")
 	graph, err := e.agent.Plan(criteria, analysis, flowName, ctx)
 	if err != nil {
-		log.Printf("[MissionEngine] Agent.Plan failed: %v", err)
+		t.StageFail("Agent.Plan", err)
+		t.Summary()
 		if isTimeout(err) {
 			// LLM 超时→发布干预事件+GoalFailed（诚实反馈：不伪造产出物）
 			e.publishTimeoutIntervention(evt.GoalID, goalText, "Plan", err)
@@ -182,14 +201,28 @@ func (e *Engine) handlePlanRequested(evt events.Event) error {
 		e.publishRejected(evt.GoalID, err.Error(), 1)
 		return nil
 	}
+	// [FIXED] 防御性校验
+	if graph == nil {
+		err := fmt.Errorf("Agent.Plan 返回了 nil graph 但没有错误")
+		t.StageFail("Agent.Plan", err)
+		t.Summary()
+		e.publishGoalFailed(evt.GoalID, "LLM 规划失败（Plan 阶段返回空数据）")
+		return nil
+	}
+	t.StageOK("Agent.Plan")
 
 	// Validate and publish
+	t.StageStart("MissionGraph.validate")
 	if err := e.validate(graph); err != nil {
+		t.StageFail("MissionGraph.validate", err)
+		t.Summary()
 		log.Printf("[MissionEngine] validation failed: %v", err)
 		e.publishRejected(evt.GoalID, err.Error(), 1)
 		return nil
 	}
+	t.StageOK("MissionGraph.validate")
 
+	t.Summary()
 	e.publishGraph(evt.GoalID, graph)
 	return nil
 }
@@ -345,7 +378,7 @@ func (e *Engine) publishGoalFailed(goalID string, reason string) {
 		Source: "mission-engine",
 		Payload: map[string]interface{}{
 			"reason": reason,
-			"error":  "llm_timeout",
+			"error":  "llm_failure",
 		},
 	})
 }
@@ -369,9 +402,9 @@ func (e *Engine) publishTimeoutIntervention(goalID string, goalText string, stag
 		GoalID: goalID,
 		Source: "mission-engine",
 		Payload: map[string]interface{}{
-			"reason":       fmt.Sprintf("LLM 超时 (%s阶段): %v", stage, err),
-			"stage":        stage,
-			"goal_text":    goalText,
+			"reason":            fmt.Sprintf("LLM 超时 (%s阶段): %v", stage, err),
+			"stage":             stage,
+			"goal_text":         goalText,
 			"intervention_type": "llm_timeout",
 			"options": []map[string]string{
 				{"action": "keep_waiting", "label": "继续等待", "desc": "保持当前模型，延长超时时间继续"},
@@ -385,12 +418,14 @@ func (e *Engine) publishTimeoutIntervention(goalID string, goalText string, stag
 
 // StubAgent 硬编码单节点图，用于无 LLM 环境下的核心链路测试。
 // 配置 LLM Provider 后自动切换到 GoalAgent。
+// [WARNING] StubAgent 返回硬编码数据，仅用于测试/CI，生产环境必须使用 GoalAgent。
 type StubAgent struct{}
 
 // NewStubAgent 创建 StubAgent（默认 Agent，零外部依赖）。
 func NewStubAgent() *StubAgent { return &StubAgent{} }
 
 // Align 返回默认完成标准（Stub 实现）。
+// [WARNING] 这是测试桩，生产环境不应使用
 func (s *StubAgent) Align(goal string, ctx Context) (*CompletionCriteria, error) {
 	return &CompletionCriteria{
 		GoalID:            ctx.GoalID,
@@ -401,17 +436,19 @@ func (s *StubAgent) Align(goal string, ctx Context) (*CompletionCriteria, error)
 }
 
 // Analyze 返回默认任务分析（Stub 实现）。
+// [WARNING] 这是测试桩，生产环境不应使用
 func (s *StubAgent) Analyze(criteria *CompletionCriteria, ctx Context) (*TaskAnalysis, error) {
 	return &TaskAnalysis{
-		GoalID:        ctx.GoalID,
-		Complexity:    "medium",
-		SuggestedFlow: "generic-v1",
+		GoalID:         ctx.GoalID,
+		Complexity:     "medium",
+		SuggestedFlow:  "generic-v1",
 		RiskAssessment: "L1",
 		EstimatedSteps: 1,
 	}, nil
 }
 
 // Plan 生成单节点 MissionGraph（Stub 实现）。
+// [WARNING] 这是测试桩，生产环境不应使用
 func (s *StubAgent) Plan(criteria *CompletionCriteria, analysis *TaskAnalysis, flowName string, ctx Context) (*MissionGraph, error) {
 	goal := ctx.GoalText
 	if criteria != nil && criteria.SuccessDefinition != "" {
@@ -425,12 +462,10 @@ func (s *StubAgent) Plan(criteria *CompletionCriteria, analysis *TaskAnalysis, f
 	}, nil
 }
 
-// PlanLegacy 旧版接口（W3 废弃）。
-func (s *StubAgent) PlanLegacy(goal string, ctx Context) (*MissionGraph, error) {
-	return s.Plan(nil, nil, "", ctx)
-}
+// R-724: PlanLegacy 已删除——LLM 失败即诚实失败。
 
 // Verify Stub 实现（v0.1.0 R-372）。
+// [WARNING] 这是测试桩，生产环境不应使用
 func (s *StubAgent) Verify(code string, actionID string, ctx Context) (*VerificationResult, error) {
 	if len(code) == 0 {
 		return &VerificationResult{ActionID: actionID, Verdict: "FAIL", Reason: "empty code", Score: 0}, nil
@@ -439,7 +474,8 @@ func (s *StubAgent) Verify(code string, actionID string, ctx Context) (*Verifica
 }
 
 // InferAction 返回默认 action_type。v0.1.0: GoalAgent+LLM 推理替代关键词匹配。
-// 仅作为 StubAgent/fallbackPlan 的最后回退。
+// 仅作为 StubAgent 的最后回退。
+// [WARNING] 生产环境应使用 GoalAgent 的 LLM 推理，而非此硬编码回退
 func InferAction(goal string) (string, string) {
 	return "shell.execute", goal
 }
@@ -450,4 +486,3 @@ func (e *Engine) SetAgent(agent Agent) {
 	e.agent = agent
 	log.Printf("[MissionEngine] agent hot-swapped to %T", agent)
 }
-

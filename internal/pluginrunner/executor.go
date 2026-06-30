@@ -86,14 +86,15 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 		return nil, fmt.Errorf("executor: start: %w", err)
 	}
 
-	// 发送 init（含 session_token + seccomp_profile）
+	// 发送 init（含 session_token + seccomp_profile + protocol_version）
 	writeJSON(stdin, map[string]interface{}{
-		"type":            "init",
-		"session_token":   sessionToken,
-		"seccomp_profile": seccompProfile,
-		"capabilities":    action.RequiredCapabilities,
-		"workspace":       cfg.WorkDir,
-		"tmp":             cfg.TmpDir,
+		"type":             "init",
+		"protocol_version": "v2.0-two-line-hmac", // R-724: 内部协议版本。Plugin 必须支持此版本
+		"session_token":    sessionToken,
+		"seccomp_profile":  seccompProfile,
+		"capabilities":     action.RequiredCapabilities,
+		"workspace":        cfg.WorkDir,
+		"tmp":              cfg.TmpDir,
 	})
 
 	resultCh := make(chan *ExecResult, 1)

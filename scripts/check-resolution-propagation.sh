@@ -153,7 +153,7 @@ resolve_path() {
         测试规范.md|开发规范.md|发布规范.md|验收规范.md|用户手册.md|开发日志.md)
             echo "GoalOS/$f"
             ;;
-        check-anti-cheat.sh|check-cross-verification.sh|check-doc-completeness.sh|check-schema-consistency.sh|export-glossary-yaml.sh)
+        check-anti-cheat.sh|check-cross-verification.sh|check-doc-completeness.sh|check-schema-consistency.sh|check-plugin-protocol.sh|export-glossary-yaml.sh)
             echo "GoalOS/scripts/$f"
             ;;
         *)
