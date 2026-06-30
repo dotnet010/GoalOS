@@ -30,7 +30,7 @@ func TestIntegration_FullApprovalFlow(t *testing.T) {
 	gov.Start()
 
 	missionengine.New(bus, missionengine.NewStubAgent()).Start()
-	pluginrunner.New(bus, nil).Start()
+	pluginrunner.New(bus, nil, nil).Start()
 
 	// Track events
 	pending := make(chan events.Event, 1)

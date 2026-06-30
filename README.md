@@ -89,7 +89,7 @@ multi_llm:
       allowed_for: [L0,L1,L2,L3,L4,L5]
     - name: openrouter
       model: nvidia/nemotron-3-ultra-550b-a55b:free
-      api_key: "sk-or-..."
+      api_key: "your-openrouter-api-key"
       base_url: https://openrouter.ai/api/v1
       allowed_for: [L0,L1,L2]
 ```

@@ -29,6 +29,7 @@ func TestMultiLLMVerifier_DualProvider(t *testing.T) {
 				"https://ws-hwiv1ueutcxpjuzq.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
 				glmKey,
 				"glm-5.1",
+				4096,
 			),
 		},
 		{
@@ -38,6 +39,7 @@ func TestMultiLLMVerifier_DualProvider(t *testing.T) {
 				"https://openrouter.ai/api/v1",
 				orKey,
 				"nvidia/nemotron-3-ultra-550b-a55b:free",
+				4096,
 			),
 		},
 	}
