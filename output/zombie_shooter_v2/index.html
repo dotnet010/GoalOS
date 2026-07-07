@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2.5D Zombie Shooter - Low Poly</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container"></div>
+
+  <div id="ui-overlay">
+    <div id="health-container">
+      <div id="health-label">Health</div>
+      <div id="health-bar-bg"><div id="health-bar"></div></div>
+      <div id="health-text">100 / 100</div>
+    </div>
+
+    <div id="score-container">
+      <div id="score-label">Score</div>
+      <div id="score">0</div>
+      <div id="wave-container">
+        <div id="wave-label">Wave</div>
+        <div id="wave">0</div>
+      </div>
+    </div>
+
+    <div id="weapon-container">
+      <div id="weapon-label">Weapon</div>
+      <div id="weapon-name">Pistol</div>
+      <div id="weapon-slots">
+        <div class="weapon-slot active" id="slot-0">1 Pistol</div>
+        <div class="weapon-slot" id="slot-1">2 Shotgun</div>
+        <div class="weapon-slot" id="slot-2">3 Rifle</div>
+      </div>
+    </div>
+
+    <div id="skills-container">
+      <div class="skill">
+        <div class="skill-icon">&#128163;</div>
+        <div class="skill-cd-bg"><div class="skill-cd-fill" id="grenade-cd"></div></div>
+        <div class="skill-label">Q Grenade</div>
+        <div class="skill-count" id="grenade-count">3</div>
+      </div>
+      <div class="skill">
+        <div class="skill-icon">&#9201;</div>
+        <div class="skill-cd-bg"><div class="skill-cd-fill" id="timeslow-cd"></div></div>
+        <div class="skill-label">E Time Slow</div>
+      </div>
+    </div>
+
+    <div id="crosshair"></div>
+    <div id="wave-announce"></div>
+    <div id="timeslow-active">&#9201; TIME SLOW ACTIVE</div>
+  </div>
+
+  <div id="start-screen" class="screen">
+    <h1>ZOMBIE SHOOTER</h1>
+    <p>2.5D Top-Down Survival</p>
+    <div class="controls">
+      <p>WASD - Move | Mouse - Aim | Left Click - Shoot</p>
+      <p>1 / 2 / 3 - Pistol / Shotgun / Rifle</p>
+      <p>Q - Grenade | E - Time Slow</p>
+      <p>Survive the waves. Good luck.</p>
+    </div>
+    <button id="start-btn">Start Game</button>
+  </div>
+
+  <div id="gameover-screen" class="screen" style="display:none">
+    <h1>GAME OVER</h1>
+    <div class="stats">Score: <span id="final-score">0</span></div>
+    <div class="stats">Wave Reached: <span id="final-wave">0</span></div>
+    <button id="restart-btn">Restart</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="js/Assets.js"></script>
+  <script src="js/Game.js"></script>
+  <script src="js/Player.js"></script>
+  <script src="js/Zombie.js"></script>
+  <script src="js/Weapon.js"></script>
+  <script src="js/Skill.js"></script>
+  <script src="js/Particles.js"></script>
+  <script src="js/Physics.js"></script>
+  <script src="js/WaveSystem.js"></script>
+  <script src="js/UI.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -98,15 +98,83 @@ cat > "$CACHE" << EOF
 {"glossary_hash":"$current_hash","last_check":"$(date -u +"%Y-%m-%dT%H:%M:%SZ")","terms_count":$t_count,"verified":$verified,"missing":$missing}
 EOF
 
+# ─── Layer 2: 概念一致性检查（R-758 — 会议 #116 新增） ───
+echo ""
+echo "── Layer 2: 概念一致性检查（R-758）──"
+
+DOCS_DIR="开发文档"
+ABOLISHED_TERMS="RecoveryPipeline|AUTO_FIX|SWITCH_TOOL|四原语|4 Primitive"
+LEGACY_TERMS="WebSocket推送|stdin/stdout.*JSON|DecidePathSelected\(AUTO_FIX\)|DecidePathSelected\(REPLAN\)"
+
+echo "  2.1 已废除概念残留检测..."
+for term in RecoveryPipeline AUTO_FIX SWITCH_TOOL; do
+    # 在正文中（排除修改记录和已废除标注）
+    violations=$(grep -rn "$term" "$DOCS_DIR" --include="*.md" 2>/dev/null | \
+        grep -v "修改记录" | grep -v "已废除" | grep -v "会议 #107" | grep -v "R-740" | \
+        grep -v "stub追踪" | grep -v "开发计划/v0.2.0" | grep -v "会议纪要" || true)
+    if [ -n "$violations" ]; then
+        echo -e "    ${R}❌ '$term' 出现在正文中（非废除/修改记录上下文）:${N}"
+        echo "$violations" | head -5 | while read -r line; do echo "       $line"; done
+        FAIL=$((FAIL + 1))
+    fi
+done
+echo -e "    ${G}✅ 已废除概念无正文残留${N}"
+
+echo "  2.2 WebSocket→SSE / stdin/stdout→FD3 检测..."
+# WebSocket should not appear in PRD or 05-arch body (modification records OK)
+ws_violations=$(grep -rn "WebSocket推送\|WebSocket 协议" 01-prd产品需求文档.md 05软件架构文档.md 2>/dev/null | grep -v "SSE\|已废弃\|修改记录" || true)
+if [ -n "$ws_violations" ]; then
+    echo -e "    ${R}❌ WebSocket 引用未替换为 SSE:${N}"
+    echo "$ws_violations"
+    FAIL=$((FAIL + 1))
+fi
+# stdin/stdout should not appear as IPC mechanism in 08-沙箱 body
+stdin_violations=$(grep -n "stdin/stdout" 08沙箱隔离与进程通信规范.md 2>/dev/null | grep -v "FD3\|旧版\|已废弃\|os/exec.*FD3" || true)
+if [ -n "$stdin_violations" ]; then
+    echo -e "    ${R}❌ stdin/stdout 未替换为 FD3:${N}"
+    echo "$stdin_violations"
+    FAIL=$((FAIL + 1))
+fi
+echo -e "    ${G}✅ 遗留协议引用已清理${N}"
+
+echo "  2.3 Validate() 调用者统一检测（R-759）..."
+# 06-安全 should say "PipelineRunner 自动调用"
+if grep -q "每个模块在发布事件前调用" 06安全模型文档.md 2>/dev/null; then
+    echo -e "    ${R}❌ 06-安全 §1.1 Validate() 调用者未统一为 PipelineRunner${N}"
+    FAIL=$((FAIL + 1))
+fi
+# 开发规范 should say "PipelineRunner 自动调用"
+if grep -q "调用方（模块第一接触点）在发布事件前调用" ../GoalOS/开发规范.md 2>/dev/null; then
+    echo -e "    ${R}❌ 开发规范 §4.3 Validate() 调用者未统一为 PipelineRunner${N}"
+    FAIL=$((FAIL + 1))
+fi
+echo -e "    ${G}✅ Validate() 调用者已统一${N}"
+
+echo "  2.4 新概念一致性——核心术语跨文档定义一致..."
+ROOT="/Users/haochen/work/workspace/pi2"
+for term in "SafeMap" "Fan-Out" "Validatable" "CategorizedError" "MissionNode" "PluginRegistered"; do
+    glossary_count=$(grep -c "$term" "$ROOT/开发文档/GLOSSARY.md" 2>/dev/null || echo 0)
+    arch_count=$(grep -c "$term" "$ROOT/开发文档/05软件架构文档.md" 2>/dev/null || echo 0)
+    if [ "$glossary_count" -gt 0 ] && [ "$arch_count" -gt 0 ]; then
+        :
+    elif [ "$glossary_count" -eq 0 ]; then
+        echo -e "    ${Y}⚠️  '$term' 未在 GLOSSARY 中定义${N}"
+    else
+        echo -e "    ${Y}⚠️  '$term' 未在 05-架构中引用${N}"
+    fi
+done
+echo -e "    ${G}✅ 新概念跨文档一致${N}"
+
 echo ""
 echo "══════════════════════════════"
 echo "  策略1(术语→Schema): $missing 缺失"
 echo "  策略2(事件→Payload): 需人工核对"
 echo "  策略3(漂移检测): 缓存已更新 → $CACHE"
+echo "  策略4(概念一致性): R-758 Layer 2"
 echo "  失败合计: $FAIL"
 echo "══════════════════════════════"
 echo ""
 
-[ $FAIL -eq 0 ] && echo -e "${G}✅ Schema 一致性检查通过${N}" && exit 0
-echo -e "${R}❌ $FAIL 项 Schema 不一致。修复后重新运行。${N}"
+[ $FAIL -eq 0 ] && echo -e "${G}✅ Schema + 概念一致性检查通过${N}" && exit 0
+echo -e "${R}❌ $FAIL 项不一致。修复后重新运行。${N}"
 exit 1

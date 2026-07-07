@@ -47,6 +47,7 @@ type Event struct {
 	MissionID *string                `json:"mission_id,omitempty"` // 所属 Mission。可选
 	ActionID  *string                `json:"action_id,omitempty"`  // 所属 Action。可选
 	Source    string                 `json:"source"`           // 发布者模块名
+	SessionID string                 `json:"session_id,omitempty"` // R-772: 同一 Goal 的不同 Session。新 Session 重做时递增。
 	Payload   map[string]interface{} `json:"payload"`          // 事件特定数据
 	Metadata  map[string]interface{} `json:"metadata,omitempty"` // 元数据。可选
 }
@@ -138,4 +139,10 @@ const (
 	TypePluginProcessTerminated = "PluginProcessTerminated" // Plugin 进程终止。Publisher: Plugin Runner
 	TypeCapabilityRegistered    = "CapabilityRegistered"    // 动态能力注册。Publisher: Plugin Runner (v2)
 	TypeCapabilityRevoked       = "CapabilityRevoked"       // 能力撤销。Publisher: Plugin Runner (v2)
+
+	// ─── v0.2.0 Week 0 新增: Plugin Fan-Out (R-737) + Session (R-772) + Budget (R-773) ───
+	TypePluginRegistered    = "PluginRegistered"    // Plugin 注册完成。Publisher: PluginRunner。layer: core
+	TypePluginUnregistered  = "PluginUnregistered"  // Plugin 移除。Publisher: PluginRunner。layer: core
+	TypeSessionCreated      = "SessionCreated"      // 新 Session 创建。Publisher: PipelineRunner。layer: core
+	TypeTokenBudgetAdjusted = "TokenBudgetAdjusted" // Token 预算追加。Publisher: BudgetTracker。layer: core
 )

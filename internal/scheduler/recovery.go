@@ -108,6 +108,7 @@ type BudgetTracker struct {
 	goals           map[string]*GoalBudget
 	totalTokens     int
 	totalCostUSD    float64
+	globalBudget    int64  // R-813: 实例字段——非包级变量
 	bus             *eventbus.EventBus // v0.1.0 R-372: TokenUsage 事件发布
 }
 

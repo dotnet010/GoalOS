@@ -2,13 +2,22 @@
 # =============================================================================
 # GoalOS CI 反欺骗检查 — R-568（Beck 规则 5 的实现）
 # R-706: 层B增加行为变异检测——核心函数否定测试分支覆盖率>60%（G顾问审计）
+# R-735: 层1-3新增三个独立脚本（check-naked-map / check-error-swallow / check-contract-test-assertion）
 #
-# 三层自动化检测:
+# 五层自动化检测:
 #   Layer A — 测试覆盖率
-#   Layer B — 空壳检测（return nil/true/false + 无错误处理）
+#   Layer B — 空壳检测（return nil/true/false + 无错误处理）+ 行为变异检测(R-706)
 #   Layer C — 断言强度（contract_test 的 assertion 计数 ≥ MUST 数）
+#   Layer D — MUST 覆盖（make constitution-check）
+#   Layer E — govulncheck（全量扫描）
+#
+# 配套 CI 脚本（R-735 新增）:
+#   check-naked-map.sh           — 层 1: AST 扫描裸 map[K]V 包级声明
+#   check-error-swallow.sh       — 层 2: go/analysis 扫描 _ 丢弃 error/ok
+#   check-contract-test-assertion.sh — 层 3: contract_test assertion 覆盖检测
 #
 # 设计依据: 会议 #88 R-568。28 个 A 类历史遗留欠债的根因——代码通过了验证但行为是错的。
+# 扩展依据: 会议 #108-#112 R-733~R-738 框架层三统一方案。
 #
 # 退出码: 0=全部通过, 1=存在可疑代码
 # =============================================================================

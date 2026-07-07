@@ -1,0 +1,26 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #000; font-family: 'Courier New', monospace; cursor: none; }
+#gameContainer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+#hud { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+#topBar { display: flex; justify-content: space-around; padding: 10px; background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent); }
+#topBar div { color: #0f0; font-size: 20px; text-shadow: 0 0 10px #0f0; }
+#controlsHint { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); color: #555; font-size: 12px; text-align: center; }
+#bottomLeft { position: absolute; bottom: 20px; left: 20px; }
+#healthBarContainer { position: relative; width: 250px; height: 30px; background: rgba(50,0,0,0.7); border: 2px solid #500; border-radius: 5px; overflow: hidden; }
+#healthBar { width: 100%; height: 100%; background: linear-gradient(to right, #f00, #f80); transition: width 0.3s; }
+#healthText { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #fff; font-size: 16px; font-weight: bold; }
+#bottomRight { position: absolute; bottom: 20px; right: 20px; text-align: right; }
+#weaponDisplay { display: flex; flex-direction: column; gap: 5px; }
+.weaponSlot { color: #888; font-size: 14px; padding: 4px 10px; background: rgba(0,0,0,0.5); border-radius: 3px; border: 1px solid transparent; }
+.weaponSlot.active { color: #0f0; border: 1px solid #0f0; text-shadow: 0 0 5px #0f0; }
+#ammoDisplay { color: #ff0; font-size: 18px; margin-top: 8px; text-shadow: 0 0 5px #ff0; }
+#skillBar { position: absolute; bottom: 70px; right: 20px; display: flex; gap: 10px; }
+.skillSlot { color: #08f; font-size: 14px; padding: 6px 12px; background: rgba(0,0,0,0.5); border: 1px solid #08f; border-radius: 5px; }
+.skillSlot.ready { color: #0f0; border-color: #0f0; text-shadow: 0 0 5px #0f0; }
+#crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #0f0; font-size: 24px; text-shadow: 0 0 5px #0f0; }
+#waveAnnouncement { position: absolute; top: 35%; left: 50%; transform: translate(-50%,-50%); color: #f00; font-size: 48px; font-weight: bold; text-shadow: 0 0 20px #f00; opacity: 0; transition: opacity 0.5s; text-align: center; }
+#waveAnnouncement.show { opacity: 1; }
+#gameOverScreen { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: #f00; background: rgba(0,0,0,0.85); padding: 40px; border: 2px solid #f00; border-radius: 10px; pointer-events: all; }
+#gameOverScreen h1 { font-size: 48px; margin-bottom: 20px; text-shadow: 0 0 20px #f00; }
+#gameOverScreen button { margin-top: 20px; padding: 10px 30px; font-size: 18px; background: #f00; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-family: inherit; }
+#gameOverScreen button:hover { background: #f50; }

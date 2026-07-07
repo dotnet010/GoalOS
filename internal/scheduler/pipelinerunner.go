@@ -10,6 +10,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/goalos/goalos/internal/errorcategory"
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/statestore"
 	"github.com/goalos/goalos/pkg/events"
@@ -74,6 +75,8 @@ type PipelineRunner struct {
 	multiLLM     *MultiLLMVerifier
 	autoFixCount map[string]int
 	retryCount   map[string]int
+	wakeupCh     chan struct{}    // R-765: Wait 唤醒通道
+	pluginCache  *PluginCache     // R-737: Fan-Out 本地 Plugin cache
 }
 
 // NewPipelineRunner 创建 PipelineRunner。
@@ -84,6 +87,8 @@ func NewPipelineRunner(bus *eventbus.EventBus, store *statestore.Store) *Pipelin
 		recovery:     NewRecoveryPipeline(), // R-362: 集成 RecoveryPipeline
 		autoFixCount: make(map[string]int),
 		retryCount:   make(map[string]int),
+		wakeupCh:     make(chan struct{}, 10), // R-765: Wait 唤醒
+		pluginCache:  NewPluginCache(),         // R-737: Fan-Out
 	}
 }
 
@@ -322,3 +327,29 @@ func (pr *PipelineRunner) SetMultiLLM(v *MultiLLMVerifier) { pr.multiLLM = v }
 
 // SetRecoveryPipeline 设置恢复管线（v0.1.1 重写）。
 func (pr *PipelineRunner) SetRecoveryPipeline(r *RecoveryPipeline) { pr.recovery = r }
+
+// ─── Week 0 框架基础设施 F3+F5: CategorizedError 路由 + Validatable 集成 ───
+
+// ClassifyError 读取 CategorizedError.Category()→返回 DecidePath（R-771）。
+// ErrorTemporary→内部重试（新 Session），其他→ESCALATE。
+// 非 CategorizedError→默认 ErrorFatal。
+func ClassifyError(err error) DecidePath {
+	cat := errorcategory.CategoryOf(err)
+	switch cat {
+	case errorcategory.ErrorTemporary:
+		return DecideCONTINUE // R-771: 内部触发新 Session 重做
+	case errorcategory.ErrorPermanent, errorcategory.ErrorSecurity:
+		return DecideESCALATE
+	case errorcategory.ErrorFatal:
+		return DecideESCALATE // GoalRunner 收到后→GoalFailed
+	default:
+		return DecideESCALATE
+	}
+}
+
+// ValidatePayload 调用 payload 的 Validate()（若实现 Validatable）（R-770）。
+// EventBus.Publish() 内部调用——当前作为 PipelineRunner 辅助函数。
+// 校验失败→返回 error，调用方发布 InvariantViolated + ActionFailed。
+func ValidatePayload(payload interface{ Validate() error }) error {
+	return payload.Validate()
+}
