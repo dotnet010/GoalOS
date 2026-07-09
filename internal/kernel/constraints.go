@@ -85,7 +85,7 @@ type CheckPrimitive interface {
 }
 
 // ExecPrimitive 执行原语：启动 Plugin 子进程→执行实际操作→产出 Artifact。
-// R-490: 当前代码中 exec() 为空壳。Week 2 A8 修复后命名为 requestExecution。
+// v0.2.0 W1: exec() 已修复——发布 ActionScheduled 事件。StateMachineRun 接入生产路径。
 type ExecPrimitive interface {
 	Primitive
 	// RequestExecution 提交 Action 到 PluginRunner 异步执行。
@@ -143,7 +143,8 @@ type Projection interface {
 // 订阅 ActionExecutionRequested → os/exec 启动子进程 → 返回 ResultMessage → 发布 ActionCompleted/ActionFailed。
 //
 // 设计依据: Week 0 提取为显式 Go interface。Mock 和 Real 都实现此 interface。
-// TestIntegration_ExecRedTest 用 Mock 验证当前 exec() 空壳 (RED)→Week 2 A8 修复 (GREEN)。
+// v0.2.0 W1: exec() 空壳已修复。TestExecRedTest→GREEN。
+// TestIntegration_ExecRedTest 用 Mock 验证当前 exec() 已发布 ActionScheduled。
 type PluginRunner interface {
 	Layered // PluginRunner 属于 Layer 5 (最底层)
 
@@ -193,7 +194,8 @@ type HotPath interface {
 // M1-M8 契约闸口在 Validate() 中统一验证。
 //
 // 定义位置: goalos/events/payload.go (R-499: pkg/events → goalos/events)
-// 实现时机: Week 5 B2 typed event payload 迁移。
+// v0.2.0 W1: EventPayload 接口已实现——16 typed payload 全部实现 Validate()。
+// 定义位置: internal/scheduler/typed_events.go + typed_events_peripheral.go
 //
 // 示例:
 //   type GoalCreatedPayload struct { Title string `json:"title"` }

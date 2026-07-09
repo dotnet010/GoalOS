@@ -8,9 +8,11 @@ package skills
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -56,7 +58,8 @@ func (l *SkillLoader) Load() ([]Skill, error) {
 		}
 		skill, err := l.parseFile(filepath.Join(l.skillsDir, entry.Name()))
 		if err != nil {
-			continue // 跳过无效 Skill 文件
+			log.Printf("[Skills] 跳过无效 Skill 文件 %s: %v", entry.Name(), err) // G10: 不静默
+			continue
 		}
 		skills = append(skills, *skill)
 	}
@@ -95,6 +98,7 @@ func (l *SkillLoader) parseFile(path string) (*Skill, error) {
 
 // SkillRegistry 按名称查找已加载的 Skill。
 type SkillRegistry struct {
+	mu     sync.RWMutex // G11: 并发保护
 	skills map[string]Skill
 }
 
@@ -105,6 +109,8 @@ func NewSkillRegistry() *SkillRegistry {
 
 // Register 注册一个 Skill 列表。
 func (r *SkillRegistry) Register(skills []Skill) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	for _, s := range skills {
 		r.skills[s.Name] = s
 	}
@@ -112,6 +118,8 @@ func (r *SkillRegistry) Register(skills []Skill) {
 
 // Lookup 按名称查找 Skill。
 func (r *SkillRegistry) Lookup(name string) (Skill, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	s, ok := r.skills[name]
 	return s, ok
 }

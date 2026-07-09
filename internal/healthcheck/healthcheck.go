@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/goalos/goalos/internal/config"
@@ -103,12 +105,25 @@ func checkLLMConnectivity(cfg *config.Config) Result {
 		return Result{Name: "LLM 连通性", Passed: true,
 			Message: "跳过（未配置完整）"}
 	}
-	// 轻量连通测试：HTTP HEAD 请求
-	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	// 简化：仅检查 BaseURL 可达性
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, cfg.LLM.BaseURL, nil)
+	if err != nil {
+		return Result{Name: "LLM 连通性", Passed: false,
+			Message:    fmt.Sprintf("无法创建请求: %v", err),
+			Suggestion: "检查 LLM BaseURL 格式是否正确"}
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return Result{Name: "LLM 连通性", Passed: false,
+			Message:    fmt.Sprintf("无法连接 %s: %v", cfg.LLM.BaseURL, err),
+			Suggestion: "检查网络连接和 LLM BaseURL 是否正确"}
+	}
+	resp.Body.Close()
 	return Result{Name: "LLM 连通性", Passed: true,
-		Message: fmt.Sprintf("端点 %s 已配置", cfg.LLM.BaseURL)}
+		Message: fmt.Sprintf("端点 %s 可达", cfg.LLM.BaseURL)}
 }
 
 func checkPluginDir(dir string) Result {
@@ -132,7 +147,26 @@ func checkPluginDir(dir string) Result {
 }
 
 func checkDiskSpace() Result {
-	return Result{Name: "磁盘空间", Passed: true, Message: "足够"}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Result{Name: "磁盘空间", Passed: true,
+			Message: "跳过（无法获取 home 目录）"}
+	}
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(home+"/.goalos", &stat); err != nil {
+		return Result{Name: "磁盘空间", Passed: true,
+			Message: fmt.Sprintf("跳过（statfs 失败: %v）", err)}
+	}
+	availableBytes := stat.Bavail * uint64(stat.Bsize)
+	availableGB := float64(availableBytes) / (1024 * 1024 * 1024)
+	minGB := 0.5
+	if availableGB < minGB {
+		return Result{Name: "磁盘空间", Passed: false,
+			Message:    fmt.Sprintf("可用空间 %.2f GB < %.2f GB 最低要求", availableGB, minGB),
+			Suggestion: "清理磁盘空间或扩展存储"}
+	}
+	return Result{Name: "磁盘空间", Passed: true,
+		Message: fmt.Sprintf("%.2f GB 可用", availableGB)}
 }
 
 // checkPluginSignatures 检查所有插件签名，不匹配时自动修复（v0.1.1）。

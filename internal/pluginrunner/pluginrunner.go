@@ -33,7 +33,10 @@ type Runner struct {
 // New creates a Plugin Runner with the given plugins directory and token secret.
 // tokenVerifier 可选——如果为 nil，使用 governance.VerifyToken（无撤销检查）。
 func New(bus *eventbus.EventBus, secretKey []byte, tokenVerifier TokenVerifier) *Runner {
-	home, _ := osUserHomeDir()
+	home, err := osUserHomeDir()
+	if err != nil {
+		home = "/tmp" // fallback: 容器环境
+	}
 	pluginsDir := home + "/.goalos/plugins"
 	return &Runner{
 		bus:           bus,
@@ -109,21 +112,23 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 		}
 	}
 
-	// 尝试真实子进程执行。失败→回退 stub（MVP）。
+	// v0.2.0 W2: 真实子进程执行。失败→发布 ActionFailed（Decide 原语接管决策）。
+	// R-817: 已删除 stub 回退路径。失败即诚实失败。
 	result, err := r.executeAction(evt)
 	if err != nil {
 		log.Printf("[PluginRunner] execution error: %v", err)
+		// R-828 final: flat payload
+		payload := events.ActionCompletedPayload{
+			ActionID: actionID,
+			Status:   "failure",
+			Output:   fmt.Sprintf("no plugin for: %s", actionType),
+		}
 		r.publish(events.Event{
 			Type:    events.TypeActionFailed,
 			GoalID:  evt.GoalID,
 			Source:  "plugin-runner",
-			Payload: map[string]interface{}{
-				"action_id": actionID,
-				"result":    map[string]interface{}{"status": "failure", "output": fmt.Sprintf("no plugin for: %s", actionType)},
-				"error":     fmt.Sprintf("execution failed: %v", err),
-				"error_type": errorTypeFrom(err),
-			},
-		})
+			Payload: events.PayloadToMap(payload),
+			})
 		return nil
 	}
 
@@ -134,21 +139,18 @@ func (r *Runner) handleActionApproved(evt events.Event) error {
 	}
 	log.Printf("[PluginRunner] result: type=%s status=%s output_len=%d", result.eventType, result.status, len(displayOutput))
 
+	// R-828 final: flat typed payload——重构所有订阅者同步
+	payload := events.ActionCompletedPayload{
+		ActionID:   actionID,
+		Status:     result.status,
+		Output:     displayOutput,
+		DurationMs: result.durationMs,
+	}
 	r.publish(events.Event{
-		Type:   result.eventType,
-		GoalID: evt.GoalID,
-		Source: "plugin-runner",
-		Payload: map[string]interface{}{
-			"action_id": actionID,
-			"result": map[string]interface{}{
-				"status": result.status,
-				"output": displayOutput,
-			},
-			"artifacts_produced": []interface{}{},
-			"cost": map[string]interface{}{
-				"duration_ms": result.durationMs,
-			},
-		},
+		Type:    result.eventType,
+		GoalID:  evt.GoalID,
+		Source:  "plugin-runner",
+		Payload: events.PayloadToMap(payload),
 	})
 	return nil
 }
@@ -177,7 +179,10 @@ func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 		return execResult{}, fmt.Errorf("no plugin found for action type: %s", actionType)
 	}
 
-	home, _ := osUserHomeDir()
+	home, err := osUserHomeDir()
+	if err != nil {
+		return execResult{}, fmt.Errorf("pluginrunner: cannot determine home directory: %w", err)
+	}
 	cfg := ExecConfig{
 		BinaryPath: plugin.BinaryPath,
 		WorkDir:    home + "/Goals/" + evt.GoalID,
@@ -259,8 +264,9 @@ var osUserHomeDir = os.UserHomeDir
 // errorTypeFrom 从 error 消息推断正确的 error_type。
 // R-660+R-703: HMAC/IPC 安全违规必须返回 "ipc_security_violation"——非 "execution_error"。
 func errorTypeFrom(err error) string {
+	// E17: nil error 不应返回 "execution_error"
 	if err == nil {
-		return "execution_error"
+		return ""
 	}
 	msg := err.Error()
 	switch {

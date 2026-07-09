@@ -13,7 +13,7 @@ import (
 func TestA22_GoalCompleted_NoDuplicate(t *testing.T) {
 	t.Run("GoalFailed后不触发GoalCompleted", func(t *testing.T) {
 		gs := scheduler.NewGoalState("goal-1")
-		gs.State = "Failed"
+		gs.SetState("Failed")
 		if gs.CanTransitionTo("Completed") {
 			t.Error("Failed 状态不应允许→Completed 转换")
 		}
@@ -21,7 +21,7 @@ func TestA22_GoalCompleted_NoDuplicate(t *testing.T) {
 
 	t.Run("Running状态允许Completed", func(t *testing.T) {
 		gs := scheduler.NewGoalState("goal-2")
-		gs.State = "Running"
+		gs.SetState("Running")
 		if !gs.CanTransitionTo("Completed") {
 			t.Error("Running 状态应允许→Completed 转换")
 		}
@@ -29,7 +29,7 @@ func TestA22_GoalCompleted_NoDuplicate(t *testing.T) {
 
 	t.Run("已Completed不允许再次Completed", func(t *testing.T) {
 		gs := scheduler.NewGoalState("goal-3")
-		gs.State = "Completed"
+		gs.SetState("Completed")
 		if gs.CanTransitionTo("Completed") {
 			t.Error("Completed 终态不应允许再次 Completed")
 		}
@@ -92,35 +92,4 @@ func TestA25_ExperienceTimestamp(t *testing.T) {
 	})
 }
 
-// ─── A26: Pattern 异步提取 ────────────────────────────────────
-
-func TestA26_PatternAsync(t *testing.T) {
-	t.Run("Pattern提取不阻塞主流程", func(t *testing.T) {
-		extractor := scheduler.NewPatternExtractor()
-		done := make(chan bool, 1)
-		go func() {
-			extractor.Extract([]string{"goal-1", "goal-2", "goal-3"})
-			done <- true
-		}()
-		select {
-		case <-done:
-			// 正常完成
-		case <-time.After(100 * time.Millisecond):
-			t.Error("Pattern 提取不应阻塞——应异步执行")
-		}
-	})
-
-	t.Run("同领域Goal不足3个_不提取", func(t *testing.T) {
-		extractor := scheduler.NewPatternExtractor()
-		if extractor.ShouldExtract([]string{"goal-1", "goal-2"}) {
-			t.Error("同领域 <3 个 Goal 不应触发 Pattern 提取")
-		}
-	})
-
-	t.Run("同领域Goal>=3个_触发提取", func(t *testing.T) {
-		extractor := scheduler.NewPatternExtractor()
-		if !extractor.ShouldExtract([]string{"goal-1", "goal-2", "goal-3"}) {
-			t.Error("同领域 >=3 个 Goal 应触发 Pattern 提取")
-		}
-	})
-}
+// ─── A26: Pattern 异步提取（H12: PatternExtractor 已删除——ContextEngine.ExtractPattern 替代）───

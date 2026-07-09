@@ -1,8 +1,7 @@
-// Package scheduler — RecoveryPipeline + BudgetTracker v0.1.0。
-// 熔断后的自动恢复管线。决策树：exec_crash→RETRY→SWITCH_TOOL→ESCALATE。
-// BudgetTracker: 追踪 Token/费用/重试次数/重复失败模式。
+// Package scheduler — BudgetTracker + RecoveryPipeline（已简化）。
+// BudgetTracker: 追踪 Token/费用。RecoveryPipeline: Decide 决策（已收敛为 CONTINUE/ESCALATE，会议 #107）。
 //
-// 设计依据：05 架构文档 §3.12-3.13、R299、R334。
+// 设计依据：05 架构文档 §3.12-3.13、会议 #107。
 
 package scheduler
 

@@ -54,7 +54,13 @@ func checkSecrets(repoRoot string) CheckResult {
 			"--include=*.go", "--include=*.yaml", "--include=*.yml", "--include=*.json",
 		)
 		cmd.Env = append(os.Environ(), "HOME="+os.Getenv("HOME"))
-		out, _ := cmd.Output()
+		out, err := cmd.Output()
+		if err != nil {
+			// grep exit 1 = no matches (not an error). exit > 1 = actual error.
+			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() > 1 {
+				return CheckResult{Name: "secrets-scan", Passed: false, Detail: fmt.Sprintf("grep failed: %v", err)}
+			}
+		}
 		lines := strings.TrimSpace(string(out))
 		if lines != "" {
 			// 排除已知安全文件
@@ -71,7 +77,10 @@ func checkSecrets(repoRoot string) CheckResult {
 func checkTestConfigNotInGit(repoRoot string) CheckResult {
 	cmd := exec.Command("git", "ls-files")
 	cmd.Dir = repoRoot
-	out, _ := cmd.Output()
+	out, err := cmd.Output()
+	if err != nil {
+		return CheckResult{Name: "test-config-git", Passed: false, Detail: fmt.Sprintf("git ls-files failed: %v", err)}
+	}
 	for _, line := range strings.Split(string(out), "\n") {
 		if strings.Contains(line, "daemon.test.yaml") {
 			return CheckResult{Name: "test-config-git", Passed: false,
@@ -162,5 +171,54 @@ func checkArchitectureContracts(repoRoot string) CheckResult {
 		return CheckResult{Name: "architecture-contracts", Passed: false,
 			Detail: "pipelinerunner.go check() 硬编码返回 CheckPASS，未集成 MultiLLMVerifier"}
 	}
-	return CheckResult{Name: "architecture-contracts", Passed: true, Detail: "核心契约已实现"}
+	// B16: 测试用例计数——≥115 测试函数
+	testCount := countTestFunctions(repoRoot)
+	if testCount < 115 {
+		return CheckResult{Name: "architecture-contracts", Passed: false,
+			Detail: fmt.Sprintf("测试用例不足：%d < 115（最低要求）", testCount)}
+	}
+	// B16: 契约测试文件计数——≥8
+	contractCount := countContractTests(repoRoot)
+	if contractCount < 8 {
+		return CheckResult{Name: "architecture-contracts", Passed: false,
+			Detail: fmt.Sprintf("契约测试文件不足：%d < 8（最低要求）", contractCount)}
+	}
+	return CheckResult{Name: "architecture-contracts", Passed: true,
+		Detail: fmt.Sprintf("核心契约已实现 (%d tests, %d contract files)", testCount, contractCount)}
+}
+
+// countTestFunctions 统计所有 *_test.go 中的 Test 函数数量（B16）。
+func countTestFunctions(repoRoot string) int {
+	count := 0
+	filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil || !strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "func Test") {
+				count++
+			}
+		}
+		return nil
+	})
+	return count
+}
+
+// countContractTests 统计契约测试文件数量（B16）。
+func countContractTests(repoRoot string) int {
+	count := 0
+	filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if strings.Contains(path, "_contract_test.go") {
+			count++
+		}
+		return nil
+	})
+	return count
 }

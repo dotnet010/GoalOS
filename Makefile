@@ -1,4 +1,4 @@
-.PHONY: build test lint race deadcode clean install-plugin release
+.PHONY: build test lint race deadcode clean install-plugin release ci
 
 build:
 	go build ./...
@@ -16,6 +16,20 @@ deadcode:
 	@which staticcheck > /dev/null 2>&1 && staticcheck ./... || echo "install staticcheck: go install honnef.co/go/tools/cmd/staticcheck@latest"
 
 all: lint race deadcode test build
+
+# ci 目标：运行全部 CI 检查脚本（v0.2.0 audit fix）。
+# 首个失败即退出。成功后运行全量 race 测试。
+ci: lint build
+	@echo "=== Running CI check scripts ==="
+	@bash scripts/check-anti-cheat.sh . || exit 1
+	@bash scripts/check-naked-map.sh . || exit 1
+	@bash scripts/check-error-swallow.sh . || exit 1
+	@bash scripts/check-contract-test-assertion.sh . || exit 1
+	@bash scripts/check-plugin-protocol.sh . || exit 1
+	@bash scripts/check-dead-code.sh . || exit 1
+	@echo "=== Running full race tests ==="
+	@go test -count=1 -timeout 180s -race ./...
+	@echo "=== CI ALL GREEN ==="
 
 install-plugin:
 	@mkdir -p ~/.goalos/plugins/capability/websearch

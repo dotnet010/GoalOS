@@ -81,6 +81,8 @@ type Engine struct {
 	// R-660: Token 撤销列表。Wait/AUTO_FIX/Shutdown 时撤销对应 Token
 	revokedTokens map[string]bool
 	revokedMu     sync.RWMutex
+
+	done chan struct{} // G2: shutdown 信号——停止 auditFlushLoop
 }
 
 type pendingApproval struct {
@@ -97,7 +99,11 @@ type pendingApproval struct {
 
 // New creates a Governance Engine with default policies.
 func New(bus *eventbus.EventBus, secretKey []byte) *Engine {
-	home, _ := osUserHomeDir()
+	home, err := osUserHomeDir()
+	if err != nil {
+		home = "/tmp" // G1: fallback——容器环境中可能无 home 目录
+		log.Printf("[Governance] osUserHomeDir failed: %v — falling back to /tmp", err)
+	}
 	e := &Engine{
 		bus:              bus,
 		capRegistry:      make(map[string][]string),
@@ -107,6 +113,7 @@ func New(bus *eventbus.EventBus, secretKey []byte) *Engine {
 		auditLogDir:      home + "/.goalos/logs/",
 		pendingApprovals: make(map[string]pendingApproval),
 		revokedTokens:    make(map[string]bool), // R-660: Token 撤销列表
+done:             make(chan struct{}),
 		policy: []PolicyRule{
 			{
 				Name:     "block-prod-delete",
@@ -156,8 +163,11 @@ func (e *Engine) RegisterCapabilities(pluginName string, capabilities []string) 
 // ─── Event Handlers ───
 
 func (e *Engine) handleActionScheduled(evt events.Event) error {
+	actionID, ok := evt.Payload["action_id"].(string)
+	if !ok || actionID == "" {
+		return fmt.Errorf("governance: ActionScheduled missing action_id")
+	}
 	actionType, _ := evt.Payload["action_type"].(string)
-	actionID, _ := evt.Payload["action_id"].(string)
 	requiredCaps, _ := evt.Payload["required_capabilities"].([]interface{})
 	target, _ := evt.Payload["target"].(string)
 	riskLevelPre, _ := evt.Payload["risk_level_pre"].(string)
@@ -517,9 +527,20 @@ func (e *Engine) recordAudit(entry auditEntry) {
 func (e *Engine) auditFlushLoop() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		e.flushAudit()
+	for {
+		select {
+		case <-e.done:
+			e.flushAudit() // G2: 最后刷盘一次
+			return
+		case <-ticker.C:
+			e.flushAudit()
+		}
 	}
+}
+
+// Stop 停止 Engine——关闭 audit flush loop（G2）。
+func (e *Engine) Stop() {
+	close(e.done)
 }
 
 func (e *Engine) flushAudit() {
@@ -658,7 +679,12 @@ func (e *Engine) handlePluginTerminated(evt events.Event) error {
 func (e *Engine) revokedTokensCleanup() {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
+	for {
+		select {
+		case <-e.done:
+			return // H17: Stop() 时退出
+		case <-ticker.C:
+		}
 		e.revokedMu.Lock()
 		// 简单策略：每 10 分钟清空撤销列表。Token TTL 默认 ≤60s——10 分钟后所有已撤销 Token 必然过期
 		// 完整实现应记录撤销时间并逐条检查 TTL

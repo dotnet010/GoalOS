@@ -9,6 +9,7 @@ package scheduler
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -148,7 +149,8 @@ func (fr *FlowRegistry) loadBuiltins() {
 // FlowComposer 是 Flow 约束验证与降级控制器（v0.1.0）。
 type FlowComposer struct {
 	registry       *FlowRegistry
-	rejectCount    map[string]int // goalID → 连续拒绝次数
+	mu             sync.Mutex        // G5: rejectCount 并发保护
+	rejectCount    map[string]int    // goalID → 连续拒绝次数
 }
 
 // NewFlowComposer 创建 FlowComposer。
@@ -166,8 +168,23 @@ func (fc *FlowComposer) MatchFlow(taskType string) (*FlowTemplate, error) {
 		// 无匹配——使用 generic-v1
 		return fc.registry.Lookup("builtin/generic-v1")
 	}
-	// v0.1.0: 规则硬匹配——返回第一个匹配的
+	// R-831: 按名称匹配度排序——精确 > 前缀 > 兜底
+	if len(candidates) > 1 {
+		sort.Slice(candidates, func(i, j int) bool {
+			return flowMatchScore(candidates[i].Name, taskType) > flowMatchScore(candidates[j].Name, taskType)
+		})
+		names := make([]string, len(candidates))
+		for i, c := range candidates { names[i] = c.Name }
+		log.Printf("[FlowComposer] %d candidates for %s: %v — using %s", len(candidates), taskType, names, candidates[0].Name)
+	}
 	return candidates[0], nil
+}
+
+// flowMatchScore 计算 Flow 模板名称与 taskType 的匹配度（R-831）。
+func flowMatchScore(flowName, taskType string) int {
+	if strings.Contains(flowName, taskType) { return 100 } // 精确包含
+	if strings.Contains(flowName, strings.Split(taskType, "-")[0]) { return 50 }
+	return 0
 }
 
 // ValidatePlan 验证 MissionGraph 是否覆盖 Flow 的 required stages。
@@ -179,12 +196,15 @@ func (fc *FlowComposer) ValidatePlan(goalID string, flow *FlowTemplate, coveredS
 		return nil
 	}
 
+	fc.mu.Lock()
 	fc.rejectCount[goalID]++
+	rejectN := fc.rejectCount[goalID]
+	fc.mu.Unlock()
 	log.Printf("[FlowComposer] goal=%s missing stages: %v (reject #%d)",
-		goalID, missing, fc.rejectCount[goalID])
+		goalID, missing, rejectN)
 
 	// 连续 3 次→降级
-	if fc.rejectCount[goalID] >= 3 {
+	if rejectN >= 3 {
 		log.Printf("[FlowComposer] goal=%s degraded to generic-v1 after %d rejects", goalID, fc.rejectCount[goalID])
 		fc.rejectCount[goalID] = 0
 		return &FlowDegradeError{
@@ -258,4 +278,47 @@ func (pcb *PlanningCircuitBreaker) RecordSuccess(goalID string) {
 // IsTripped 检查是否已熔断。
 func (pcb *PlanningCircuitBreaker) IsTripped(goalID string) bool {
 	return pcb.planFailures[goalID] >= pcb.maxFailures
+}
+
+// ─── K1: 对抗性欺骗检测（R-818）─────────────────────────────
+
+// DetectDeceptivePattern 检测常见 LLM 欺骗模式。
+// shell.execute("echo skip")——伪装成执行但实际跳过。
+func (fc *FlowComposer) DetectDeceptivePattern(actionType, target string) bool {
+	deceptiveTargets := []string{
+		"echo skip", "echo done", "echo ok",
+		"sleep 0", "sleep 1",
+		"true", "false", "exit 0",
+	}
+	if actionType == "shell.execute" {
+		for _, d := range deceptiveTargets {
+			if target == d {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// DetectMismatchedAction 检测 action_type 与 stage 不匹配。
+func (fc *FlowComposer) DetectMismatchedAction(stage, actionType string) bool {
+	validActions := map[string][]string{
+		"code_generation": {"shell.execute", "fs.write", "browser.open"},
+		"code_review":     {"fs.read", "web.search"},
+		"testing":         {"shell.execute", "fs.read"},
+	}
+	if allowed, ok := validActions[stage]; ok {
+		for _, a := range allowed {
+			if a == actionType {
+				return false // 合法匹配
+			}
+		}
+		return true // 不在允许列表中
+	}
+	return false
+}
+
+// DetectEmptyParams 检测空参数列表——什么都没做。
+func (fc *FlowComposer) DetectEmptyParams(params map[string]interface{}) bool {
+	return len(params) == 0
 }

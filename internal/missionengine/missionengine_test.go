@@ -74,7 +74,9 @@ func TestMissionEngine_EmptyGraphRejected(t *testing.T) {
 	}
 }
 
-// TestMissionEngine_WebSearchActionType 验证搜索类 Goal 产生 shell.execute action_type。
+// TestMissionEngine_WebSearchActionType 验证 StubAgent 在无 LLM 时返回 unknown action_type。
+// v0.2.0 audit fix: InferAction 不再静默返回 shell.execute，而是返回 error，
+// StubAgent 降级为 "unknown" action_type 并输出 WARNING 日志。
 func TestMissionEngine_WebSearchActionType(t *testing.T) {
 	bus := eventbus.New()
 	engine := missionengine.New(bus, &missionengine.StubAgent{})
@@ -104,8 +106,9 @@ func TestMissionEngine_WebSearchActionType(t *testing.T) {
 		}
 		node := nodes[0].(map[string]interface{})
 		actionType, _ := node["action_type"].(string)
-		if actionType != "shell.execute" {
-			t.Errorf("搜索类 Goal 应映射到 shell.execute, got %s", actionType)
+		// v0.2.0 audit: StubAgent 在无 LLM 时返回 "unknown" 而非 "shell.execute"
+		if actionType != "unknown" {
+			t.Errorf("StubAgent 无 LLM 时应返回 unknown, got %s", actionType)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("MissionGenerated event was not published for search goal (timeout)")
@@ -128,17 +131,17 @@ func (s *emptyStubAgent) PlanLegacy(goal string, ctx missionengine.Context) (*mi
 }
 
 func (s *emptyStubAgent) Verify(code string, actionID string, ctx missionengine.Context) (*missionengine.VerificationResult, error) {
-	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "stub", Score: 100}, nil
+	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "WARN", Reason: "test stub — no real verification", Score: 0}, nil
 }
 
 func (s *cycleAgent) Verify(code string, actionID string, ctx missionengine.Context) (*missionengine.VerificationResult, error) {
-	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "stub", Score: 100}, nil
+	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "WARN", Reason: "test stub — no real verification", Score: 0}, nil
 }
 
 func (s *badEdgeAgent) Verify(code string, actionID string, ctx missionengine.Context) (*missionengine.VerificationResult, error) {
-	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "stub", Score: 100}, nil
+	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "WARN", Reason: "test stub — no real verification", Score: 0}, nil
 }
 
 func (s *selfLoopAgent) Verify(code string, actionID string, ctx missionengine.Context) (*missionengine.VerificationResult, error) {
-	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "stub", Score: 100}, nil
+	return &missionengine.VerificationResult{ActionID: actionID, Verdict: "WARN", Reason: "test stub — no real verification", Score: 0}, nil
 }

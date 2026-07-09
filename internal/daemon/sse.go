@@ -41,9 +41,10 @@ func (sm *SSEManager) HandleSSE(w http.ResponseWriter, r *http.Request) {
 	ch := make(chan string, 50)
 	sm.mu.Lock()
 	sm.conns[ch] = true
+	connCount := len(sm.conns) // G4: 在锁内读取
 	sm.mu.Unlock()
 
-	log.Printf("[SSE] 客户端已连接 (总连接: %d)", len(sm.conns))
+	log.Printf("[SSE] 客户端已连接 (总连接: %d)", connCount)
 
 	defer func() {
 		sm.mu.Lock()

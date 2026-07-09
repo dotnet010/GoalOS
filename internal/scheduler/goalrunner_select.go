@@ -91,6 +91,13 @@ func (gs *GoalState) handleWakeup(evt WakeupEvent) {
 	if gs.State == "Paused" {
 		return // 暂停状态下不处理唤醒
 	}
+	// H11: 根据唤醒类型更新状态
+	switch evt.Type {
+	case "approval", "dependency_met", "resource_available":
+		if gs.State == "Running" {
+			// 唤醒有效——GoalRunner 外部处理订阅和恢复
+		}
+	}
 }
 
 // IsTerminal 判断 Goal 是否处于终态（I3）。
@@ -98,4 +105,18 @@ func (gs *GoalState) IsTerminal() bool {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
 	return gs.State == "Completed" || gs.State == "Failed"
+}
+
+// GetState 返回 Goal 当前状态（线程安全）。v0.2.0 audit fix.
+func (gs *GoalState) GetState() string {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return gs.State
+}
+
+// SetState 设置 Goal 状态（线程安全）。v0.2.0 audit fix.
+func (gs *GoalState) SetState(s string) {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	gs.State = s
 }

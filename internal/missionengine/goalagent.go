@@ -15,9 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goalos/goalos/pkg/events"
+
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/llm"
-	"github.com/goalos/goalos/pkg/events"
 )
 
 // Verifier 是代码验证接口（v0.1.0 R-372）。
@@ -77,11 +78,16 @@ func (g *GoalAgent) getPlanTimeout() time.Duration {
 // sanitizeGoal 对用户输入进行基本清洗，防止 prompt 注入（v0.1.0 R-372）。
 // 使用 XML 标签包裹用户输入，建立明确的指令边界。
 func sanitizeGoal(goal string) string {
-	// 移除常见的注入模式
-	goal = strings.ReplaceAll(goal, "忽略之前的指令", "[过滤]")
-	goal = strings.ReplaceAll(goal, "ignore previous instructions", "[filtered]")
-	goal = strings.ReplaceAll(goal, "Ignore all previous", "[filtered]")
-	goal = strings.ReplaceAll(goal, " disregard ", " [filtered] ")
+	// H5: 扩展 prompt injection 过滤模式
+	for _, p := range [][2]string{
+		{"忽略之前的指令", "[过滤]"}, {"ignore previous instructions", "[filtered]"},
+		{"Ignore all previous", "[filtered]"}, {" disregard ", " [filtered] "},
+		{"forget previous", "[filtered]"}, {"ignore the above", "[filtered]"},
+		{"disregard previous", "[filtered]"}, {"system prompt", "[filtered]"},
+		{"you are now", "[filtered]"}, {"new instructions", "[filtered]"},
+	} {
+		goal = strings.ReplaceAll(goal, p[0], p[1])
+	}
 	return goal
 }
 
@@ -213,9 +219,28 @@ func (g *GoalAgent) planInternal(goal string, flowName string, ctx Context) (*Mi
 		ToolChoice: "required",
 	}
 
+	// R-835: LLM 调用期间每 2s 推送心跳——证明系统在工作
+	stopHeartbeat := make(chan struct{})
+	if g.bus != nil {
+		go func() {
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stopHeartbeat:
+					return
+				case <-ticker.C:
+					g.bus.Publish(events.Event{
+						Type: "PlanProgressUpdate", GoalID: ctx.GoalID, Source: "goal-agent",
+						Payload: map[string]interface{}{"stage": "Plan", "detail": "LLM 生成执行计划中..."},
+					})
+				}
+			}
+		}()
+	}
 	response, err := g.llm.Chat(planCtx, req)
+	close(stopHeartbeat) // R-835: 停止心跳
 	if err != nil {
-		// [FIXED] 直接返回错误，不调用 fallbackPlan
 		return nil, fmt.Errorf("LLM 调用失败: %w", err)
 	}
 

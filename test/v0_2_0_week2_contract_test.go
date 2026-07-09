@@ -16,7 +16,7 @@ func TestA8_PipelineRunner_StateMachine(t *testing.T) {
 	t.Run("Run返回非nil结果", func(t *testing.T) {
 		pr := &scheduler.PipelineRunner{}
 		ctx := context.Background()
-		result := pr.StateMachineRun(ctx, "action-1")
+		result := pr.StateMachineRun(ctx, "goal-test", "action-1")
 		if result == nil {
 			t.Fatal("StateMachineRun 不应返回 nil——A8 空壳检测")
 		}
@@ -28,7 +28,7 @@ func TestA8_PipelineRunner_StateMachine(t *testing.T) {
 	t.Run("空actionID_Check返回REJECT_Run返回Failed", func(t *testing.T) {
 		pr := &scheduler.PipelineRunner{}
 		ctx := context.Background()
-		result := pr.StateMachineRun(ctx, "")
+		result := pr.StateMachineRun(ctx, "goal-test", "")
 		if result == nil {
 			t.Fatal("空 actionID 应返回非 nil")
 		}
@@ -41,7 +41,7 @@ func TestA8_PipelineRunner_StateMachine(t *testing.T) {
 		pr := &scheduler.PipelineRunner{}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		result := pr.StateMachineRun(ctx, "action-1")
+		result := pr.StateMachineRun(ctx, "goal-test", "action-1")
 		if result.Status != scheduler.PipelineFailed {
 			t.Errorf("取消的 ctx 应返回 PipelineFailed, got %v", result.Status)
 		}
@@ -50,7 +50,7 @@ func TestA8_PipelineRunner_StateMachine(t *testing.T) {
 	t.Run("合法actionID_状态机正常完成", func(t *testing.T) {
 		pr := &scheduler.PipelineRunner{}
 		ctx := context.Background()
-		result := pr.StateMachineRun(ctx, "valid-action")
+		result := pr.StateMachineRun(ctx, "goal-test", "valid-action")
 		if result == nil {
 			t.Fatal("合法 actionID 应返回非 nil 结果")
 		}
@@ -66,40 +66,40 @@ func TestA8_PipelineRunner_StateMachine(t *testing.T) {
 func TestI2_GoalRunner_Select(t *testing.T) {
 	t.Run("Pause指令改变状态为Paused", func(t *testing.T) {
 		gs := scheduler.NewGoalState("goal-1")
-		gs.State = "Running"
+		gs.SetState("Running")
 		stopCh := make(chan struct{})
 		go gs.Run(stopCh)
 		gs.ControlChan <- scheduler.ControlPause
 		time.Sleep(50 * time.Millisecond)
 		close(stopCh)
-		if gs.State != "Paused" {
-			t.Errorf("Pause 后 State=%v, want Paused", gs.State)
+		if state := gs.GetState(); state != "Paused" {
+			t.Errorf("Pause 后 State=%v, want Paused", state)
 		}
 	})
 
 	t.Run("Stop指令改变状态为Failed", func(t *testing.T) {
 		gs := scheduler.NewGoalState("goal-2")
-		gs.State = "Running"
+		gs.SetState("Running")
 		stopCh := make(chan struct{})
 		go gs.Run(stopCh)
 		gs.ControlChan <- scheduler.ControlStop
 		time.Sleep(50 * time.Millisecond)
 		close(stopCh)
-		if gs.State != "Failed" {
-			t.Errorf("Stop 后 State=%v, want Failed", gs.State)
+		if state := gs.GetState(); state != "Failed" {
+			t.Errorf("Stop 后 State=%v, want Failed", state)
 		}
 	})
 
 	t.Run("Paused状态不接受唤醒", func(t *testing.T) {
 		gs := scheduler.NewGoalState("goal-3")
-		gs.State = "Paused"
+		gs.SetState("Paused")
 		stopCh := make(chan struct{})
 		go gs.Run(stopCh)
 		gs.WakeupChan <- scheduler.WakeupEvent{Type: "approval", ActionID: "a1"}
 		time.Sleep(50 * time.Millisecond)
 		close(stopCh)
-		if gs.State != "Paused" {
-			t.Errorf("Paused 状态应保持 Paused, got %v", gs.State)
+		if state := gs.GetState(); state != "Paused" {
+			t.Errorf("Paused 状态应保持 Paused, got %v", state)
 		}
 	})
 }
@@ -109,7 +109,7 @@ func TestI2_GoalRunner_Select(t *testing.T) {
 func TestI3_Goal_TerminalState(t *testing.T) {
 	t.Run("Running不是终态", func(t *testing.T) {
 		gs := scheduler.NewGoalState("goal-1")
-		gs.State = "Running"
+		gs.SetState("Running")
 		if gs.IsTerminal() {
 			t.Error("Running 不应是终态")
 		}
@@ -117,7 +117,7 @@ func TestI3_Goal_TerminalState(t *testing.T) {
 
 	t.Run("Completed是终态", func(t *testing.T) {
 		gs := scheduler.NewGoalState("goal-2")
-		gs.State = "Completed"
+		gs.SetState("Completed")
 		if !gs.IsTerminal() {
 			t.Error("Completed 应是终态")
 		}
@@ -125,7 +125,7 @@ func TestI3_Goal_TerminalState(t *testing.T) {
 
 	t.Run("Failed是终态", func(t *testing.T) {
 		gs := scheduler.NewGoalState("goal-3")
-		gs.State = "Failed"
+		gs.SetState("Failed")
 		if !gs.IsTerminal() {
 			t.Error("Failed 应是终态")
 		}

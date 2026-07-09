@@ -72,13 +72,18 @@ func (s *Store) recoverGoal(goalID string) (*RecoverResult, error) {
 
 	// 3. 如有事件，重建最终状态
 	if len(evts) > 0 {
-		// 取最后一条事件的 seq 和 type 更新状态
-		var lastEvt events.Event
-		json.Unmarshal(evts[len(evts)-1], &lastEvt)
-		snapshot.LastAppliedSeq = lastEvt.Seq
-
-		// 从最后一条事件推断 Goal 状态
-		snapshot.InternalState = inferStateFromEvent(lastEvt.Type)
+		// v0.2.2 W5 A23: 回放全部事件，不只取最后一条
+		for _, evtBytes := range evts {
+			var evt events.Event
+			if json.Unmarshal(evtBytes, &evt) != nil {
+				continue
+			}
+			// W5-A23: 取最大 seq（事件可能乱序）
+			if evt.Seq > snapshot.LastAppliedSeq {
+				snapshot.LastAppliedSeq = evt.Seq
+			}
+			snapshot.InternalState = inferStateFromEvent(evt.Type)
+		}
 	}
 
 	result.InternalState = snapshot.InternalState
@@ -98,6 +103,8 @@ func inferStateFromEvent(evtType string) string {
 		return "paused"
 	case events.TypeGoalCompleted:
 		return "completed"
+	case events.TypeGoalFailed:
+		return "failed"
 	case events.TypeActionFailed:
 		return "recovering"
 	default:

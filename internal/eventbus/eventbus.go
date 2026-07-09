@@ -46,12 +46,13 @@ type EventBus struct {
 	acl    map[string][]string // eventType → 允许的角色列表
 
 	// ── 副作用层（v0.1.0 R-349）──
-	asyncEvents map[string]bool    // 路由到异步路径的事件类型
-	asyncCh     chan asyncPayload  // 缓冲 channel（100）
-	asyncPool   int                // goroutine pool 大小
-	ctx         context.Context    // 关闭信号
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup     // 等待异步 workers 完成
+	asyncEvents  map[string]bool    // 路由到异步路径的事件类型
+	asyncCh      chan asyncPayload  // 缓冲 channel（100）
+	asyncPool    int                // goroutine pool 大小
+	ctx          context.Context    // 关闭信号
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup     // 等待异步 workers 完成
+	shutdownOnce sync.Once          // 确保 Shutdown 只执行一次（v0.2.0 audit fix）
 }
 
 // asyncPayload 是异步投递的载荷。
@@ -113,27 +114,24 @@ func (eb *EventBus) startAsyncWorkers() {
 }
 
 // asyncWorker 是副作用层 worker goroutine。
+// v0.2.0 audit fix: 使用 for-range 替代 select，channel 关闭后自动退出，
+// 确保 Shutdown 时先排空 asyncCh 再退出 worker。
 func (eb *EventBus) asyncWorker(id int) {
 	defer eb.wg.Done()
-	for {
-		select {
-		case <-eb.ctx.Done():
-			return
-		case payload := <-eb.asyncCh:
-			for _, sub := range payload.subs {
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Printf("[EventBus] async worker %d: handler panic for event %s: %v",
-								id, payload.evt.Type, r)
-						}
-					}()
-					if err := sub.handler(payload.evt); err != nil {
-						log.Printf("[EventBus] async worker %d: handler error for event %s: %v",
-							id, payload.evt.Type, err)
+	for payload := range eb.asyncCh {
+		for _, sub := range payload.subs {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("[EventBus] async worker %d: handler panic for event %s: %v",
+							id, payload.evt.Type, r)
 					}
 				}()
-			}
+				if err := sub.handler(payload.evt); err != nil {
+					log.Printf("[EventBus] async worker %d: handler error for event %s: %v",
+						id, payload.evt.Type, err)
+				}
+			}()
 		}
 	}
 }
@@ -198,7 +196,9 @@ func (eb *EventBus) Unsubscribe(id SubscriptionID) {
 // Publish 分发事件。核心状态事件同步阻塞分发。副作用事件异步投递（R-349）。
 func (eb *EventBus) Publish(evt events.Event) {
 	eb.mu.RLock()
-	subs := eb.subs[evt.Type]
+	// E1: deep copy——防止 Unsubscribe 并发修改底层数组导致数据竞争
+	subs := make([]subscription, len(eb.subs[evt.Type]))
+	copy(subs, eb.subs[evt.Type])
 	allowedRoles := eb.acl[evt.Type]
 	eb.mu.RUnlock()
 
@@ -245,7 +245,13 @@ func (eb *EventBus) dispatchSync(evt events.Event, sub subscription) {
 
 // dispatchAsync 将事件投递到副作用层 goroutine pool（R-349）。
 // 非阻塞：channel 满时丢弃事件并记录警告。
+// v0.2.0 audit fix: 添加 panic recovery 处理 send-on-closed-channel。
 func (eb *EventBus) dispatchAsync(evt events.Event, subs []subscription) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[EventBus] dispatchAsync recovered (channel closed): %v", r)
+		}
+	}()
 	payload := asyncPayload{evt: evt, subs: subs}
 	select {
 	case eb.asyncCh <- payload:
@@ -256,10 +262,14 @@ func (eb *EventBus) dispatchAsync(evt events.Event, subs []subscription) {
 	}
 }
 
-// Shutdown 优雅关闭 EventBus。等待所有异步 workers 完成。
+// Shutdown 优雅关闭 EventBus。先关闭 asyncCh 排空剩余事件，再等待 workers 完成。
+// v0.2.0 audit fix: close(asyncCh) 先于 cancel()。worker 用 for-range，channel 关闭后自动退出。
 func (eb *EventBus) Shutdown() {
-	eb.cancel()
-	eb.wg.Wait()
+	eb.shutdownOnce.Do(func() {
+		close(eb.asyncCh)
+		eb.cancel()
+		eb.wg.Wait()
+	})
 }
 
 func contains(slice []string, item string) bool {

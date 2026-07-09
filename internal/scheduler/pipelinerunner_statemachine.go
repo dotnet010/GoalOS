@@ -5,6 +5,7 @@ package scheduler
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/goalos/goalos/internal/errorcategory"
@@ -36,11 +37,10 @@ type WaitCondition struct {
 
 // StateMachineRun 执行 PipelineRunner 状态机循环（R-765 + R-771）。
 // 替代旧的线性 Check→Exec→Wait→Decide 管线。
-func (pr *PipelineRunner) StateMachineRun(ctx context.Context, actionID string) *StateMachineResult {
+func (pr *PipelineRunner) StateMachineRun(ctx context.Context, goalID string, actionID string) *StateMachineResult {
 	state := StateCheck
-	waitType := "" // "pre_exec" | "post_exec"
-	retryCount := 0
 	const maxRetries = 1 // R-741: 最多 1 次新 Session 重做
+	// S4: retryCount 使用 pr.retryCount[actionID]（跨 StateMachineRun 调用持久）
 
 	for {
 		select {
@@ -52,11 +52,11 @@ func (pr *PipelineRunner) StateMachineRun(ctx context.Context, actionID string) 
 		switch state {
 		case StateCheck:
 			result := pr.checkAction(actionID)
+			pr.publishCheckPerformed(goalID, actionID, result) // H10: 发布 CheckPerformed
 			switch result {
 			case CheckPASS:
 				state = StateExec
 			case CheckBLOCK:
-				waitType = "pre_exec"
 				state = StateWait
 			case CheckREJECT:
 				return &StateMachineResult{Status: PipelineFailed, Error: "check_rejected"}
@@ -67,12 +67,10 @@ func (pr *PipelineRunner) StateMachineRun(ctx context.Context, actionID string) 
 		case StateWait:
 			timeout := 30 * time.Second // default
 			select {
+			case <-ctx.Done():
+				return &StateMachineResult{Status: PipelineFailed, Error: "cancelled"}
 			case <-pr.wakeupCh:
-				if waitType == "pre_exec" {
-					state = StateCheck // 重新 Check
-				} else {
-					state = StateDecide
-				}
+				state = StateCheck // CheckBLOCK解除→重新 Check
 			case <-time.After(timeout):
 				return &StateMachineResult{
 					Status: PipelineFailed,
@@ -81,53 +79,83 @@ func (pr *PipelineRunner) StateMachineRun(ctx context.Context, actionID string) 
 			}
 
 		case StateExec:
+			// v0.2.0 W1: Check requiresWait before exec
+			if pr.requiresWait(goalID, actionID) {
+				return &StateMachineResult{
+					Status:       PipelineWaiting,
+					PendingWaits: []WaitCondition{{Type: "approval", TargetID: actionID}},
+				}
+			}
 			result, err := pr.executeAction(actionID)
 			if err != nil {
 				catErr, ok := err.(errorcategory.CategorizedError)
-				if ok && catErr.Category() == errorcategory.ErrorTemporary && retryCount < maxRetries {
+				if ok && catErr.Category() == errorcategory.ErrorTemporary && pr.retryCount[actionID] < maxRetries {
 					// R-771: ErrorTemporary→内部新Session重做
-					retryCount++
+					pr.retryCount[actionID]++
 					state = StateCheck // 重新 Check→Exec
 					continue
 				}
+				// v0.2.0 W1 fix: 当 err 不实现 CategorizedError 或 ok=false 时，
+				// catErr 是 nil——不能调用 catErr.Suggestion()。
+				errMsg := err.Error()
+				if ok {
+					errMsg = catErr.Suggestion()
+				}
 				return &StateMachineResult{
 					Status: PipelineFailed,
-					Error:  catErr.Suggestion(),
+					Error:  errMsg,
 				}
 			}
+			// v0.2.0 W2 fix: Async=true → 返回 PipelineWaiting，由 GoalRunner 接管外部事件唤醒。
+			// 不再在 StateMachineRun 内部阻塞 Wait。
 			if result != nil && result.Async {
-				waitType = "post_exec"
-				state = StateWait
-			} else {
-				state = StateDecide
+				return &StateMachineResult{
+					Status:       PipelineWaiting,
+					PendingWaits: []WaitCondition{{Type: "post_exec", TargetID: actionID}},
+				}
 			}
+			state = StateDecide
 
 		case StateDecide:
-			return &StateMachineResult{Status: PipelineCompleted}
+			// R-840: 调用 decide() —— MultiLLM 同步验证
+			result, err := pr.decide(goalID, actionID, nil)
+			if err != nil {
+				return &StateMachineResult{Status: PipelineFailed, Error: err.Error()}
+			}
+			return &StateMachineResult{Status: result.Status, Error: result.Error}
 		}
 	}
 }
 
 // checkAction 执行 Check 原语。
-// 真实实现: 空actionID→REJECT。合法actionID→验证Plugin存在性→PASS/WARN/BLOCK。
-// Phase B 增强: QualityGate完整评估（PolicyGate/RiskGate/SkillGate）。
-func (pr *PipelineRunner) checkAction(actionID string) CheckResult {
+// CR-K3: 接受可选 code 参数——传入 MultiLLM 验证器。
+func (pr *PipelineRunner) checkAction(actionID string, code ...string) CheckResult {
 	if actionID == "" {
 		return CheckREJECT
 	}
+	// CR-K3 + R-836: 从 actionCode 获取代码 → MultiLLM 语义验证
+	if c, ok := pr.actionCode[actionID]; ok && c != "" {
+		log.Printf("[PipelineRunner] checkAction: MultiLLM code found for %s (%d chars)", actionID, len(c))
+		return pr.check(actionID, c)
+	}
+	// R-837: 文件系统 fallback——读 workspace 产出文件作为 MultiLLM 验证代码
+	if c := readWorkspaceCode(pr.workspaceDir); c != "" {
+		log.Printf("[PipelineRunner] checkAction: workspace code loaded for %s (%d chars)", actionID, len(c))
+		return pr.check(actionID, c)
+	}
+	// fallthrough to basic checks
 	// 验证 Action 对应的 Plugin 是否已注册（Fan-Out cache）
 	if pr.pluginCache != nil && pr.pluginCache.Count() == 0 {
-		return CheckWARN // 无 Plugin 可用——警告但允许继续
+		return CheckWARN
 	}
-	// 检查是否超过系统负载阈值
 	if pr.retryCount != nil && len(pr.retryCount) > 100 {
-		return CheckBLOCK // 系统过载——阻塞
+		return CheckBLOCK
 	}
 	return CheckPASS
 }
 
 // executeAction 执行 Exec 原语。
-// 真实实现: 空actionID→Permanent错误。非空→验证Plugin→同步/异步执行。
+// v0.2.0 audit fix: 发布 ActionScheduled 事件到 EventBus，由 PluginRunner 异步执行。
 func (pr *PipelineRunner) executeAction(actionID string) (*execResult, error) {
 	if actionID == "" {
 		return nil, &actionError{
@@ -146,7 +174,7 @@ func (pr *PipelineRunner) executeAction(actionID string) (*execResult, error) {
 			}
 		}
 	}
-	// 同步执行——Phase B 当前阶段
+	// R-839: Scheduler 已调度——PipelineRunner 不再重复发布
 	return &execResult{Async: false}, nil
 }
 

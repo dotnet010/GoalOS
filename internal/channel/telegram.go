@@ -88,12 +88,22 @@ func (tb *TelegramBot) getUpdates() ([]update, error) {
 	}
 	defer resp.Body.Close()
 
+	// E14: 检查 HTTP 状态码
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("telegram: API returned %d: %s", resp.StatusCode, string(body))
+	}
+
 	var result struct {
 		OK     bool     `json:"ok"`
 		Result []update `json:"result"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("telegram: 解析响应失败: %w", err)
+	}
+	// E14: 检查 Telegram OK 字段
+	if !result.OK {
+		return nil, fmt.Errorf("telegram: API error (ok=false)")
 	}
 	return result.Result, nil
 }
@@ -136,12 +146,20 @@ func (tb *TelegramBot) Send(chatID string, content MessageContent) error {
 	defer resp.Body.Close()
 
 	// 检查 Telegram API 错误
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("telegram: 读取响应失败: %w", err)
+	}
 	var result struct {
 		OK          bool   `json:"ok"`
 		Description string `json:"description"`
 	}
-	io.ReadAll(resp.Body)
-	_ = result
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return fmt.Errorf("telegram: 解析响应失败: %w", err)
+	}
+	if !result.OK {
+		return fmt.Errorf("telegram: API 错误: %s", result.Description)
+	}
 	return nil
 }
 

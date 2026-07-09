@@ -64,6 +64,10 @@ func (e *Engine) WriteDecision(goalID string, record *DecisionRecord) error {
 		fmt.Fprintf(f, "- **理由**: %s\n", d.Reason)
 		fmt.Fprintf(f, "- **结果**: %s\n\n", d.Outcome)
 	}
+	// G9: Sync 确保写入完成并检测磁盘错误
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("experience: 同步 decision 文件失败: %w", err)
+	}
 	return nil
 }
 
@@ -98,6 +102,10 @@ func (e *Engine) WriteLesson(goalID string, record *LessonRecord) error {
 	fmt.Fprintf(f, "\n## 下次可复用\n\n")
 	for _, item := range record.Reusable {
 		fmt.Fprintf(f, "- %s\n", item)
+	}
+	// G9: Sync 确保写入完成并检测磁盘错误
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("experience: 同步 lesson 文件失败: %w", err)
 	}
 	return nil
 }

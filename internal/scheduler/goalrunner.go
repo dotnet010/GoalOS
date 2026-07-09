@@ -29,14 +29,24 @@ type GoalRunner struct {
 
 	mu       sync.Mutex
 	state    GoalStatus
-	waitReason string // v0.1.0: "approval"|"dependency"|"resource"。Running 子状态
+	waitReason string // H16: "approval"|"dependency"|"resource"
 }
+
+// WaitReason 类型安全常量 (H16)。
+type WaitReason string
+const (
+	WaitApproval   WaitReason = "approval"
+	WaitDependency WaitReason = "dependency"
+	WaitResource   WaitReason = "resource"
+)
 
 // Goal 是 GoalRunner 的输入。
 type Goal struct {
-	ID          string
-	Title       string
-	Description string
+	ID           string
+	Title        string
+	Description  string
+	ArtifactPath string // A4: 产出物目录路径
+	State        string // A4: 当前 Goal 状态
 }
 
 // NewGoalRunner 创建 GoalRunner。
@@ -56,7 +66,8 @@ func NewGoalRunner(goal Goal, bus *eventbus.EventBus, store *statestore.Store, p
 func (gr *GoalRunner) Execute() error {
 	gr.setState(StatusRunning)
 
-	for gr.state == StatusRunning {
+	// G1: 循环直到终态（Completed/Failed），含 Paused 恢复
+	for gr.state != StatusCompleted && gr.state != StatusFailed {
 		// 加载最新 MissionGraph（可能因 REPLAN 而更新）
 		state, err := gr.store.LoadState(gr.goal.ID)
 		if err != nil {
@@ -87,9 +98,13 @@ func (gr *GoalRunner) Execute() error {
 
 			// 订阅唤醒事件并等待
 			evt := gr.waitForWakeup(result)
+			// G2: WaitTimeout→GoalFailed，不无限等待
+			if evt.Type == "WaitTimeout" {
+				gr.setState(StatusFailed)
+				gr.publishGoalFailed("wait timeout: " + result.WaitReason)
+				return nil
+			}
 			log.Printf("[GoalRunner] goal=%s woken by %s", gr.goal.ID, evt.Type)
-
-			// 恢复：重新进入循环。PipelineRunner 从 ResumePrimitive 继续
 			continue
 
 		case PipelinePaused:
@@ -120,10 +135,13 @@ func (gr *GoalRunner) State() GoalStatus {
 
 // savePipelineState 持久化 PipelineState 到 Snapshot。
 func (gr *GoalRunner) savePipelineState(ps *PipelineState) error {
-	state, _ := gr.store.LoadState(gr.goal.ID)
+	state, err := gr.store.LoadState(gr.goal.ID)
+	if err != nil {
+		return fmt.Errorf("goalrunner: load state for snapshot: %w", err)
+	}
 	state.PipelineState = &statestore.PipelineState{
 		ResumePoint:      ps.ResumePoint,
-		ResumePrimitive:  ps.ResumePrimitive,
+		ResumePrimitive:  string(ps.ResumePrimitive),
 		WaitReason:       ps.WaitReason,
 		TimeoutAt:        ps.TimeoutAt,
 		PendingActionIDs: ps.PendingActionIDs,
@@ -183,23 +201,64 @@ func (gr *GoalRunner) waitForResume() {
 }
 
 // publishGoalCompleted 发布 GoalCompleted 事件。
+// v0.2.2 W8 B15: Two-Phase Commit——Publish 前检查 events.jsonl 防止重复。
 func (gr *GoalRunner) publishGoalCompleted() {
+	// B15 Phase 1: 检查是否已发布（幂等保护）
+	if state, err := gr.store.LoadState(gr.goal.ID); err == nil && state.InternalState == "completed" {
+		log.Printf("[GoalRunner] GoalCompleted skipped: %s already completed in events.jsonl", gr.goal.ID)
+		return
+	}
+	payload := GoalCompletedPayloadTyped{
+		GoalID:       gr.goal.ID,
+		ArtifactPath: gr.goal.ArtifactPath,
+	}
+	if err := payload.Validate(); err != nil {
+		// G5: Validate 失败时回退到 map payload 确保事件不丢失
+		log.Printf("[GoalRunner] GoalCompleted typed payload validation failed: %v — falling back to map payload", err)
+		gr.bus.Publish(events.Event{
+			Type:    events.TypeGoalCompleted,
+			GoalID:  gr.goal.ID,
+			Source:  "goalrunner",
+			Payload: map[string]interface{}{"goal_id": gr.goal.ID, "artifact_path": gr.goal.ArtifactPath},
+		})
+		return
+	}
 	gr.bus.Publish(events.Event{
-		Type:   events.TypeGoalCompleted,
-		GoalID: gr.goal.ID,
-		Source: "goalrunner",
+		Type:    events.TypeGoalCompleted,
+		GoalID:  gr.goal.ID,
+		Source:  "goalrunner",
+		Payload: typedPayloadToMap(payload),
 	})
 }
 
-// publishGoalFailed 发布 GoalCompleted 事件（失败终态）。
+// publishGoalFailed 发布 GoalFailed 事件（失败终态）。
+// v0.2.2 W8 B15: Two-Phase Commit——Publish 前检查幂等。
 func (gr *GoalRunner) publishGoalFailed(reason string) {
-	gr.bus.Publish(events.Event{
-		Type:   events.TypeGoalFailed,
+	// B15 Phase 2: 检查是否已发布（幂等保护）
+	if state, err := gr.store.LoadState(gr.goal.ID); err == nil && state.InternalState == "failed" {
+		log.Printf("[GoalRunner] GoalFailed skipped: %s already failed in events.jsonl", gr.goal.ID)
+		return
+	}
+	payload := GoalFailedPayload{
 		GoalID: gr.goal.ID,
-		Source: "goalrunner",
-		Payload: map[string]interface{}{
-			"reason": reason,
-		},
+		Reason: reason,
+	}
+	if err := payload.Validate(); err != nil {
+		// G6: Validate 失败时回退到 map payload 确保事件不丢失
+		log.Printf("[GoalRunner] GoalFailed typed payload validation failed: %v — falling back to map payload", err)
+		gr.bus.Publish(events.Event{
+			Type:    events.TypeGoalFailed,
+			GoalID:  gr.goal.ID,
+			Source:  "goalrunner",
+			Payload: map[string]interface{}{"goal_id": gr.goal.ID, "reason": reason},
+		})
+		return
+	}
+	gr.bus.Publish(events.Event{
+		Type:    events.TypeGoalFailed,
+		GoalID:  gr.goal.ID,
+		Source:  "goalrunner",
+		Payload: typedPayloadToMap(payload),
 	})
 }
 

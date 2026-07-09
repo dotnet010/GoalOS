@@ -50,11 +50,20 @@ jobs:
       - name: Run tests (sequential, no race)
         run: CGO_ENABLED=0 go test -p 1 -count=1 -timeout 300s ./internal/...
 
-      - name: Run tests (race, critical only)
-        run: go test -p 1 -count=1 -timeout 300s -race ./internal/eventbus ./internal/governance ./internal/scheduler
+      - name: Run tests (race, full)  # v0.2.0 audit: 全量 race 覆盖
+        run: go test -p 1 -count=1 -timeout 300s -race ./...
 
       - name: L6 Release Readiness (v0.1.1)
         run: go test -v -run TestReleaseReadiness ./internal/releasecheck/
+
+      - name: CI Check Scripts (v0.2.0 audit)
+        run: |
+          bash scripts/check-anti-cheat.sh .
+          bash scripts/check-naked-map.sh .
+          bash scripts/check-error-swallow.sh .
+          bash scripts/check-contract-test-assertion.sh .
+          bash scripts/check-plugin-protocol.sh .
+          bash scripts/check-dead-code.sh .
 
   release:
     needs: test

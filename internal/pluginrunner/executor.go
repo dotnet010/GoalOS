@@ -51,10 +51,23 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 	if cfg.WorkDir != "" {
 		cmd.Dir = cfg.WorkDir
 	}
-	cmd.Env = append(os.Environ(),
-		"GOALOS_WORKSPACE="+cfg.WorkDir,
-		"GOALOS_TMP="+cfg.TmpDir,
-	)
+	// v0.2.0 audit fix (Kees N16): 重置 Cmd.Env 为白名单，防止 GOALOS_SECRET_KEY 等敏感
+	// 环境变量泄露到子进程。仅传递子进程必需的变量。
+	// E13: PATH/HOME 可能为空，提供 fallback
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		pathEnv = "/usr/local/bin:/usr/bin:/bin"
+	}
+	homeEnv := os.Getenv("HOME")
+	if homeEnv == "" {
+		homeEnv = "/tmp"
+	}
+	cmd.Env = []string{
+		"PATH=" + pathEnv,
+		"HOME=" + homeEnv,
+		"GOALOS_WORKSPACE=" + cfg.WorkDir,
+		"GOALOS_TMP=" + cfg.TmpDir,
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -235,7 +248,11 @@ func computeHMAC(payload []byte, token string) string {
 // generateSessionToken 生成 64 字符随机 hex token。
 func generateSessionToken() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	// E15: crypto/rand.Read 失败时 token 为全零——fallback 到时间戳
+	if _, err := rand.Read(b); err != nil {
+		log.Printf("[executor] crypto/rand.Read failed: %v — falling back to timestamp token", err)
+		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+	}
 	return hex.EncodeToString(b)
 }
 

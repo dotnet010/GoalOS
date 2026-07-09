@@ -1,6 +1,22 @@
-// Package scheduler — v0.2.0 Week 3: Typed Event Payloads
-// 5 核心事件 Go struct 替代 map[string]interface{}（B2/C16）。
+// Package scheduler — R-828: typed payload 权威来源已迁移到 pkg/events。
+// 本文件保留 GoalCreatedPayload 本地定义 + type alias 指向 pkg/events。
 package scheduler
+
+import (
+	"fmt"
+
+	"github.com/goalos/goalos/internal/kernel"
+	"github.com/goalos/goalos/pkg/events"
+)
+
+// 编译期验证：所有 typed payload 实现 EventPayload 接口 (R-828: alias→pkg/events)。
+var (
+	_ kernel.EventPayload = GoalCreatedPayload{}
+	_ kernel.EventPayload = events.ActionScheduledPayload{}
+	_ kernel.EventPayload = events.ActionCompletedPayload{}
+	_ kernel.EventPayload = events.GoalCompletedPayloadV2{}
+	_ kernel.EventPayload = events.GoalFailedPayload{}
+)
 
 // GoalCreatedPayload 是 GoalCreated 事件的 typed payload。
 type GoalCreatedPayload struct {
@@ -10,43 +26,33 @@ type GoalCreatedPayload struct {
 	Tags        []string `json:"tags,omitempty"`
 }
 
-// ActionScheduledPayload 是 ActionScheduled 事件的 typed payload。
-type ActionScheduledPayload struct {
-	ActionID             string   `json:"action_id"`
-	ActionType           string   `json:"action_type"`
-	Target               string   `json:"target"`
-	Source               string   `json:"source"`
-	RequiredCapabilities []string `json:"required_capabilities"`
-	TimeoutSeconds       int      `json:"timeout_seconds"`
-	RiskLevelPre         string   `json:"risk_level_pre"`
+func (p GoalCreatedPayload) EventType() string { return "GoalCreated" }
+func (p GoalCreatedPayload) Validate() error {
+	if p.GoalID == "" {
+		return fmt.Errorf("GoalCreatedPayload: GoalID is required")
+	}
+	if p.Title == "" {
+		return fmt.Errorf("GoalCreatedPayload: Title is required (M4)")
+	}
+	if len(p.Title) > 10000 {
+		return fmt.Errorf("GoalCreatedPayload: Title exceeds 10000 characters")
+	}
+	return nil
 }
 
-// ActionCompletedPayload 是 ActionCompleted 事件的 typed payload。
-type ActionCompletedPayload struct {
-	ActionID           string   `json:"action_id"`
-	Status             string   `json:"status"`
-	Output             string   `json:"output,omitempty"`
-	ArtifactsProduced  []string `json:"artifacts_produced,omitempty"`
-	DurationMs         int      `json:"duration_ms"`
-	Tokens             int      `json:"tokens,omitempty"`
-}
+// ActionScheduledPayload → pkg/events (R-828 Step 2)
+type ActionScheduledPayload = events.ActionScheduledPayload
 
-// GoalCompletedPayload 是 GoalCompleted 事件的 typed payload。
-type GoalCompletedPayloadTyped struct {
-	GoalID            string `json:"goal_id"`
-	ArtifactPath      string `json:"artifact_path"`
-	DurationSeconds   int    `json:"duration_seconds"`
-	TotalActions      int    `json:"total_actions"`
-	SucceededActions  int    `json:"succeeded_actions"`
-	FailedActions     int    `json:"failed_actions"`
-	TotalTokens       int    `json:"total_tokens"`
-	HumanInterventions int   `json:"human_interventions"`
-}
+// ActionCompletedPayload → pkg/events (R-828 Step 2)
+type ActionCompletedPayload = events.ActionCompletedPayload
 
-// GoalFailedPayload 是 GoalFailed 事件的 typed payload。
-type GoalFailedPayload struct {
-	GoalID    string `json:"goal_id"`
-	Reason    string `json:"reason"`
-	Error     string `json:"error"`
-	ErrorHint string `json:"error_hint"`
+// GoalCompletedPayloadTyped → pkg/events.GoalCompletedPayloadV2 (R-828 Step 2)
+type GoalCompletedPayloadTyped = events.GoalCompletedPayloadV2
+
+// GoalFailedPayload → pkg/events (R-828 Step 2)
+type GoalFailedPayload = events.GoalFailedPayload
+
+// typedPayloadToMap → events.PayloadToMap (R-828 R4: 统一到 pkg/events)
+func typedPayloadToMap(v interface{}) map[string]interface{} {
+	return events.PayloadToMap(v)
 }

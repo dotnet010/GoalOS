@@ -1,13 +1,17 @@
-// Package scheduler — PipelineRunner v0.1.0（重写：R-362 激进策略）。
-// Action 级执行引擎。按 MissionGraph 拓扑序遍历节点→对每个 Action
-// 依次执行 Check→Exec→Wait→Decide 原语管线。
-// Decide 委托给 RecoveryPipeline（完整 10 分支决策树）。
+// Package scheduler — PipelineRunner v0.2.2。
+// Action 级执行引擎。对每个 Action 执行 Check→Exec→Decide 三原语管线。
+// Wait 为 PipelineRunner 中间状态（非 Primitive）。Decide 路径收敛为 CONTINUE/ESCALATE。
 //
-// 设计依据：05 架构文档 §3.1、R253、R276、R-362。
+// 设计依据：05 架构文档 §3.1、会议 #79 E1、会议 #107。
 package scheduler
 
 import (
+	"context"
+	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/goalos/goalos/internal/errorcategory"
@@ -26,6 +30,15 @@ const (
 	PipelinePaused    PipelineStatus = "paused"
 )
 
+// ResumePrimitive 是 PipelineRunner 恢复执行的原语类型（P8: 类型安全）。
+type ResumePrimitive string
+
+const (
+	ResumeFromCheck  ResumePrimitive = "check"
+	ResumeFromDecide ResumePrimitive = "decide"
+	ResumeFromWait   ResumePrimitive = "wait"
+)
+
 // PipelineResult 是 PipelineRunner.Run() 的返回值。
 type PipelineResult struct {
 	Status        PipelineStatus
@@ -36,12 +49,12 @@ type PipelineResult struct {
 
 // PipelineState 记录 PipelineRunner 的执行位置（v0.1.0）。
 type PipelineState struct {
-	ResumePoint      string   `json:"resume_point"`
-	ResumePrimitive  string   `json:"resume_primitive"`
-	WaitReason       string   `json:"wait_reason"`
-	TimeoutAt        string   `json:"timeout_at"`
-	PendingActionIDs []string `json:"pending_action_ids,omitempty"`
-	CompletedNodes   []string `json:"completed_nodes,omitempty"`
+	ResumePoint      string          `json:"resume_point"`
+	ResumePrimitive  ResumePrimitive `json:"resume_primitive"` // P8: 类型安全
+	WaitReason       string          `json:"wait_reason"`
+	TimeoutAt        string          `json:"timeout_at"`
+	PendingActionIDs []string        `json:"pending_action_ids,omitempty"`
+	CompletedNodes   []string        `json:"completed_nodes,omitempty"`
 }
 
 // CheckResult 是 Check 原语的返回结果。
@@ -59,10 +72,8 @@ type DecidePath string
 
 const (
 	DecideCONTINUE DecidePath = "CONTINUE"
-	DecideRETRY    DecidePath = "RETRY"
-	DecideREPLAN   DecidePath = "REPLAN"
 	DecideESCALATE DecidePath = "ESCALATE"
-	DecideABORT    DecidePath = "ABORT"
+	// H3: RETRY/REPLAN/ABORT 已废除（会议 #107）
 )
 
 // PipelineRunner 是 Action 级执行引擎（v0.1.0 重写）。
@@ -70,34 +81,47 @@ type PipelineRunner struct {
 	bus      *eventbus.EventBus
 	store    *statestore.Store
 	state    *PipelineState
-	recovery *RecoveryPipeline // R-362: Decide 委托给 RecoveryPipeline
-
 	multiLLM     *MultiLLMVerifier
-	autoFixCount map[string]int
 	retryCount   map[string]int
-	wakeupCh     chan struct{}    // R-765: Wait 唤醒通道
-	pluginCache  *PluginCache     // R-737: Fan-Out 本地 Plugin cache
+	wakeupCh       chan struct{}       // R-765: Wait 唤醒通道
+	pluginCache    *PluginCache        // R-737: Fan-Out 本地 Plugin cache
+	actionCode     map[string]string   // CR-K3: actionID→code for MultiLLM check
+	workspaceDir   string              // R-837: Goal workspace output dir
+	currentGoalID  string              // R-840: 当前 Goal ID
 }
 
 // NewPipelineRunner 创建 PipelineRunner。
+// R-836: 订阅 ActionCompleted——提取产出代码注入 actionCode 供 MultiLLM Check 验证。
 func NewPipelineRunner(bus *eventbus.EventBus, store *statestore.Store) *PipelineRunner {
-	return &PipelineRunner{
+	pr := &PipelineRunner{
 		bus:          bus,
 		store:        store,
-		recovery:     NewRecoveryPipeline(), // R-362: 集成 RecoveryPipeline
-		autoFixCount: make(map[string]int),
 		retryCount:   make(map[string]int),
-		wakeupCh:     make(chan struct{}, 10), // R-765: Wait 唤醒
-		pluginCache:  NewPluginCache(),         // R-737: Fan-Out
+		wakeupCh:     make(chan struct{}, 10),
+		pluginCache:  NewPluginCache(),
+		actionCode:   make(map[string]string),
 	}
+	// R-836: 订阅 ActionCompleted——提取代码产出供下一轮 MultiLLM 验证
+	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
+		if actionID, ok := evt.Payload["action_id"].(string); ok && actionID != "" {
+			if output, ok := evt.Payload["output"].(string); ok && output != "" {
+				pr.actionCode[actionID] = output
+			}
+		}
+		return nil
+	})
+	return pr
 }
 
 // Run 执行 MissionGraph 的 Action 原语管线。
+// v0.2.0 W1: 统一为状态机版本 StateMachineRun。删除旧的线性 executePrimitivePipeline。
+// 返回 PipelineResult 保持与 GoalRunner 的接口兼容。
 func (pr *PipelineRunner) Run(goalID string, state *statestore.GoalState) (*PipelineResult, error) {
+	pr.currentGoalID = goalID // R-840: 供 publishVerdict 使用
 	if state.PipelineState != nil {
 		pr.state = &PipelineState{
 			ResumePoint:      state.PipelineState.ResumePoint,
-			ResumePrimitive:  state.PipelineState.ResumePrimitive,
+			ResumePrimitive:  ResumePrimitive(state.PipelineState.ResumePrimitive),
 			WaitReason:       state.PipelineState.WaitReason,
 			TimeoutAt:        state.PipelineState.TimeoutAt,
 			PendingActionIDs: state.PipelineState.PendingActionIDs,
@@ -110,10 +134,10 @@ func (pr *PipelineRunner) Run(goalID string, state *statestore.GoalState) (*Pipe
 	}
 
 	// 恢复路径
-	if pr.state.ResumePrimitive == "wait" {
+	if pr.state.ResumePrimitive == ResumeFromWait {
 		return pr.wait(goalID, pr.state.WaitReason)
 	}
-	if pr.state.ResumePrimitive == "decide" {
+	if pr.state.ResumePrimitive == ResumeFromDecide {
 		return pr.decide(goalID, "", nil)
 	}
 
@@ -123,73 +147,61 @@ func (pr *PipelineRunner) Run(goalID string, state *statestore.GoalState) (*Pipe
 		return &PipelineResult{Status: PipelineCompleted}, nil
 	}
 
-	return pr.executePrimitivePipeline(goalID, currentAction)
-}
+	// R-837: 设置 workspace 目录供 MultiLLM 读文件
+	pr.workspaceDir = os.Getenv("HOME") + "/Goals/" + goalID + "/output"
+	// v0.2.0 W1: 使用状态机循环（Check→Wait→Exec→Decide）
+	logProgress(goalID, "Check", "evaluating action: "+currentAction)
+	ctx := context.Background()
+	result := pr.StateMachineRun(ctx, goalID, currentAction)
 
-// executePrimitivePipeline 对一个 Action 执行 Check→Exec→Wait→Decide。
-func (pr *PipelineRunner) executePrimitivePipeline(goalID string, actionID string) (*PipelineResult, error) {
-	// 阶段 1: Check — Gate 评估（auto_tests→checks→constraints→llm_verify）
-	result := pr.check(actionID)
-	pr.publishCheckPerformed(goalID, actionID, result)
-
-	switch result {
-	case CheckREJECT:
-		return pr.decidePath(goalID, actionID, DecideABORT, "check_rejected")
-	case CheckBLOCK:
-		return pr.wait(goalID, "check_blocked")
-	}
-
-	// 阶段 2: Exec — 幂等检查后执行
-	if pr.isActionCompleted(goalID, actionID) {
-		log.Printf("[PipelineRunner] action=%s already completed — skipping Exec", actionID)
-	} else {
-		if err := pr.exec(actionID); err != nil {
-			return pr.decide(goalID, actionID, err)
+	switch result.Status {
+	case PipelineCompleted:
+		return &PipelineResult{Status: PipelineCompleted}, nil
+	case PipelineFailed:
+		return &PipelineResult{Status: PipelineFailed, Error: result.Error}, nil
+	case PipelineWaiting:
+		// P10+P11: WaitReason 和 ResumePrimitive 从 StateMachineResult 提取
+		waitReason := "approval"
+		resumeFrom := ResumeFromCheck
+		if len(result.PendingWaits) > 0 {
+			if result.PendingWaits[0].Type == "post_exec" {
+				resumeFrom = ResumeFromDecide // post-exec wait→从 Decide 恢复
+			}
+			waitReason = result.PendingWaits[0].Type
 		}
-	}
-
-	// 阶段 3: Wait（审批/依赖/资源）
-	if pr.requiresWait(actionID) {
-		return pr.wait(goalID, "approval")
-	}
-
-	// 阶段 4: Decide — 委托给 RecoveryPipeline
-	return pr.decide(goalID, actionID, nil)
-}
+		return &PipelineResult{
+			Status:     PipelineWaiting,
+			WaitReason: waitReason,
+			PipelineState: &PipelineState{
+				ResumePrimitive:  resumeFrom,
+				PendingActionIDs: []string{currentAction},
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("pipelinerunner: unknown state from StateMachineRun: %v", result.Status)
+	}}
 
 // check 评估 Action 的准入条件。v0.1.1 重写：集成 MultiLLMVerifier。
+// check 评估 Action 的准入条件（Pre-Exec Gate）。
+// R-840: MultiLLM 代码审查已移到 decide()——Check 只做准入检查。
 func (pr *PipelineRunner) check(actionID string, code ...string) CheckResult {
-	// 有代码 + MultiLLM 可用 → 多模型审查
-	if len(code) > 0 && code[0] != "" && pr.multiLLM != nil {
-		verdict, err := pr.multiLLM.Verify(code[0], actionID)
-		if err == nil {
-			switch verdict.Result {
-			case "FAIL":
-				return CheckREJECT
-			case "WARN":
-				return CheckWARN
-			default:
-				return CheckPASS
-			}
-		}
-	}
-	// 无代码或 MultiLLM 不可用 → 基础检查通过
 	return CheckPASS
 }
 
-// exec 执行 Action。通过 Event Bus 触发 Plugin Runner（fire-and-forget）。
-// v0.1.1 重写：publish ActionScheduled — PluginRunner 负责实际执行和结果发布。
-func (pr *PipelineRunner) exec(actionID string) error {
-	// ActionScheduled 事件由 Scheduler 发布（从 MissionGraph 构造完整 payload）。
-	// PipelineRunner.exec() 的角色是标记 Action 已进入执行阶段。
-	// 实际执行结果（ActionCompleted/ActionFailed）由 PluginRunner 发布，
-	// Scheduler 订阅后驱动状态机继续。
+// exec 标记 Action 进入执行阶段（R-839: Scheduler 已调度——不再重复发布 ActionScheduled）。
+func (pr *PipelineRunner) exec(goalID string, actionID string) error {
+	log.Printf("[PipelineRunner] goal=%s action=%s: executing", goalID, actionID)
 	return nil
+}
+
+// logProgress 输出用户可见的进度日志（CR-J1）。
+func logProgress(goalID, stage, detail string) {
+	log.Printf("[PipelineRunner] goal=%s | %s | %s", goalID, stage, detail)
 }
 
 // wait 进入等待状态。保存 PipelineState 并返回 WAITING。
 func (pr *PipelineRunner) wait(goalID string, reason string) (*PipelineResult, error) {
-	pr.state.ResumePrimitive = "decide"
+	pr.state.ResumePrimitive = ResumeFromDecide
 	pr.state.WaitReason = reason
 	pr.state.TimeoutAt = time.Now().Add(5 * time.Minute).Format(time.RFC3339)
 
@@ -210,66 +222,107 @@ func (pr *PipelineRunner) wait(goalID string, reason string) (*PipelineResult, e
 	}, nil
 }
 
-// decide 委托给 RecoveryPipeline 的完整决策树（R-362 重写）。
+// decide 决策下一步（R-840: MultiLLM 同步验证集成）。
 func (pr *PipelineRunner) decide(goalID string, actionID string, execErr error) (*PipelineResult, error) {
-	if execErr == nil {
-		return pr.decidePath(goalID, actionID, DecideCONTINUE, "")
+	if execErr != nil {
+		path := ClassifyError(execErr)
+		return pr.decidePath(goalID, actionID, path, execErr.Error())
 	}
+	// R-840: Exec 成功→MultiLLM 代码审查（同步，Decide 阶段）
+	if pr.multiLLM != nil {
+		code := readWorkspaceCode(pr.workspaceDir)
+		if code != "" {
+			log.Printf("[PipelineRunner] MultiLLM sync verify: action=%s code_len=%d", actionID, len(code))
+			verdict, err := pr.multiLLM.Verify(code, actionID)
+			if err == nil {
+				pr.publishVerdict(actionID, verdict)
+				switch verdict.Result {
+				case "FAIL":
+					return pr.decidePath(goalID, actionID, DecideESCALATE, "multi_llm_fail: code review failed") // REPLAN
+				case "WARN":
+					return pr.decidePath(goalID, actionID, DecideCONTINUE, "multi_llm_warn")
+				default: // PASS
+					return pr.decidePath(goalID, actionID, DecideCONTINUE, "")
+				}
+			}
+			log.Printf("[PipelineRunner] MultiLLM verify error: %v", err)
+		}
+	}
+	return pr.decidePath(goalID, actionID, DecideCONTINUE, "")
+}
 
-	// 委托给 RecoveryPipeline（完整 10 分支决策树）
-	rp := pr.recovery.Decide(actionID, execErr.Error(), nil, goalID)
-	path := recoveryActionToDecidePath(rp.Action)
-	return pr.decidePath(goalID, actionID, path, rp.Reason)
+// publishVerdict 发布 MultiLLM 裁决结果（R-840）。
+func (pr *PipelineRunner) publishVerdict(actionID string, verdict *Verdict) {
+	if pr.bus == nil {
+		return
+	}
+	// R-840: 发布完整裁决——含各 Provider 个体意见
+	votes := make([]map[string]interface{}, len(verdict.Votes))
+	for i, v := range verdict.Votes {
+		votes[i] = map[string]interface{}{
+			"provider":  v.Provider,
+			"model":     v.Model,
+			"vote":      v.Vote,
+			"reasoning": v.Reasoning,
+		}
+	}
+	pr.bus.Publish(events.Event{
+		Type:   "MultiLLMVerificationCompleted",
+		Source: "pipelinerunner",
+		GoalID: pr.currentGoalID,
+		Payload: map[string]interface{}{
+			"action_id": actionID,
+			"verdict":   verdict.Result,
+			"score":     verdict.WeightedScore,
+			"consensus": verdict.Consensus,
+			"votes":     votes,
+		},
+	})
 }
 
 // recoveryActionToDecidePath 将 RecoveryPath.Action 映射为 DecidePath。
+// H1: RETRY/AUTO_FIX/SWITCH_TOOL 已废除（会议 #107）。收敛为 CONTINUE/ESCALATE。
 func recoveryActionToDecidePath(action string) DecidePath {
-	switch action {
-	case "RETRY":
-		return DecideRETRY
-	case "AUTO_FIX", "SWITCH_TOOL":
-		return DecideREPLAN
-	case "ESCALATE":
+	if action == "ESCALATE" {
 		return DecideESCALATE
-	default:
-		return DecideABORT
 	}
+	return DecideCONTINUE
 }
 
 // decidePath 发布 DecidePathSelected 事件并返回对应 PipelineResult。
 func (pr *PipelineRunner) decidePath(goalID string, actionID string, path DecidePath, reason string) (*PipelineResult, error) {
-	pr.bus.Publish(events.Event{
-		Type:   events.TypeDecidePathSelected,
-		GoalID: goalID,
-		Source: "pipelinerunner",
-		Payload: map[string]interface{}{
-			"action_id": actionID,
-			"path":      string(path),
-			"reason":    reason,
-		},
-	})
-
-	switch path {
-	case DecideCONTINUE:
-		return &PipelineResult{Status: PipelineCompleted}, nil
-	case DecideRETRY, DecideREPLAN:
-		pr.retryCount[actionID]++
-		return &PipelineResult{Status: PipelineCompleted}, nil // 重试由 GoalRunner 重新调用 Run()
-	case DecideESCALATE:
+	// P16: nil bus guard
+	if pr.bus != nil {
 		pr.bus.Publish(events.Event{
-			Type:   events.TypeHumanInterventionRequested,
+			Type:   events.TypeDecidePathSelected,
 			GoalID: goalID,
 			Source: "pipelinerunner",
 			Payload: map[string]interface{}{
 				"action_id": actionID,
+				"path":      string(path),
 				"reason":    reason,
 			},
 		})
-		return &PipelineResult{Status: PipelineFailed, Error: reason}, nil
-	case DecideABORT:
-		return &PipelineResult{Status: PipelineFailed, Error: "aborted: " + reason}, nil
-	default:
+	}
+
+	switch path {
+	case DecideCONTINUE:
 		return &PipelineResult{Status: PipelineCompleted}, nil
+	case DecideESCALATE:
+		if pr.bus != nil {
+			pr.bus.Publish(events.Event{
+				Type:   events.TypeHumanInterventionRequested,
+				GoalID: goalID,
+				Source: "pipelinerunner",
+				Payload: map[string]interface{}{
+					"action_id": actionID,
+					"reason":    reason,
+				},
+			})
+		}
+		return &PipelineResult{Status: PipelineFailed, Error: reason}, nil
+	default:
+		return nil, fmt.Errorf("pipelinerunner: unknown decide path: %s", path)
 	}
 }
 
@@ -289,9 +342,13 @@ func (pr *PipelineRunner) publishCheckPerformed(goalID string, actionID string, 
 // ── 辅助方法 ──
 
 func (pr *PipelineRunner) isActionCompleted(goalID string, actionID string) bool {
+	if pr.store == nil {
+		return false
+	}
 	state, err := pr.store.LoadState(goalID)
 	if err != nil {
-		return false
+		log.Printf("[PipelineRunner] isActionCompleted: LoadState error for %s: %v — skipping to avoid duplicate", goalID, err)
+		return true // CR-B2: 出错时保守返回 true，避免重复执行
 	}
 	for _, id := range state.CompletedNodes {
 		if id == actionID {
@@ -301,12 +358,46 @@ func (pr *PipelineRunner) isActionCompleted(goalID string, actionID string) bool
 	return false
 }
 
-func (pr *PipelineRunner) requiresWait(actionID string) bool {
-	// R-362: 从 MissionGraph 节点标记判定。MVP 返回 false（简化）。
+func (pr *PipelineRunner) requiresWait(goalID string, actionID string) bool {
+	// v0.2.0 W1 fix: nil guard for store
+	if pr.store == nil {
+		return false
+	}
+	// v0.2.0 audit fix: 从 GoalState 检查是否有待审批 Action
+	state, err := pr.store.LoadState(goalID)
+	if err != nil {
+		return false
+	}
+	if state.ApprovalPending {
+		return true
+	}
+	// 检查 PipelineState 中是否有等待中的 Action
+	if state.PipelineState != nil {
+		for _, id := range state.PipelineState.PendingActionIDs {
+			if id == actionID {
+				return true
+			}
+		}
+	}
 	return false
 }
 
 func (pr *PipelineRunner) getNextAction(goalID string, state *statestore.GoalState) string {
+	// P22: nil guard
+	if state == nil {
+		return ""
+	}
+	// R-839: 多节点支持——遍历 NodeIDs
+	if len(state.NodeIDs) > 0 {
+		for _, nid := range state.NodeIDs {
+			if !containsStr(state.CompletedNodes, nid) {
+				return nid
+			}
+		}
+		log.Printf("[PipelineRunner] goal=%s: all %d nodes completed", goalID, len(state.NodeIDs))
+		return ""
+	}
+	// 向后兼容：单 NodeID
 	if state.NodeID != "" && !containsStr(state.CompletedNodes, state.NodeID) {
 		return state.NodeID
 	}
@@ -322,11 +413,29 @@ func containsStr(slice []string, item string) bool {
 	return false
 }
 
+// readWorkspaceCode 读取 workspace 产出目录中的代码文件（R-837 MultiLLM 验证）。
+func readWorkspaceCode(workspaceDir string) string {
+	entries, err := os.ReadDir(workspaceDir)
+	if err != nil {
+		return ""
+	}
+	var buf strings.Builder
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".js") && !strings.HasSuffix(e.Name(), ".html") && !strings.HasSuffix(e.Name(), ".css") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(workspaceDir, e.Name()))
+		if err != nil {
+			continue
+		}
+		buf.Write(data)
+		buf.WriteByte('\n')
+	}
+	return buf.String()
+}
+
 // SetMultiLLM 设置多模型验证器（v0.1.1）。
 func (pr *PipelineRunner) SetMultiLLM(v *MultiLLMVerifier) { pr.multiLLM = v }
-
-// SetRecoveryPipeline 设置恢复管线（v0.1.1 重写）。
-func (pr *PipelineRunner) SetRecoveryPipeline(r *RecoveryPipeline) { pr.recovery = r }
 
 // ─── Week 0 框架基础设施 F3+F5: CategorizedError 路由 + Validatable 集成 ───
 
@@ -334,6 +443,10 @@ func (pr *PipelineRunner) SetRecoveryPipeline(r *RecoveryPipeline) { pr.recovery
 // ErrorTemporary→内部重试（新 Session），其他→ESCALATE。
 // 非 CategorizedError→默认 ErrorFatal。
 func ClassifyError(err error) DecidePath {
+	// P23: nil error → CONTINUE（无错误，无需决策）
+	if err == nil {
+		return DecideCONTINUE
+	}
 	cat := errorcategory.CategoryOf(err)
 	switch cat {
 	case errorcategory.ErrorTemporary:
@@ -343,7 +456,7 @@ func ClassifyError(err error) DecidePath {
 	case errorcategory.ErrorFatal:
 		return DecideESCALATE // GoalRunner 收到后→GoalFailed
 	default:
-		return DecideESCALATE
+		return DecideCONTINUE // H3: 未知错误默认继续（会议 #107 收敛为 CONTINUE/ESCALATE）
 	}
 }
 

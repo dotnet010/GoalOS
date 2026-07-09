@@ -98,11 +98,41 @@ sse.onmessage = (evt) => {
 };
 
 // 处理事件
-function handleEvent(type, payload) {
+
+  function actionLabel(t) {
+    var map = {'shell.execute':'执行命令','fs.read':'读取文件','fs.write':'写入文件','browser.open':'打开网页','browser.click':'点击操作','web.search':'搜索'};
+    return map[t] || t || '执行中';
+  }
+
+  function handleEvent(type, payload) {
   switch(type) {
     case 'GoalCreated':
       addGoal(payload.goal_id, payload.title, 'created');
       toast('目标已创建: ' + payload.goal_id);
+      break;
+    case 'ActionScheduled':
+      if (goals[payload.goal_id]) {
+        goals[payload.goal_id].currentAction = actionLabel(payload.action_type);
+        goals[payload.goal_id].actionsDone = (goals[payload.goal_id].actionsDone || 0) + 1;
+        renderGoals();
+      }
+      break;
+    case 'ActionCompleted':
+      if (goals[payload.goal_id]) {
+        var name = payload.action_id || 'action';
+        goals[payload.goal_id].lastAction = 'OK ' + name;
+        goals[payload.goal_id].currentAction = null;
+        renderGoals();
+        toast(name + ' done');
+      }
+      break;
+    case 'ActionFailed':
+      if (goals[payload.goal_id]) {
+        var name = payload.action_id || 'action';
+        goals[payload.goal_id].lastAction = 'FAIL ' + name;
+        goals[payload.goal_id].currentAction = null;
+        renderGoals();
+      }
       break;
     case 'GoalCompleted':
       updateGoalStatus(payload.goal_id, 'completed');
@@ -110,6 +140,9 @@ function handleEvent(type, payload) {
       break;
     case 'GoalPaused':
       updateGoalStatus(payload.goal_id, 'paused');
+      break;
+    case 'GoalFailed':
+      updateGoalStatus(payload.goal_id, 'failed');
       break;
     case 'ActionPendingApproval':
       showWatcher(payload);
@@ -121,6 +154,22 @@ function handleEvent(type, payload) {
     case 'ActionRejected':
       hideWatcher();
       toast('操作已拒绝');
+      break;
+    case 'MultiLLMVerificationCompleted':
+      if (goals[payload.goal_id]) {
+        var v = payload.verdict || '?';
+        var icon = v === 'PASS' ? '✅' : v === 'WARN' ? '⚠️' : '❌';
+        var detail = icon + ' MultiLLM: ' + v + ' (' + (payload.score||0).toFixed(1) + ')';
+        if (payload.votes) {
+          detail += ' | ';
+          for (var vi = 0; vi < payload.votes.length; vi++) {
+            var vt = payload.votes[vi];
+            detail += vt.provider + ':' + vt.vote + ' ';
+          }
+        }
+        goals[payload.goal_id]._multiVerdict = detail;
+        renderGoals();
+      }
       break;
   }
 }
@@ -210,3 +259,11 @@ function toast(msg) {
 </script>
 </body>
 </html>
+
+<script>
+// R-835: 活动日志——用户可展开查看 LLM 执行细节
+function toggleLog(id) {
+  var el = document.getElementById("log-"+id);
+  if (el) { el.style.display = el.style.display === "none" ? "block" : "none"; }
+}
+</script>

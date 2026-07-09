@@ -66,8 +66,8 @@ func ClassifyLLMError(err error) *ClassifiedError {
 
 // IsAuthError 判断是否为认证错误（不可重试）。
 func IsAuthError(err error) bool {
-	return errors.Is(err, &ClassifiedError{StatusCode: 401}) ||
-		(ClassifyLLMError(err).StatusCode == 401)
+	// G12: errors.Is 与临时指针比较永远 false——直接用 ClassifyLLMError
+	return ClassifyLLMError(err).StatusCode == 401
 }
 
 // IsRateLimit 判断是否为速率限制错误。

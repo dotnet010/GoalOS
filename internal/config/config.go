@@ -7,6 +7,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -81,7 +82,7 @@ func Default() *Config {
 	return &Config{
 		Daemon: DaemonConfig{
 			Port:            18920,
-			AutonomyLevel:   "approve",
+			AutonomyLevel:   "autonomous", // G7: 与 daemon.yaml.example 一致
 			IdleTimeout:     5 * time.Minute,
 			ShutdownTimeout: 5 * time.Second,
 		},
@@ -211,6 +212,10 @@ func loadYAML(path string, cfg *Config) error {
 	if fileCfg.Policy.GoalAnchorInterval != 0 { cfg.Policy.GoalAnchorInterval = fileCfg.Policy.GoalAnchorInterval }
 	if fileCfg.Policy.RecoveryRetryMax != 0 { cfg.Policy.RecoveryRetryMax = fileCfg.Policy.RecoveryRetryMax }
 	}
+	// R-836: MultiLLM 配置复制——之前遗漏导致始终 disabled
+	cfg.MultiLLM.Enabled = fileCfg.MultiLLM.Enabled
+	cfg.MultiLLM.Providers = fileCfg.MultiLLM.Providers
+	log.Printf("[Config] MultiLLM loaded: enabled=%v providers=%d", cfg.MultiLLM.Enabled, len(cfg.MultiLLM.Providers))
 	if fileCfg.Persona != "" {
 		cfg.Persona = fileCfg.Persona
 	}

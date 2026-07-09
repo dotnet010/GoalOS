@@ -103,33 +103,4 @@ func NewExperience(goalID, expType string) *Experience {
 
 // ─── A26: Pattern 异步提取 ─────────────────────────────────────
 
-// PatternExtractor 从跨 Goal 经验中提取通用模式。
-// 异步执行——不阻塞 EventBus（A26）。
-type PatternExtractor struct {
-	mu sync.Mutex
-}
-
-// NewPatternExtractor 创建 Pattern 提取器。
-func NewPatternExtractor() *PatternExtractor {
-	return &PatternExtractor{}
-}
-
-// ShouldExtract 判断是否应触发 Pattern 提取。
-// 同领域 ≥3 个 Goal 后触发。
-func (pe *PatternExtractor) ShouldExtract(goalIDs []string) bool {
-	return len(goalIDs) >= 3
-}
-
-// Extract 异步提取 Pattern。不阻塞调用方。
-func (pe *PatternExtractor) Extract(goalIDs []string) {
-	// A26: 异步提取——不阻塞调用方。30s timeout。
-	go func() {
-		pe.mu.Lock()
-		defer pe.mu.Unlock()
-		// 后台 Pattern 提炼：基于 goalIDs 对应的经验文件提取通用模式
-		// 结果写入 ~/.goalos/memory/patterns/
-		for _, goalID := range goalIDs {
-			_ = goalID // 实际提炼需要 ContextEngine 经验文件——Phase B Week 8
-		}
-	}()
-}
+// H12: PatternExtractor 已删除——ContextEngine.ExtractPattern 替代。

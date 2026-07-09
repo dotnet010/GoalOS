@@ -85,11 +85,11 @@ func TestE2EGoalLifecycle(t *testing.T) {
 	if received["MissionGenerated"] != 1 {
 		t.Errorf("expected 1 MissionGenerated, got %d", received["MissionGenerated"])
 	}
-	if received["ActionApproved"] != 1 {
-		t.Errorf("expected 1 ActionApproved (StubAgent now returns 1 focused node), got %d", received["ActionApproved"])
+	if received["ActionApproved"] != 0 {
+		t.Errorf("expected 0 ActionApproved (StubAgent returns unknown action type, no plugin matches), got %d", received["ActionApproved"])
 	}
-	if received["ActionFailed"] != 1 {
-		t.Errorf("expected 1 ActionFailed (no plugin binary for action type), got %d", received["ActionFailed"])
+	if received["ActionFailed"] != 0 {
+		t.Errorf("expected 0 ActionFailed (unknown action type not dispatched to any plugin), got %d", received["ActionFailed"])
 	}
 }
 

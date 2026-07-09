@@ -13,13 +13,23 @@ import (
 // CheckOnline 检查是否能访问互联网。
 // 使用 HEAD 请求到 google.com（快速、轻量）。
 func CheckOnline() bool {
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Head("https://google.com")
-	if err != nil {
-		return false
+	// G14: 多端点检测——Google/Baidu/GitHub 任一可达即为在线
+	endpoints := []string{
+		"https://google.com",
+		"https://baidu.com",
+		"https://github.com",
 	}
-	resp.Body.Close()
-	return resp.StatusCode < 500
+	client := &http.Client{Timeout: 3 * time.Second}
+	for _, url := range endpoints {
+		resp, err := client.Head(url)
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode < 500 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // OfflineStatus 是离线状态追踪器。

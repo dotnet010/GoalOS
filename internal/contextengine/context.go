@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/pkg/events"
@@ -200,11 +201,28 @@ func (e *Engine) Start(bus *eventbus.EventBus) {
 func (e *Engine) onGoalCompleted(evt events.Event) error {
 	goalID := evt.GoalID
 	log.Printf("[ContextEngine] generating experience for completed goal: %s", goalID)
-	e.WriteDecision(goalID, &DecisionRecord{GoalID: goalID, Title: "Goal completed"})
-	e.WriteLesson(goalID, &LessonRecord{GoalID: goalID, Title: "Goal execution completed"})
-	// v0.1.0 H10: 跨 Goal 模式提炼
+	// W5-A25 fix: 检查写入错误
+	if err := e.WriteDecision(goalID, &DecisionRecord{GoalID: goalID, Title: "Goal completed", CreatedAt: time.Now()}); err != nil {
+		log.Printf("[ContextEngine] WriteDecision failed for %s: %v", goalID, err)
+	}
+	if err := e.WriteLesson(goalID, &LessonRecord{GoalID: goalID, Title: "Goal execution completed", CreatedAt: time.Now()}); err != nil {
+		log.Printf("[ContextEngine] WriteLesson failed for %s: %v", goalID, err)
+	}
+	// v0.2.2 W5 A26: 异步提炼——独立 goroutine + 30s timeout，不阻塞 EventBus
 	if goalText, ok := evt.Payload["goal_text"].(string); ok {
-		e.ExtractPattern(goalID, goalText)
+		go func(gID, gText string) {
+			done := make(chan struct{}, 1)
+			go func() {
+				defer func() { recover() }() // E11: 防 ExtractPattern panic 导致 done 不发送
+				e.ExtractPattern(gID, gText)
+				done <- struct{}{}
+			}()
+			select {
+			case <-done:
+			case <-time.After(30 * time.Second):
+				log.Printf("[ContextEngine] pattern extraction timeout for goal=%s", gID)
+			}
+		}(goalID, goalText)
 	}
 	return nil
 }

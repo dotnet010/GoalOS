@@ -26,6 +26,7 @@ type GoalState struct {
 	InternalState     string   `json:"internal_state"` // Draft|Planned|Running|Paused|Failed|Completed
 	LastAppliedSeq    int      `json:"last_applied_seq"`
 	NodeID            string   `json:"node_id,omitempty"`
+	NodeIDs           []string `json:"node_ids,omitempty"`      // R-839: 多节点支持
 	CompletedNodes    []string `json:"completed_nodes,omitempty"`
 	ArtifactPaths     []string `json:"artifact_paths,omitempty"`
 	TokenIDs          []string `json:"token_ids,omitempty"`
