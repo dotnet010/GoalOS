@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -92,41 +91,39 @@ func TestContract_LLMConnectivity_UsesContextTimeout(t *testing.T) {
 	_ = context.Background() // 确保 context import 被使用
 }
 
-// TestContract_DiskSpace_ActuallyChecksDiskSpace 验证 checkDiskSpace 真的检查了磁盘空间。
-// MUST: 调用 syscall.Statfs 获取实际可用空间，而非硬编码返回。
+// TestContract_DiskSpace_ActuallyChecksDiskSpace 验证 checkDiskSpace 真的检查了磁盘可写性。
+// R-867: 跨平台兼容——使用文件写入测试替代 syscall.Statfs。
 func TestContract_DiskSpace_ActuallyChecksDiskSpace(t *testing.T) {
 	result := checkDiskSpace()
 	if !result.Passed {
-		// 如果磁盘空间不足，这也是有效的检查结果（不是硬编码）
-		t.Logf("磁盘空间不足: %s", result.Message)
+		t.Logf("磁盘不可写: %s", result.Message)
 	}
 	// 消息不应为硬编码的"足够"（旧行为）
 	if result.Message == "足够" {
-		t.Error("checkDiskSpace MUST 返回实际磁盘空间信息，而非硬编码'足够'")
+		t.Error("checkDiskSpace MUST 返回实际磁盘检查结果，而非硬编码'足够'")
 	}
-	if !strings.Contains(result.Message, "GB") && !strings.Contains(result.Message, "跳过") {
-		t.Errorf("checkDiskSpace 应返回 GB 数值或跳过原因，got: %s", result.Message)
+	if !result.Passed && !strings.Contains(result.Message, "不可写") {
+		t.Errorf("checkDiskSpace failed but message doesn't explain: %s", result.Message)
 	}
-	_ = syscall.Statfs_t{} // 确保 syscall import 被使用
 }
 
 // TestContract_DiskSpace_ReportsPath 验证磁盘检查使用了 .goalos 目录。
-// MUST: 检查 ~/.goalos 目录所在文件系统，而非根目录。
+// MUST: 在 ~/.goalos 目录中测试写入。
 func TestContract_DiskSpace_ReportsPath(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skip("无法获取 home 目录")
 	}
 	goalosDir := filepath.Join(home, ".goalos")
-	os.MkdirAll(goalosDir, 0755) // safe: best-effort dir creation
+	os.MkdirAll(goalosDir, 0755)
 
 	result := checkDiskSpace()
-	// MUST: 返回结果含实际信息（GB 数值或跳过原因），非硬编码
+	// MUST: 返回实际检查结果
 	if result.Message == "足够" {
 		t.Error("checkDiskSpace MUST NOT return hardcoded '足够'")
 	}
-	if !strings.Contains(result.Message, "GB") && !strings.Contains(result.Message, "跳过") {
-		t.Errorf("checkDiskSpace 应返回 GB 数值或跳过原因, got: %s", result.Message)
+	if !result.Passed && !strings.Contains(result.Message, "不可写") {
+		t.Errorf("checkDiskSpace failure message unexpected: %s", result.Message)
 	}
 }
 

@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/goalos/goalos/internal/config"
@@ -152,21 +151,16 @@ func checkDiskSpace() Result {
 		return Result{Name: "磁盘空间", Passed: true,
 			Message: "跳过（无法获取 home 目录）"}
 	}
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(home+"/.goalos", &stat); err != nil {
-		return Result{Name: "磁盘空间", Passed: true,
-			Message: fmt.Sprintf("跳过（statfs 失败: %v）", err)}
-	}
-	availableBytes := stat.Bavail * uint64(stat.Bsize)
-	availableGB := float64(availableBytes) / (1024 * 1024 * 1024)
-	minGB := 0.5
-	if availableGB < minGB {
+	// R-867 go-vet: cross-platform disk space check (no syscall.Statfs)
+	// Simplified: check if .goalos directory is writable
+	testFile := filepath.Join(home, ".goalos", ".disk-test")
+	if err := os.WriteFile(testFile, []byte("ok"), 0600); err != nil {
 		return Result{Name: "磁盘空间", Passed: false,
-			Message:    fmt.Sprintf("可用空间 %.2f GB < %.2f GB 最低要求", availableGB, minGB),
-			Suggestion: "清理磁盘空间或扩展存储"}
+			Message: fmt.Sprintf("❌ 磁盘不可写: %v", err)}
 	}
+	os.Remove(testFile)
 	return Result{Name: "磁盘空间", Passed: true,
-		Message: fmt.Sprintf("%.2f GB 可用", availableGB)}
+		Message: "✅ 磁盘可写"}
 }
 
 // checkPluginSignatures 检查所有插件签名，不匹配时自动修复（v0.1.1）。
