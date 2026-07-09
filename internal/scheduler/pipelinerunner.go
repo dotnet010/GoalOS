@@ -328,6 +328,9 @@ func (pr *PipelineRunner) decidePath(goalID string, actionID string, path Decide
 
 // publishCheckPerformed 发布 CheckPerformed 事件。
 func (pr *PipelineRunner) publishCheckPerformed(goalID string, actionID string, result CheckResult) {
+	if pr.bus == nil {
+		return // R-815: nil bus tolerated for test environments
+	}
 	pr.bus.Publish(events.Event{
 		Type:   events.TypeCheckPerformed,
 		GoalID: goalID,
