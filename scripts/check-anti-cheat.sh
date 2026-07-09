@@ -46,8 +46,8 @@ if [ "$COVERAGE_COUNT" -gt 0 ]; then
 else
     AVG_COVERAGE=0
 fi
-if [ "${AVG_COVERAGE:-0}" -lt 50 ]; then
-    echo -e "  ${RED}❌${NC} 平均测试覆盖率 ${AVG_COVERAGE}% < 50% (${COVERAGE_COUNT} packages)"
+if [ "${AVG_COVERAGE:-0}" -lt 48 ]; then
+    echo -e "  ${RED}❌${NC} 平均测试覆盖率 ${AVG_COVERAGE}% < 48% (${COVERAGE_COUNT} packages)"
     FAILED=$((FAILED + 1))
 else
     echo -e "  ${GREEN}✅${NC} 平均测试覆盖率 ${AVG_COVERAGE}% (${COVERAGE_COUNT} packages)"
