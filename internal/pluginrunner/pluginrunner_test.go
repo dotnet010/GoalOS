@@ -42,9 +42,10 @@ func TestPluginRunner_ActionApproved(t *testing.T) {
 		if actionID != "act_001" {
 			t.Errorf("expected act_001, got %s", actionID)
 		}
-		result, _ := evt.Payload["result"].(map[string]interface{})
-		if result["status"] != "failure" {
-			t.Errorf("expected failure (no plugin binary), got %s", result["status"])
+		// R-828: flat payload——status 在顶层
+		status, _ := evt.Payload["status"].(string)
+		if status != "failure" {
+			t.Errorf("expected failure (no plugin binary), got %s", status)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("ActionFailed was not published within 1s")
@@ -122,9 +123,9 @@ func TestPluginRunner_ReadsActionTypeFromPayload(t *testing.T) {
 
 	select {
 	case evt := <-failed:
-		result, _ := evt.Payload["result"].(map[string]interface{})
-		output, _ := result["output"].(string)
-		// 应包含 action_type 名称（shell.execute），而不是空字符串
+		// R-828: flat payload——output 在顶层
+		output, _ := evt.Payload["output"].(string)
+		// 应包含 action_type 名称
 		if output == "" {
 			t.Error("ActionFailed output should mention the action_type, got empty")
 		}
