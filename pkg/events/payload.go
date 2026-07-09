@@ -3,6 +3,7 @@
 package events
 
 import (
+	"encoding/json"
 	"fmt"
 	"unicode/utf8"
 )
@@ -156,6 +157,128 @@ func (p FileContentPayload) Validate() error {
 	const maxSize int64 = 10 * 1024 * 1024
 	if p.Size > maxSize {
 		return fmt.Errorf("Size: len<=%d (actual=%d)", maxSize, p.Size)
+	}
+	return nil
+}
+
+// PayloadToMap 将 typed payload 转换为 map[string]interface{}（R-828 统一）。
+func PayloadToMap(v interface{}) map[string]interface{} {
+	switch p := v.(type) {
+	case ActionScheduledPayload:
+		return map[string]interface{}{
+			"action_id": p.ActionID, "action_type": p.ActionType, "source": p.Source,
+			"timeout_seconds": p.TimeoutSeconds, "risk_level_pre": p.RiskLevelPre,
+			"required_capabilities": p.RequiredCapabilities, "target": p.Target,
+		}
+	case ActionCompletedPayload:
+		return map[string]interface{}{
+			"action_id": p.ActionID, "status": p.Status, "output": p.Output,
+			"artifacts_produced": p.ArtifactsProduced, "duration_ms": p.DurationMs, "tokens": p.Tokens,
+		}
+	case GoalCompletedPayloadV2:
+		return map[string]interface{}{
+			"goal_id": p.GoalID, "artifact_path": p.ArtifactPath, "goal_state": p.GoalState,
+			"duration_seconds": p.DurationSeconds, "total_actions": p.TotalActions,
+			"succeeded_actions": p.SucceededActions, "failed_actions": p.FailedActions,
+			"total_tokens": p.TotalTokens, "human_interventions": p.HumanInterventions,
+		}
+	case GoalFailedPayload:
+		return map[string]interface{}{
+			"goal_id": p.GoalID, "reason": p.Reason,
+			"error": p.Error, "error_hint": p.ErrorHint,
+		}
+	default:
+		data, _ := json.Marshal(v)
+		var result map[string]interface{}
+		json.Unmarshal(data, &result)
+		return result
+	}
+}
+
+// ─── R-828 Step 1: 从 internal/scheduler 迁移核心 payload ──────────
+
+// ActionScheduledPayload 是 ActionScheduled 事件的 typed payload。
+type ActionScheduledPayload struct {
+	ActionID             string   `json:"action_id"`
+	ActionType           string   `json:"action_type,omitempty"`
+	Target               string   `json:"target,omitempty"`
+	Source               string   `json:"source,omitempty"`
+	RequiredCapabilities []string `json:"required_capabilities,omitempty"`
+	TimeoutSeconds       int      `json:"timeout_seconds"`
+	RiskLevelPre         string   `json:"risk_level_pre,omitempty"`
+}
+
+func (p ActionScheduledPayload) EventType() string { return "ActionScheduled" }
+func (p ActionScheduledPayload) Validate() error {
+	if p.ActionID == "" {
+		return fmt.Errorf("ActionScheduledPayload: ActionID is required")
+	}
+	return nil
+}
+
+// ActionCompletedPayload 是 ActionCompleted 事件的 typed payload。
+type ActionCompletedPayload struct {
+	ActionID          string   `json:"action_id"`
+	Status            string   `json:"status"`
+	Output            string   `json:"output,omitempty"`
+	ArtifactsProduced []string `json:"artifacts_produced,omitempty"`
+	DurationMs        int      `json:"duration_ms"`
+	Tokens            int      `json:"tokens"`
+}
+
+func (p ActionCompletedPayload) EventType() string { return "ActionCompleted" }
+func (p ActionCompletedPayload) Validate() error {
+	if p.ActionID == "" {
+		return fmt.Errorf("ActionCompletedPayload: ActionID is required")
+	}
+	if p.Status != "success" && p.Status != "failure" {
+		return fmt.Errorf("ActionCompletedPayload: Status must be success|failure, got %q", p.Status)
+	}
+	return nil
+}
+
+// GoalFailedPayload 是 GoalFailed 事件的 typed payload。
+type GoalFailedPayload struct {
+	GoalID    string `json:"goal_id"`
+	Reason    string `json:"reason"`
+	Error     string `json:"error,omitempty"`
+	ErrorHint string `json:"error_hint,omitempty"`
+}
+
+func (p GoalFailedPayload) EventType() string { return "GoalFailed" }
+func (p GoalFailedPayload) Validate() error {
+	if p.GoalID == "" {
+		return fmt.Errorf("GoalFailedPayload: GoalID is required")
+	}
+	if p.Reason == "" {
+		return fmt.Errorf("GoalFailedPayload: Reason is required")
+	}
+	return nil
+}
+
+// GoalCompletedPayloadV2 是 GoalCompleted 事件的增强 typed payload（R-828）。
+type GoalCompletedPayloadV2 struct {
+	GoalID             string `json:"goal_id"`
+	ArtifactPath       string `json:"artifact_path"`
+	GoalState          string `json:"goal_state,omitempty"`
+	DurationSeconds    int    `json:"duration_seconds"`
+	TotalActions       int    `json:"total_actions"`
+	SucceededActions   int    `json:"succeeded_actions"`
+	FailedActions      int    `json:"failed_actions"`
+	TotalTokens        int    `json:"total_tokens"`
+	HumanInterventions int    `json:"human_interventions"`
+}
+
+func (p GoalCompletedPayloadV2) EventType() string { return "GoalCompleted" }
+func (p GoalCompletedPayloadV2) Validate() error {
+	if p.GoalID == "" {
+		return fmt.Errorf("GoalCompletedPayloadV2: GoalID is required")
+	}
+	if p.ArtifactPath == "" {
+		return fmt.Errorf("GoalCompletedPayloadV2: ArtifactPath is required")
+	}
+	if p.GoalState == "Failed" {
+		return fmt.Errorf("GoalCompletedPayloadV2: GoalState cannot be Failed")
 	}
 	return nil
 }

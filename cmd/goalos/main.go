@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/goalos/goalos/internal/channel"
 	"github.com/goalos/goalos/internal/config"
 	"github.com/goalos/goalos/internal/contextengine"
 	"github.com/goalos/goalos/internal/daemon"
@@ -98,21 +100,39 @@ func main() {
 	sched.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 6: Scheduler registered"}`, time.Now().Format(time.RFC3339))
 
+	// B14: BudgetTracker 提前声明，供 GoalCreated handler 闭包使用
+	var bt *scheduler.BudgetTracker
+
 	// TC-GL-006: GoalRunner per-Goal 执行控制。v0.1.1 fix: per-Goal PipelineRunner 避免跨 Goal 状态污染
 	bus.Subscribe(events.TypeGoalCreated, func(evt events.Event) error {
 		pr := scheduler.NewPipelineRunner(bus, store)
 		if cfg.MultiLLM.Enabled && len(cfg.MultiLLM.Providers) > 0 {
+			log.Printf("[Daemon] MultiLLM: enabled with %d providers", len(cfg.MultiLLM.Providers))
+			// R-861: Provider 健康检查——启动时过滤不可用 Provider
+			healthyCount := 0
 			var providers []scheduler.ProviderClient
 			for _, p := range cfg.MultiLLM.Providers {
-				// [FIXED] 增加 maxTokens 参数（从配置读取，默认 8192）
 				maxTokens := p.MaxTokens
-				if maxTokens == 0 {
-					maxTokens = 16384
+				if maxTokens == 0 { maxTokens = 16384 }
+				pc := scheduler.ProviderConfig{Name: p.Name, Model: p.Model, Endpoint: p.BaseURL}
+				status := scheduler.CheckProviderHealth(pc, p.APIKey)
+				if status.Healthy {
+					healthyCount++
+					providers = append(providers, scheduler.ProviderClient{Name: p.Name, Model: p.Model,
+						Client: missionengine.NewCloudLLMClient(p.BaseURL, p.APIKey, p.Model, maxTokens)})
+					log.Printf("[Daemon] MultiLLM provider ✅ %s/%s: %s", p.Name, p.Model, status.Message)
+				} else {
+					log.Printf("[Daemon] MultiLLM provider ❌ %s/%s: %s — skipped for this session", p.Name, p.Model, status.Message)
 				}
-				providers = append(providers, scheduler.ProviderClient{Name: p.Name, Model: p.Model,
-					Client: missionengine.NewCloudLLMClient(p.BaseURL, p.APIKey, p.Model, maxTokens)})
 			}
-			pr.SetMultiLLM(scheduler.NewMultiLLMVerifier(providers))
+			if healthyCount > 0 {
+				log.Printf("[Daemon] MultiLLM: %d/%d providers healthy", healthyCount, len(cfg.MultiLLM.Providers))
+				pr.SetMultiLLM(scheduler.NewMultiLLMVerifier(providers))
+			} else {
+				log.Printf("[Daemon] MultiLLM: all providers unhealthy, verification disabled")
+			}
+		} else {
+			log.Printf("[Daemon] MultiLLM: disabled (enabled=%v, providers=%d)", cfg.MultiLLM.Enabled, len(cfg.MultiLLM.Providers))
 		}
 		gr := scheduler.NewGoalRunner(scheduler.Goal{ID: evt.GoalID, Title: fmt.Sprint(evt.Payload["title"])}, bus, store, pr, goalAnchor)
 		go func() {
@@ -131,16 +151,21 @@ func main() {
 
 	// R-383 P0接线修复 #2-4: Flow/Snapshot/BudgetTracker
 	flowReg := scheduler.NewFlowRegistry()
-	_ = scheduler.NewFlowComposer(flowReg) // v1.5: MissionEngine接入
+	flowComposer := scheduler.NewFlowComposer(flowReg) // A18: 创建 FlowComposer（稍后接入）
 	store.SetSnapshotCallback(func(goalID string) {
-		state, _ := store.LoadState(goalID)
+		state, err := store.LoadState(goalID)
+		if err != nil {
+			log.Printf("[Daemon] snapshot callback: LoadState failed for %s: %v", goalID, err)
+			return
+		}
 		if state != nil {
-			store.SaveSnapshot(goalID, state)
+			if err := store.SaveSnapshot(goalID, state); err != nil {
+				log.Printf("[Daemon] snapshot callback: SaveSnapshot failed for %s: %v", goalID, err)
+			}
 		}
 	})
-	bt := scheduler.NewBudgetTracker()
+	bt = scheduler.NewBudgetTracker()
 	bt.SetEventBus(bus)
-	_ = bt
 
 	secretKey, err := governance.LoadOrGenerateSecret(goalOSDir + "/secrets.enc")
 	if err != nil {
@@ -190,15 +215,13 @@ func main() {
 		if u := os.Getenv("GOALOS_LLM_BASE_URL"); u != "" {
 			baseURL = u
 		}
+		// E6: 优先级——config指定env > GOALOS_LLM_API_KEY > config文件值
 		apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
 		if apiKey == "" {
-			apiKey = cfg.LLM.APIKey
+			apiKey = os.Getenv("GOALOS_LLM_API_KEY")
 		}
 		if apiKey == "" {
 			apiKey = cfg.LLM.APIKey
-		}
-		if k := os.Getenv("GOALOS_LLM_API_KEY"); k != "" {
-			apiKey = k
 		}
 		model := cfg.LLM.Model
 		if m := os.Getenv("GOALOS_LLM_MODEL"); m != "" {
@@ -218,6 +241,18 @@ func main() {
 		ga.SetPlanTimeout(cfg.LLM.PlanTimeout)
 	}
 	missionEng := missionengine.New(bus, agent)
+	missionEng.SetFlowComposer(flowComposer) // A18: FlowComposer 接入
+	// v0.2.2 W6 B10: autonomous 模式自动确认 MissionGraph
+	missionEng.SetAutoConfirm(cfg.Daemon.AutonomyLevel == "autonomous")
+	// v0.2.2 W8 B13: 设置回退 Provider（Multi-LLM 配置的第二 Provider）
+	if len(cfg.MultiLLM.Providers) > 1 {
+		p := cfg.MultiLLM.Providers[1]
+		mt := p.MaxTokens
+		if mt == 0 { mt = 16384 }
+		fallbackClient := missionengine.NewCloudLLMClient(p.BaseURL, p.APIKey, p.Model, mt)
+		missionEng.SetFallbackAgent(missionengine.NewGoalAgentWithBus(fallbackClient, bus))
+		log.Printf("[Daemon] B13: fallback provider set: %s/%s", p.Name, p.Model)
+	}
 	missionEng.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (%s)"}`, time.Now().Format(time.RFC3339), agentName)
 
@@ -229,6 +264,33 @@ func main() {
 	gov.RegisterCapabilities("builtin", []string{"fs.read", "fs.write", "shell.execute", "browser.open", "browser.click", "web.search"})
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 10: Plugin Runner registered"}`, time.Now().Format(time.RFC3339))
 
+	// v0.2.2 W6 B12: Telegram Bot Channel 启动接线
+	if token := os.Getenv("TELEGRAM_BOT_TOKEN"); token != "" {
+		tb := channel.NewTelegramBot(token)
+		go func() {
+			defer tb.Stop() // W6-B3: daemon 关闭时清理
+			log.Printf("[Daemon] Step 10.5: Telegram Bot starting...")
+			if err := tb.Start(func(msg channel.Message) error {
+				// W6-B1: 保留 SenderID 以支持回复
+				// W6-B2: 返回真实 error 而非永远 nil
+				bus.Publish(events.Event{
+					Type:   events.TypeMessageReceived,
+					Source: "telegram-bot",
+					GoalID: msg.SenderID, // 用 SenderID 关联用户
+					Payload: map[string]interface{}{
+						"channel":  msg.Channel,
+						"sender":   msg.SenderID,
+						"content":  msg.Content,
+					},
+				})
+				return nil
+			}); err != nil {
+				log.Printf("[Daemon] Telegram Bot error: %v", err)
+			}
+		}()
+		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 10.5: Telegram Bot registered"}`, time.Now().Format(time.RFC3339))
+	}
+
 	if _, err := store.RecoverAll(); err != nil {
 		log.Printf(`{"level":"WARN","msg":"Step 11: recovery: %v"}`, err)
 	} else {
@@ -236,9 +298,17 @@ func main() {
 	}
 
 	pidFile := goalOSDir + "/goalos.pid"
+	// A19: 清理前次崩溃残留的 PID 文件
+	if data, err := os.ReadFile(pidFile); err == nil {
+		var oldPID int
+		fmt.Sscanf(string(data), "%d", &oldPID)
+		if oldPID > 0 && !isProcessAlive(oldPID) {
+			os.Remove(pidFile) // 前次崩溃残留——清理
+		}
+	}
 	pidLock, err := acquirePIDLock(pidFile)
 	if err != nil {
-		log.Fatalf("Step 12: PID lock failed")
+		log.Fatalf("Step 12: PID lock failed: %v", err)
 	}
 	defer os.Remove(pidFile)
 	defer pidLock.Close()
@@ -250,6 +320,17 @@ func main() {
 	daemon.SetEventBus(bus)
 	daemon.SetStateStore(store)
 	sse := daemon.NewSSEManager()
+	// R-835: PlanProgressUpdate → SSE 实时推送 LLM 进展
+	bus.Subscribe("PlanProgressUpdate", func(evt events.Event) error { sse.Push("PlanProgressUpdate", evt.Payload); return nil })
+	// R-845: MultiLLMVerificationCompleted → SSE + API（含完整审查报告）
+	bus.Subscribe("MultiLLMVerificationCompleted", func(evt events.Event) error {
+		sse.Push("MultiLLMVerificationCompleted", evt.Payload)
+		if v, _ := evt.Payload["verdict"].(string); v != "" {
+			report := buildMultiLLMReport(evt.Payload)
+			api.UpdateMultiLLMVerdict(evt.GoalID, v, report)
+		}
+		return nil
+	})
 	bus.Subscribe("GoalCreated", func(evt events.Event) error { sse.Push("GoalCreated", evt.Payload); return nil })
 	bus.Subscribe("GoalCompleted", func(evt events.Event) error {
 		failed, _ := evt.Payload["failed"].(float64)
@@ -287,13 +368,23 @@ func main() {
 		}
 		return nil
 	})
+	// R-833 B18: ActionScheduled → SSE + action status
 	bus.Subscribe("ActionScheduled", func(evt events.Event) error {
 		api.UpdateGoalProgress(evt.GoalID)
+		if actionID, ok := evt.Payload["action_id"].(string); ok && actionID != "" {
+			actionType, _ := evt.Payload["action_type"].(string)
+			api.UpdateActionStatus(evt.GoalID, actionID, actionType, "scheduled")
+		}
+		sse.Push("ActionScheduled", evt.Payload)
 		return nil
 	})
-	// v0.1.1 fix: 移除重复订阅——已有 events.TypeActionCompleted 版本
+	// R-833 B18: ActionFailed → action status
 	bus.Subscribe("ActionFailed", func(evt events.Event) error {
 		api.UpdateGoalProgress(evt.GoalID)
+		if actionID, ok := evt.Payload["action_id"].(string); ok && actionID != "" {
+			api.UpdateActionStatus(evt.GoalID, actionID, "", "failed")
+		}
+		sse.Push("ActionFailed", evt.Payload)
 		return nil
 	})
 	bus.Subscribe("ActionRetrying", func(evt events.Event) error {
@@ -313,14 +404,18 @@ func main() {
 		})
 		return nil
 	})
+	// R-833 B18: ActionCompleted → SSE + action status
 	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
-		if result, ok := evt.Payload["result"]; ok {
-			api.TrackResult(evt.GoalID, result)
-			if m, ok := result.(map[string]interface{}); ok && m["status"] == "success" {
-				api.UpdateGoalStatus(evt.GoalID, "已完成")
-			}
+		if actionID, ok := evt.Payload["action_id"].(string); ok && actionID != "" {
+			api.UpdateActionStatus(evt.GoalID, actionID, "", "completed")
 		}
-		return nil
+	// R-828 final: flat payload——status 不再嵌套在 result 内
+	api.TrackResult(evt.GoalID, evt.Payload)
+	if status, _ := evt.Payload["status"].(string); status == "success" {
+		api.UpdateGoalStatus(evt.GoalID, "已完成")
+	}
+	sse.Push("ActionCompleted", evt.Payload)
+	return nil
 	})
 	bus.Subscribe(events.TypeActionApproved, func(evt events.Event) error {
 		api.RemovePendingApproval(fmt.Sprint(evt.Payload["action_id"]))
@@ -343,8 +438,27 @@ func main() {
 		}
 	})
 	mux.HandleFunc("/api/goals/", func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimPrefix(r.URL.Path, "/api/goals/")
-		id = strings.Split(id, "/")[0]
+		path := strings.TrimPrefix(r.URL.Path, "/api/goals/")
+		parts := strings.Split(path, "/")
+
+		// R-846~R-850: MultiLLM ReviewReport API 子路径
+		// GET  /api/goals/:goal_id/reviews              → 审查摘要列表
+		// GET  /api/goals/:goal_id/reviews/:action_id    → 完整审查报告
+		// POST /api/goals/:goal_id/reviews/:action_id/decide → 用户决策
+		if len(parts) >= 2 && parts[1] == "reviews" {
+			goalID := parts[0]
+			switch {
+			case len(parts) == 4 && parts[3] == "decide" && r.Method == http.MethodPost:
+				api.HandleDecideReview(w, r, goalID, parts[2]) // parts[2]=actionID
+			case len(parts) == 3 && parts[2] != "":
+				api.HandleGetReviewDetail(w, r, goalID, parts[2]) // parts[2]=actionID
+			default:
+				api.HandleGetReviews(w, r, goalID)
+			}
+			return
+		}
+
+		id := parts[0]
 		r.SetPathValue("id", id)
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/pause"):
@@ -377,6 +491,21 @@ func main() {
 	mux.HandleFunc("/api/system/status", api.HandleSystemStatus)
 	mux.HandleFunc("/api/system/stop", api.HandleDaemonStop)
 	mux.HandleFunc("/api/system/restart", api.HandleDaemonRestart)
+	// R-840: MultiLLM 运行时配置——用户可随时开关
+	mux.HandleFunc("/api/system/multi-llm", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			var body struct{ Enabled bool `json:"enabled"` }
+			json.NewDecoder(r.Body).Decode(&body)
+			cfg.MultiLLM.Enabled = body.Enabled
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"multi_llm":{"enabled":%v,"providers":%d}}`, cfg.MultiLLM.Enabled, len(cfg.MultiLLM.Providers))
+			log.Printf("[Daemon] MultiLLM toggled: enabled=%v", cfg.MultiLLM.Enabled)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"multi_llm":{"enabled":%v,"providers":%d}}`, cfg.MultiLLM.Enabled, len(cfg.MultiLLM.Providers))
+		}
+	})
+
 	mux.HandleFunc("/metrics", api.HandleMetrics) // v0.1.0 H8: Prometheus 格式指标端点
 	mux.HandleFunc("/api/system/reload", func(w http.ResponseWriter, r *http.Request) {
 		configPath := home + "/.goalos/config/daemon.yaml"
@@ -384,28 +513,41 @@ func main() {
 			http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"`+err.Error()+`"}}`, http.StatusInternalServerError)
 			return
 		}
+		// E6: 优先级——config指定env > GOALOS_LLM_API_KEY > config文件值
 		apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
 		if apiKey == "" {
-			apiKey = cfg.LLM.APIKey
+			apiKey = os.Getenv("GOALOS_LLM_API_KEY")
 		}
 		if apiKey == "" {
 			apiKey = cfg.LLM.APIKey
-		}
-		if k := os.Getenv("GOALOS_LLM_API_KEY"); k != "" {
-			apiKey = k
 		}
 		// [FIXED] 增加 maxTokens 参数（从配置读取，默认 8192）
 		maxTokens := cfg.LLM.MaxTokens
 		if maxTokens == 0 {
 			maxTokens = 16384
 		}
-		cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, cfg.LLM.Model, maxTokens)
-		newAgent := missionengine.NewGoalAgentWithBus(cloudClient, bus)
-		newAgent.SetPlanTimeout(cfg.LLM.PlanTimeout)
-		missionEng.SetAgent(newAgent)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `"}`))
-		log.Printf("[Daemon] hot-reloaded: model=%s, agent swapped", cfg.LLM.Model)
+	// B19: 跨 Provider 热加载——与 startup 逻辑一致
+	var newAgent missionengine.Agent
+	model := cfg.LLM.Model
+	if m := os.Getenv("GOALOS_LLM_MODEL"); m != "" { model = m }
+	switch {
+	case cfg.LLM.Provider == "ollama" || os.Getenv("OLLAMA_MODEL") != "":
+		if m := os.Getenv("OLLAMA_MODEL"); m != "" { model = m }
+		baseURL := cfg.LLM.BaseURL
+		if baseURL == "" { baseURL = "http://localhost:11434" }
+		ollamaClient := missionengine.NewOllamaClient(model, baseURL, maxTokens)
+		newAgent = missionengine.NewGoalAgentWithBus(ollamaClient, bus)
+	default:
+		cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, model, maxTokens)
+		newAgent = missionengine.NewGoalAgentWithBus(cloudClient, bus)
+	}
+	if ga, ok := newAgent.(*missionengine.GoalAgent); ok {
+		ga.SetPlanTimeout(cfg.LLM.PlanTimeout)
+	}
+	missionEng.SetAgent(newAgent)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `","provider":"` + cfg.LLM.Provider + `"}`))
+	log.Printf("[Daemon] hot-reloaded: provider=%s model=%s, agent swapped", cfg.LLM.Provider, cfg.LLM.Model)
 	})
 	server := &http.Server{Addr: fmt.Sprintf("localhost:%d", cfg.Daemon.Port), Handler: mux}
 	go func() {
@@ -435,6 +577,9 @@ func main() {
 	defer stop()
 	<-ctx.Done()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Shutting down..."}`, time.Now().Format(time.RFC3339))
+	gov.Stop() // H18: 停止 auditFlushLoop + revokedTokensCleanup
+	bus.Shutdown()
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"EventBus stopped."}`, time.Now().Format(time.RFC3339))
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Daemon.ShutdownTimeout)
 	defer cancel()
 	api.SetShutdownHook(func() { cancel() })
@@ -449,4 +594,33 @@ func acquirePIDLock(path string) (*os.File, error) {
 	}
 	fmt.Fprintf(f, "%d\n", os.Getpid())
 	return f, nil
+}
+
+// isProcessAlive 检查进程是否存活（A19）。
+func isProcessAlive(pid int) bool {
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	// Unix: Signal(0) 不发送信号，只检查权限和存活
+	err = p.Signal(os.Signal(nil))
+	return err == nil
+}
+
+// buildMultiLLMReport 从 MultiLLM 事件构造人类可读审查报告（R-845）。
+func buildMultiLLMReport(payload map[string]interface{}) string {
+	var b strings.Builder
+	if votes, ok := payload["votes"].([]interface{}); ok {
+		for _, v := range votes {
+			if vt, ok := v.(map[string]interface{}); ok {
+				fmt.Fprintf(&b, "%s/%s → %s",
+					vt["provider"], vt["model"], vt["vote"])
+				if r, ok := vt["reasoning"].(string); ok && r != "" {
+					fmt.Fprintf(&b, ": %s", r)
+				}
+				b.WriteString("\n")
+			}
+		}
+	}
+	return b.String()
 }

@@ -5,9 +5,14 @@
 package missionengine
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
-	"strings"
+	"net"
+	"sort"
 
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/trace"
@@ -101,14 +106,31 @@ type GraphEdge struct {
 
 // Engine is the Mission Engine.
 type Engine struct {
-	bus   *eventbus.EventBus
-	agent Agent
-	seq   int
+	bus          *eventbus.EventBus
+	agent        Agent
+	fallbackAgent Agent     // v0.2.2 W8 B13: Plan 失败时的回退 Provider
+	seq          int
+	flowComposer interface{} // A18: FlowComposer 验证（*scheduler.FlowComposer）
+	autoConfirm  bool        // v0.2.2 W6 B10: autonomous 模式自动确认
 }
+
+// SetFallbackAgent 设置 Plan 阶段的回退 Provider（B13）。
+func (e *Engine) SetFallbackAgent(a Agent) { e.fallbackAgent = a }
 
 // New creates a Mission Engine.
 func New(bus *eventbus.EventBus, agent Agent) *Engine {
 	return &Engine{bus: bus, agent: agent}
+}
+
+// SetFlowComposer 设置 FlowComposer（A18）。
+func (e *Engine) SetFlowComposer(fc interface{}) {
+	e.flowComposer = fc
+}
+
+// SetAutoConfirm 设置是否自动确认 MissionGraph（B10）。
+// autonomous 模式 → true。否则等待用户确认。
+func (e *Engine) SetAutoConfirm(auto bool) {
+	e.autoConfirm = auto
 }
 
 // Start subscribes to PlanRequested and begins processing.
@@ -136,6 +158,8 @@ func (e *Engine) handlePlanRequested(evt events.Event) error {
 
 	// v0.1.0 三步规划（R-350）：Align → Analyze → Plan
 	// R-724: 删除 PlanLegacy 回退——LLM 失败即诚实失败，不伪造产出物
+	// R-835: 推送进度——LLM Align 开始
+	e.pushProgress(evt.GoalID, "Align", "LLM 正在分析目标...")
 	t.StageStart("Agent.Align")
 	criteria, err := e.agent.Align(goalText, ctx)
 	if err != nil {
@@ -157,6 +181,7 @@ func (e *Engine) handlePlanRequested(evt events.Event) error {
 	// [FIXED] 原代码：Analyze 失败时（err != nil），仍调用 Plan(criteria, nil, ...) 并发布图
 	// 这是致命 bug：Analyze 失败意味着没有有效的分析结果，但系统仍生成"假任务图"
 	// [FIXED] 现在：Analyze 失败即终止流程，发布 GoalFailed
+	e.pushProgress(evt.GoalID, "Analyze", "LLM 正在评估任务复杂度...")
 	t.StageStart("Agent.Analyze")
 	analysis, err := e.agent.Analyze(criteria, ctx)
 	if err != nil {
@@ -184,8 +209,14 @@ func (e *Engine) handlePlanRequested(evt events.Event) error {
 		flowName = analysis.SuggestedFlow
 	}
 
+	e.pushProgress(evt.GoalID, "Plan", "LLM 正在生成执行计划...")
 	t.StageStart("Agent.Plan")
 	graph, err := e.agent.Plan(criteria, analysis, flowName, ctx)
+	// B13: Plan 失败→尝试回退 Provider
+	if err != nil && e.fallbackAgent != nil {
+		log.Printf("[MissionEngine] Plan failed with primary agent: %v — trying fallback", err)
+		graph, err = e.fallbackAgent.Plan(criteria, analysis, flowName, ctx)
+	}
 	if err != nil {
 		t.StageFail("Agent.Plan", err)
 		t.Summary()
@@ -240,6 +271,32 @@ func (e *Engine) publishRejected(goalID string, reason string, attempt int) {
 	})
 }
 
+// PlanHash 计算 MissionGraph 的规范 JSON SHA256 哈希（R-859）。
+// 使用 sorted keys + compact JSON 确保确定性。
+func PlanHash(graph *MissionGraph) string {
+	// 构建可排序的规范化结构
+	type nodeRep struct {
+		ID          string `json:"id"`
+		Type        string `json:"type"`
+		Description string `json:"description"`
+		ActionType  string `json:"action_type"`
+		Target      string `json:"target"`
+	}
+	nodes := make([]nodeRep, len(graph.Nodes))
+	for i, n := range graph.Nodes {
+		nodes[i] = nodeRep{n.ID, n.Type, n.Description, n.ActionType, n.Target}
+	}
+	// 按 ID 排序确保确定性
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].ID < nodes[j].ID })
+
+	data, _ := json.Marshal(map[string]interface{}{
+		"node_count": len(graph.Nodes),
+		"nodes":      nodes,
+	})
+	h := sha256.Sum256(data)
+	return fmt.Sprintf("%x", h)
+}
+
 // publishGraph 发布 MissionGenerated + UserConfirmed 事件。
 func (e *Engine) publishGraph(goalID string, graph *MissionGraph) {
 	// 构造节点 payload 列表（供 Scheduler 读取 action_type/target）
@@ -253,6 +310,11 @@ func (e *Engine) publishGraph(goalID string, graph *MissionGraph) {
 			"target":      n.Target,
 		}
 	}
+
+	// R-859: 计算 PlanHash，写入 MissionGenerated 事件
+	ph := PlanHash(graph)
+	log.Printf("[MissionEngine] PlanHash: %s (goal=%s, nodes=%d)", ph[:12], goalID, len(graph.Nodes))
+
 	e.publish(events.Event{
 		Type:   events.TypeMissionGenerated,
 		GoalID: goalID,
@@ -261,15 +323,30 @@ func (e *Engine) publishGraph(goalID string, graph *MissionGraph) {
 			"node_count": float64(len(graph.Nodes)),
 			"strategy":   "GoalAgent",
 			"nodes":      nodesPayload,
+			"plan_hash":  ph, // R-859
 		},
 	})
 
-	// 驱动状态机：自动确认（MVP 无人工确认环节）
-	e.publish(events.Event{
-		Type:   events.TypeUserConfirmed,
-		GoalID: goalID,
-		Source: "mission-engine",
-	})
+	// v0.2.2 W6 B10: autonomous 模式自动确认，否则等待用户确认
+	if e.autoConfirm {
+		e.publish(events.Event{
+			Type:   events.TypeUserConfirmed,
+			GoalID: goalID,
+			Source: "mission-engine",
+		})
+	} else {
+		// W6-K1: 非 autonomous 模式不自动确认——发布 UserRejected 避免死锁。
+		// Goal 不会挂起；Scheduler 收到 UserRejected 后通知用户需手动确认。
+		log.Printf("[MissionEngine] non-autonomous mode: publishing UserRejected for goal=%s", goalID)
+		e.publish(events.Event{
+			Type:   events.TypeUserRejected,
+			GoalID: goalID,
+			Source: "mission-engine",
+			Payload: map[string]interface{}{
+				"reason": "manual_confirmation_required",
+			},
+		})
+	}
 }
 
 func (e *Engine) validate(g *MissionGraph) error {
@@ -388,10 +465,29 @@ func isTimeout(err error) bool {
 	if err == nil {
 		return false
 	}
-	s := err.Error()
-	return strings.Contains(s, "deadline exceeded") ||
-		strings.Contains(s, "timeout") ||
-		strings.Contains(s, "canceled")
+	// E5: 使用 errors.Is 而非字符串匹配
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	// 兜底：net.Error 超时
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	return false
+}
+
+// pushProgress 推送 Plan 阶段进度到 EventBus（R-835: Dashboard 实时反馈）。
+func (e *Engine) pushProgress(goalID, stage, detail string) {
+	e.publish(events.Event{
+		Type:    "PlanProgressUpdate",
+		GoalID:  goalID,
+		Source:  "mission-engine",
+		Payload: map[string]interface{}{
+			"stage":  stage,
+			"detail": detail,
+		},
+	})
 }
 
 // publishTimeoutIntervention 发布 LLM 超时干预事件，让用户选择下一步（v0.1.1 Jobs 产品决策）。
@@ -454,7 +550,15 @@ func (s *StubAgent) Plan(criteria *CompletionCriteria, analysis *TaskAnalysis, f
 	if criteria != nil && criteria.SuccessDefinition != "" {
 		goal = criteria.SuccessDefinition
 	}
-	actionType, target := InferAction(goal)
+	actionType, target, err := InferAction(goal)
+	if err != nil {
+		log.Printf("[WARNING] STUB AGENT: cannot infer action type for goal: %v. Returning minimal graph.", err)
+		return &MissionGraph{
+			GoalID: ctx.GoalID,
+			Nodes:  []GraphNode{{ID: "1", Type: "mission", Description: goal, ActionType: "unknown", Target: goal}},
+			Edges:  []GraphEdge{},
+		}, nil
+	}
 	return &MissionGraph{
 		GoalID: ctx.GoalID,
 		Nodes:  []GraphNode{{ID: "1", Type: "mission", Description: goal, ActionType: actionType, Target: target}},
@@ -466,18 +570,25 @@ func (s *StubAgent) Plan(criteria *CompletionCriteria, analysis *TaskAnalysis, f
 
 // Verify Stub 实现（v0.1.0 R-372）。
 // [WARNING] 这是测试桩，生产环境不应使用
+// v0.2.0 audit fix: 非空代码返回 WARN 而非 PASS，明确标注无法验证。
 func (s *StubAgent) Verify(code string, actionID string, ctx Context) (*VerificationResult, error) {
 	if len(code) == 0 {
-		return &VerificationResult{ActionID: actionID, Verdict: "FAIL", Reason: "empty code", Score: 0}, nil
+		return &VerificationResult{ActionID: actionID, Verdict: "FAIL", Reason: "stub: empty code — cannot verify", Score: 0}, nil
 	}
-	return &VerificationResult{ActionID: actionID, Verdict: "PASS", Reason: "stub", Score: 100}, nil
+	return &VerificationResult{
+		ActionID: actionID,
+		Verdict:  "WARN",
+		Reason:   "stub agent active — no real verification performed. Result confidence is 0.",
+		Score:    0,
+	}, nil
 }
 
 // InferAction 返回默认 action_type。v0.1.0: GoalAgent+LLM 推理替代关键词匹配。
-// 仅作为 StubAgent 的最后回退。
+// 仅作为 StubAgent 的最后回退。调用方必须检查 error。
+// v0.2.0 audit fix: 返回 error 而非静默 fallback 到 shell.execute。
 // [WARNING] 生产环境应使用 GoalAgent 的 LLM 推理，而非此硬编码回退
-func InferAction(goal string) (string, string) {
-	return "shell.execute", goal
+func InferAction(goal string) (string, string, error) {
+	return "", "", fmt.Errorf("cannot infer action: no LLM agent configured for goal: %s", goal)
 }
 
 // SetAgent 热替换 Agent（v0.1.0 UX1 热加载）。

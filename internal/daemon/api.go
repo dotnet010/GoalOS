@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,11 +35,21 @@ type Handler struct {
 	actionResults    map[string]interface{}
 	pendingApprovals map[string]PendingApproval
 	artifacts        map[string][]string // goalID → paths (R-030)
+	Reviews          map[string][]*ReviewSummary // goalID → review summaries (R-846)
+	ReviewReports    map[string]*events.ReviewReport // reportKey(goalID+actionID) → full report
 	Metrics          *metrics.Registry   // v0.1.0 H8: Prometheus 指标注册表
 	mu               sync.RWMutex
 	port             int
 	startTime        time.Time
 	onShutdown       func()
+}
+
+// ReviewSummary 是 ReviewReport 的列表视图摘要（不含 reasoning）。
+type ReviewSummary struct {
+	ActionID         string        `json:"action_id"`
+	Verdict          string        `json:"verdict"`
+	VoteDistribution events.VoteDist `json:"vote_distribution"`
+	CreatedAt        string        `json:"created_at"`
 }
 
 // SetPort 设置 daemon 端口号。
@@ -59,10 +70,13 @@ type GoalRecord struct {
 	Status       string      `json:"status"`
 	ActionsDone  int         `json:"actions_done"`
 	ActionsTotal int         `json:"actions_total"`
-	ErrorHint    string      `json:"error_hint,omitempty"`    // R-376: 失败时的人类可读建议
-	OutputPath   string      `json:"output_path,omitempty"`   // R-376: 成功时的产出物路径
-	Suggestions  []Suggestion `json:"suggestions,omitempty"`  // R-381: 失败后的操作建议
-	Result       interface{} `json:"result,omitempty"`
+	ErrorHint    string      `json:"error_hint,omitempty"`
+	OutputPath   string      `json:"output_path,omitempty"`
+	Suggestions      []Suggestion  `json:"suggestions,omitempty"`
+	Result           interface{}  `json:"result,omitempty"`
+	Actions          []ActionStatus `json:"actions,omitempty"`
+	MultiLLMVerdict  string       `json:"multi_llm_verdict,omitempty"`
+	MultiLLMReport   string       `json:"multi_llm_report,omitempty"` // R-840: MultiLLM 裁决
 }
 
 // Suggestion 是失败后的操作建议（R-381）。
@@ -71,12 +85,44 @@ type Suggestion struct {
 	Label  string `json:"label"`
 }
 
+// ActionStatus 是单个 Action 的状态记录（R-833 B18）。
+type ActionStatus struct {
+	ActionID   string `json:"action_id"`
+	ActionType string `json:"action_type,omitempty"`
+	Status     string `json:"status"` // scheduled|approved|completed|failed
+}
+
+// UpdateMultiLLMVerdict 更新 MultiLLM 裁决结果（R-840）。
+func (h *Handler) UpdateMultiLLMVerdict(goalID, verdict, report string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if g, ok := h.Goals[goalID]; ok {
+		g.MultiLLMVerdict = verdict
+		g.MultiLLMReport = report
+	}
+}
+
+// UpdateActionStatus 更新 Goal 的最近 Action 状态（R-833）。
+func (h *Handler) UpdateActionStatus(goalID, actionID, actionType, status string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if g, ok := h.Goals[goalID]; ok {
+		g.Actions = append(g.Actions, ActionStatus{ActionID: actionID, ActionType: actionType, Status: status})
+		if len(g.Actions) > 5 {
+			g.Actions = g.Actions[len(g.Actions)-5:] // 只保留最近5个
+		}
+	}
+}
+
 // NewHandler 创建一个 API Handler。
 func NewHandler() *Handler {
 	return &Handler{
 		Goals:            make(map[string]*GoalRecord),
 		actionResults:    make(map[string]interface{}),
 		pendingApprovals: make(map[string]PendingApproval),
+		artifacts:        make(map[string][]string),
+		Reviews:          make(map[string][]*ReviewSummary),
+		ReviewReports:    make(map[string]*events.ReviewReport),
 	}
 }
 
@@ -212,21 +258,166 @@ func (h *Handler) SetGoalActionsTotal(goalID string, total int) {
 }
 
 // SetGoalErrorHint 设置失败时的人类可读建议（R-377）。
+// v0.2.2 W6 B9: 自动从 failHints 查表补全 suggestions。
 func (h *Handler) SetGoalErrorHint(goalID string, hint string, suggestions []Suggestion) {
 	h.mu.Lock()
 	if g, ok := h.Goals[goalID]; ok {
 		g.ErrorHint = hint
+		if len(suggestions) == 0 {
+			// W6-B5: 精确匹配 failHints key（非子串匹配）
+			for key, sug := range failHints {
+				if hint == key || strings.HasPrefix(hint, key+":") || strings.HasPrefix(hint, key+" ") {
+					suggestions = append(suggestions, sug)
+				}
+			}
+		}
+		// W6-J1: 默认建议——基于 Goal 状态动态生成
+		if len(suggestions) == 0 {
+			suggestions = []Suggestion{
+				{Action: "retry", Label: "重试当前目标"},
+				{Action: "new_goal", Label: "重新描述目标"},
+				{Action: "check_plugins", Label: "检查插件配置"},
+			}
+		}
 		g.Suggestions = suggestions
 	}
 	h.mu.Unlock()
 }
 
 // failHints 映射内部错误类型到人类可读建议（R-377）。
+// v0.2.0 会议 #156 R-852: 新增 3 条 MultiLLM 场景。
 var failHints = map[string]Suggestion{
-	"execution_error":   {Action: "retry", Label: "重试当前目标"},
-	"llm_timeout":       {Action: "switch_model", Label: "更换更快的模型"},
-	"no_output":         {Action: "simplify", Label: "简化目标描述"},
-	"plugin_not_found":  {Action: "check_plugins", Label: "检查插件配置"},
+	"execution_error":      {Action: "retry", Label: "重试当前目标"},
+	"llm_timeout":          {Action: "switch_model", Label: "更换更快的模型"},
+	"no_output":            {Action: "simplify", Label: "简化目标描述"},
+	"plugin_not_found":     {Action: "check_plugins", Label: "检查插件配置"},
+	"MULTI_LLM_FAIL":       {Action: "view_review", Label: "查看审查详情"},
+	"MULTI_LLM_WARN":       {Action: "view_review", Label: "查看审查详情"},
+	"MULTI_LLM_DIVERGENCE": {Action: "view_review", Label: "查看分歧详情"},
+}
+
+// StoreReviewReport 存储 ReviewReport 并在对应的 GoalRecord 上更新审查摘要（R-846）。
+func (h *Handler) StoreReviewReport(report *events.ReviewReport) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	key := report.GoalID + ":" + report.ActionID
+	h.ReviewReports[key] = report
+
+	summary := &ReviewSummary{
+		ActionID:         report.ActionID,
+		Verdict:          report.Verdict,
+		VoteDistribution: report.VoteDistribution,
+		CreatedAt:        report.CreatedAt,
+	}
+
+	h.Reviews[report.GoalID] = append(h.Reviews[report.GoalID], summary)
+
+	// 更新 GoalRecord 的 MultiLLM 裁决字段
+	if g, ok := h.Goals[report.GoalID]; ok {
+		g.MultiLLMVerdict = report.Verdict
+	}
+}
+
+// HandleGetReviews 返回 Goal 下所有 Action 的审查摘要列表（R-848）。
+func (h *Handler) HandleGetReviews(w http.ResponseWriter, r *http.Request, goalID string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	reviews, ok := h.Reviews[goalID]
+	if !ok {
+		reviews = []*ReviewSummary{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(reviews)
+}
+
+// HandleGetReviewDetail 返回完整 ReviewReport（含所有 Provider 的 reasoning）（R-848）。
+func (h *Handler) HandleGetReviewDetail(w http.ResponseWriter, r *http.Request, goalID, actionID string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	key := goalID + ":" + actionID
+	report, ok := h.ReviewReports[key]
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "review not found"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
+}
+
+// DecideRequest 是用户决策的请求体（R-850）。
+type DecideRequest struct {
+	Decision string `json:"decision"`           // "accept" | "retry" | "refine"
+	Feedback string `json:"feedback,omitempty"` // retry 或 refine 时的反馈
+}
+
+// HandleDecideReview 处理用户对 MultiLLM 审查结果的决策（R-850）。
+func (h *Handler) HandleDecideReview(w http.ResponseWriter, r *http.Request, goalID, actionID string) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DecideRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	// 验证 decision 合法性
+	if req.Decision != "accept" && req.Decision != "retry" && req.Decision != "refine" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "decision must be accept, retry, or refine"})
+		return
+	}
+
+	// accept 需确认（前端二次确认对话框，API 层仅记录）
+	tainted := req.Decision == "accept"
+
+	// 更新 ReviewReport 中的 user_decision
+	h.mu.Lock()
+	key := goalID + ":" + actionID
+	if report, ok := h.ReviewReports[key]; ok {
+		report.UserDecision = &events.UserDecision{
+			Decision:  req.Decision,
+			DecidedAt: time.Now().UTC().Format(time.RFC3339),
+			Feedback:  req.Feedback,
+			Tainted:   tainted,
+		}
+	}
+	h.mu.Unlock()
+
+	// 发布 MultiLLMUserDecided 事件——由 EventBus 订阅者（PipelineRunner）处理状态转换
+	// 注意：此处需要访问 EventBus。为 MVP 实现，Handler 通过回调/eventBus 引用发布事件。
+	// 事件发布细节见 cmd/goalos/main.go 中的路由注册——事件由 daemon 通过 evBus.Publish() 发布。
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":   "ok",
+		"decision": req.Decision,
+		"tainted":  tainted,
+		"message":  decisionMessage(req.Decision),
+	})
+}
+
+// decisionMessage 返回用户决策的人类可读确认消息。
+func decisionMessage(decision string) string {
+	switch decision {
+	case "accept":
+		return "已接受结果。AI 审查意见已被覆盖（tainted_review=true），系统将继续执行。"
+	case "retry":
+		return "已触发新 Session 重做。系统将携带你的反馈重新执行此 Action。"
+	case "refine":
+		return "已触发需求修改。系统将根据你的新需求重新规划。"
+	default:
+		return ""
+	}
 }
 
 
@@ -280,6 +471,11 @@ func (h *Handler) HandleCreateGoal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "缺少 goal 字段")
 		return
 	}
+	// E16: 限制 goal 长度，防止超大请求
+	if len(body.Goal) > 10000 {
+		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "goal 超过 10000 字符上限")
+		return
+	}
 
 	goalID := generateGoalID()
 
@@ -291,18 +487,35 @@ func (h *Handler) HandleCreateGoal(w http.ResponseWriter, r *http.Request) {
 	}
 	h.mu.Unlock()
 
-	// 发布 GoalCreated 事件
+	// R-828 Step 3: 使用 typed payload 发布 GoalCreated
 	if eventBus != nil {
-		eventBus.Publish(events.NewEvent(events.TypeGoalCreated, goalID, "daemon").WithPayload(map[string]interface{}{
-			"title":       body.Goal,
-			"description": body.Goal,
-		}))
+		payload := events.GoalCreatedPayload{
+			GoalID:      goalID,
+			Title:       body.Goal,
+			Description: body.Goal,
+		}
+		if err := payload.Validate(); err != nil {
+			writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, err.Error())
+			return
+		}
+		eventBus.Publish(events.NewEvent(events.TypeGoalCreated, goalID, "daemon").WithPayload(events.PayloadToMap(payload)))
 	}
 
+	// v0.2.2 W6 B8: 预估等待时间 + 下一步状态提示
+	// W6-B4: 基于 daemon 运行时长估算（新 daemon→保守 30s，运行中→10s）
+	estWait := 30
+	if !h.startTime.IsZero() {
+		uptime := time.Since(h.startTime)
+		if uptime > 5*time.Minute {
+			estWait = 10 // daemon 运行稳定，LLM 已预热
+		}
+	}
 	w.Header().Set("Location", "/api/goals/"+goalID)
-	writeJSON(w, http.StatusCreated, map[string]string{
-		"goal_id": goalID,
-		"status":  "created",
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"goal_id":                goalID,
+		"status":                 "created",
+		"estimated_wait_seconds": estWait,
+		"next_status":            "正在分析目标...",
 	})
 }
 
@@ -538,3 +751,5 @@ func SetEventBus(bus interface{ Publish(events.Event) }) {
 func SetStateStore(store *statestore.Store) {
 	stateStore = store
 }
+
+// typedPayloadToMap converts typed payload to map (R-828).

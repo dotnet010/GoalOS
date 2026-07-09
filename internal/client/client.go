@@ -41,6 +41,8 @@ func (c *Client) Health() (bool, error) {
 type CreateGoalResponse struct {
 	GoalID string `json:"goal_id"`
 	Status string `json:"status"`
+	MultiLLMVerdict string `json:"multi_llm_verdict,omitempty"`
+	MultiLLMReport  string `json:"multi_llm_report,omitempty"`
 }
 
 // GoalRecord is a single goal in list/get responses.
@@ -48,6 +50,8 @@ type GoalRecord struct {
 	GoalID string `json:"goal_id"`
 	Title  string `json:"title"`
 	Status string `json:"status"`
+	MultiLLMVerdict string `json:"multi_llm_verdict,omitempty"`
+	MultiLLMReport  string `json:"multi_llm_report,omitempty"`
 }
 
 // CreateGoal sends a new Goal to the daemon.
@@ -158,4 +162,101 @@ func (c *Client) SystemStatus() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("client: decode status: %w", err)
 	}
 	return status, nil
+}
+
+// GetGoalEvents 获取 Goal 的事件列表。GET /api/goals/:id/events（R-832 B11）。
+func (c *Client) GetGoalEvents(goalID string) ([]map[string]interface{}, error) {
+	resp, err := c.http.Get(c.baseURL + "/api/goals/" + goalID + "/events")
+	if err != nil {
+		return nil, fmt.Errorf("client: get events: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("client: get events failed: %d", resp.StatusCode)
+	}
+	var events []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, fmt.Errorf("client: parse events: %w", err)
+	}
+	return events, nil
+}
+
+// AdjustBudget 调整 Goal Token 预算。POST /api/goals/:id/budget（R-832 B11）。
+func (c *Client) AdjustBudget(goalID, amount string) (map[string]interface{}, error) {
+	body := map[string]string{"amount": amount}
+	data, _ := json.Marshal(body)
+	resp, err := c.http.Post(c.baseURL+"/api/goals/"+goalID+"/budget", "application/json", bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("client: adjust budget: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("client: adjust budget failed: %d", resp.StatusCode)
+	}
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("client: parse budget response: %w", err)
+	}
+	return result, nil
+}
+
+// ─── ReviewReport API 方法（R-849 — 会议 #156）─────────────────────────
+
+// GetReviews 获取 Goal 下所有审查摘要。
+func (c *Client) GetReviews(goalID string) ([]map[string]interface{}, error) {
+	resp, err := c.http.Get(c.baseURL + "/api/goals/" + goalID + "/reviews")
+	if err != nil {
+		return nil, fmt.Errorf("client: get reviews: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("client: get reviews failed: %d", resp.StatusCode)
+	}
+	var reviews []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&reviews); err != nil {
+		return nil, fmt.Errorf("client: parse reviews: %w", err)
+	}
+	return reviews, nil
+}
+
+// GetReviewDetail 获取完整 ReviewReport（含所有 Provider 的 reasoning）。
+func (c *Client) GetReviewDetail(goalID, actionID string) (map[string]interface{}, error) {
+	resp, err := c.http.Get(c.baseURL + "/api/goals/" + goalID + "/reviews/" + actionID)
+	if err != nil {
+		return nil, fmt.Errorf("client: get review detail: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("client: get review detail failed: %d", resp.StatusCode)
+	}
+	var report map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
+		return nil, fmt.Errorf("client: parse review: %w", err)
+	}
+	return report, nil
+}
+
+// DecideReview 提交用户对 MultiLLM 审查结果的决策。
+func (c *Client) DecideReview(goalID, actionID, decision, feedback string) (map[string]interface{}, error) {
+	body := map[string]string{
+		"decision": decision,
+	}
+	if feedback != "" {
+		body["feedback"] = feedback
+	}
+	data, _ := json.Marshal(body)
+	resp, err := c.http.Post(c.baseURL+"/api/goals/"+goalID+"/reviews/"+actionID+"/decide", "application/json", bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("client: decide review: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("client: decide review failed: %d — %s", resp.StatusCode, string(bodyBytes))
+	}
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("client: parse decide response: %w", err)
+	}
+	return result, nil
 }
