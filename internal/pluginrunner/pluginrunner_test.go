@@ -1,6 +1,7 @@
 package pluginrunner_test
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -10,6 +11,10 @@ import (
 )
 
 func TestPluginRunner_ActionApproved(t *testing.T) {
+	// 本地环境有真实 Plugin 二进制时跳过——测试设计用于 CI 环境（无 Plugin）
+	if _, err := os.Stat(os.Getenv("HOME") + "/.goalos/plugins/capability/shell-executor"); err == nil {
+		t.Skip("real plugins detected — skipping stub-only test (designed for CI)")
+	}
 	bus := eventbus.New()
 	runner := pluginrunner.New(bus, nil, nil)
 	runner.Start()
@@ -87,6 +92,9 @@ func TestPluginRunner_MultipleActions(t *testing.T) {
 // TestPluginRunner_ReadsActionTypeFromPayload 验证 PluginRunner 从 ActionApproved payload
 // 中正确读取 action_type。这是 publishApproved 转发字段的端到端验证。
 func TestPluginRunner_ReadsActionTypeFromPayload(t *testing.T) {
+	if _, err := os.Stat(os.Getenv("HOME") + "/.goalos/plugins/capability/shell-executor"); err == nil {
+		t.Skip("real plugins detected — skipping stub-only test (designed for CI)")
+	}
 	bus := eventbus.New()
 	runner := pluginrunner.New(bus, nil, nil)
 	runner.Start()

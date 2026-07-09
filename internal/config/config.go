@@ -82,7 +82,7 @@ func Default() *Config {
 	return &Config{
 		Daemon: DaemonConfig{
 			Port:            18920,
-			AutonomyLevel:   "autonomous", // G7: 与 daemon.yaml.example 一致
+			AutonomyLevel:   "approve", // 默认 approve——安全优先（需用户确认计划）
 			IdleTimeout:     5 * time.Minute,
 			ShutdownTimeout: 5 * time.Second,
 		},
