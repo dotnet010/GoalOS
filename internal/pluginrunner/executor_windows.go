@@ -64,7 +64,10 @@ func sanitizeChildProcess(cmd *exec.Cmd) {
 
 	// 将当前进程加入 Job——子进程自动继承
 	assignProc := kernel32.NewProc("AssignProcessToJobObject")
-	currentProc, _ := syscall.GetCurrentProcess()
+	currentProc, err := syscall.GetCurrentProcess()
+	if err != nil {
+		return // fallback: no Job Object isolation
+	}
 	assignProc.Call(job, uintptr(currentProc))
 }
 
