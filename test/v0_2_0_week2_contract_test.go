@@ -20,8 +20,9 @@ func TestA8_PipelineRunner_StateMachine(t *testing.T) {
 		if result == nil {
 			t.Fatal("StateMachineRun 不应返回 nil——A8 空壳检测")
 		}
-		if result.Status != scheduler.PipelineCompleted {
-			t.Errorf("Status=%v, want PipelineCompleted", result.Status)
+		// v0.3.0 fix (C3): executeAction→Async=true→PipelineWaiting
+		if result.Status != scheduler.PipelineWaiting {
+			t.Errorf("Status=%v, want PipelineWaiting (async exec)", result.Status)
 		}
 	})
 
@@ -54,9 +55,9 @@ func TestA8_PipelineRunner_StateMachine(t *testing.T) {
 		if result == nil {
 			t.Fatal("合法 actionID 应返回非 nil 结果")
 		}
-		// CheckPASS→Exec→Decide→PipelineCompleted
-		if result.Status != scheduler.PipelineCompleted {
-			t.Errorf("Status=%v, want PipelineCompleted", result.Status)
+		// v0.3.0 fix (C3): CheckPASS→Exec→Async=true→PipelineWaiting
+		if result.Status != scheduler.PipelineWaiting {
+			t.Errorf("Status=%v, want PipelineWaiting (async exec)", result.Status)
 		}
 	})
 }
