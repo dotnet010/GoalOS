@@ -17,19 +17,26 @@ while IFS= read -r file; do
     MODULE_NAME=$(basename "$file" _contract_test.go)
 
     # 统计 assertion 调用数（t.Error/t.Fatal/t.Errorf/t.Fatalf）
-    ASSERTION_COUNT=$(grep -cE '\.(Error|Fatal|Errorf|Fatalf)\(' "$file" 2>/dev/null || echo 0)
+    ASSERTION_COUNT=$(grep -cE '\.(Error|Fatal|Errorf|Fatalf)\(' "$file" 2>/dev/null || true)
+    ASSERTION_COUNT=${ASSERTION_COUNT:-0}
+    ASSERTION_COUNT=${ASSERTION_COUNT//[^0-9]/}
 
     # 统计断言库调用（testify: assert./require.）
-    TESTIFY_COUNT=$(grep -cE '(assert|require)\.(Equal|NotEqual|Nil|NotNil|True|False|Error|NoError|Contains|NotContains|Empty|NotEmpty|Less|Greater|Len)\(' "$file" 2>/dev/null || echo 0)
+    TESTIFY_COUNT=$(grep -cE '(assert|require)\.(Equal|NotEqual|Nil|NotNil|True|False|Error|NoError|Contains|NotContains|Empty|NotEmpty|Less|Greater|Len)\(' "$file" 2>/dev/null || true)
+    TESTIFY_COUNT=${TESTIFY_COUNT:-0}
+    TESTIFY_COUNT=${TESTIFY_COUNT//[^0-9]/}
 
-    TOTAL_ASSERTIONS=$(( ${ASSERTION_COUNT:-0} + ${TESTIFY_COUNT:-0} ))
+    TOTAL_ASSERTIONS=$((ASSERTION_COUNT + TESTIFY_COUNT))
 
     # 统计 assert.NotNil 使用次数——NotNil 不算精确 assertion
-    WEAK_NOTNIL=$(grep -cE '(assert|require)\.NotNil\(' "$file" 2>/dev/null || echo 0)
+    WEAK_NOTNIL=$(grep -cE '(assert|require)\.NotNil\(' "$file" 2>/dev/null || true)
+    WEAK_NOTNIL=${WEAK_NOTNIL:-0}
+    WEAK_NOTNIL=${WEAK_NOTNIL//[^0-9]/}
 
     # 获取对应模块的 MUST 数量——从架构文档或模块契约定义中提取
-    # 简易实现：从 contract_test 文件注释中提取 MUST 数
-    MUST_COUNT=$(grep -oE 'MUST[: ]+[0-9]+' "$file" 2>/dev/null | grep -oE '[0-9]+' | head -1 || echo 0)
+    MUST_COUNT=$(grep -oE 'MUST[: ]+[0-9]+' "$file" 2>/dev/null | grep -oE '[0-9]+' | head -1 || true)
+    MUST_COUNT=${MUST_COUNT:-0}
+    MUST_COUNT=${MUST_COUNT//[^0-9]/}
     if [ "$MUST_COUNT" -eq 0 ]; then
         # 如果注释中没有标注，尝试从文件名推断（常见模块的 MUST 数）
         case "$MODULE_NAME" in
