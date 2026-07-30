@@ -32,7 +32,7 @@ echo "── Layer 2: 孤儿代码检查 ──"
 
 # 检查 StateMachineRun 是否有生产调用者（排除测试文件和自身定义）
 # v0.3.0 fix (H10): 孤儿代码检测递增 FAILED 计数器——CI 不再静默通过。
-STATEMACHINE_CALLERS=$(grep -rn "StateMachineRun" internal/ cmd/ --include="*.go" | grep -v "_test.go" | grep -v "func.*StateMachineRun" | wc -l | tr -d ' ')
+STATEMACHINE_CALLERS=$(grep -rn "StateMachineRun" internal/ cmd/ --include="*.go" | grep -v "_test.go" | grep -v "func.*StateMachineRun" | wc -l | tr -d ' ' || true)
 if [ "${STATEMACHINE_CALLERS:-0}" -eq 0 ]; then
     echo -e "  ${YELLOW}⚠️${NC}  StateMachineRun: 无生产代码调用者（仅测试引用）"
     echo "    位置: internal/scheduler/pipelinerunner_statemachine.go"
@@ -42,7 +42,7 @@ else
 fi
 
 # 检查 GoalState.Run 是否有生产调用者（v0.3.0: 仅警告，不阻塞CI——grep模式可能匹配不全）
-GOALSTATE_CALLERS=$(grep -rn "\.Run(stopCh)" internal/ cmd/ --include="*.go" 2>/dev/null | grep -v "_test.go" | wc -l | tr -d ' ')
+GOALSTATE_CALLERS=$(grep -rn "\.Run(stopCh)" internal/ cmd/ --include="*.go" 2>/dev/null | grep -v "_test.go" | wc -l | tr -d ' ' || true)
 if [ "${GOALSTATE_CALLERS:-0}" -eq 0 ]; then
     echo -e "  ${YELLOW}⚠️${NC}  GoalState.Run: 无生产代码调用者（仅测试引用）"
     echo "    位置: internal/scheduler/goalrunner_select.go"
@@ -50,8 +50,7 @@ else
     echo -e "  ${GREEN}✅${NC} GoalState.Run: $GOALSTATE_CALLERS 个生产调用者"
 fi
 
-# 检查 failHints map 是否有读取者（v0.3.0: 仅警告，不阻塞CI）
-FAILHINTS_READERS=$(grep -rn "failHints\[" internal/ cmd/ --include="*.go" 2>/dev/null | grep -v "_test.go" | wc -l | tr -d ' ')
+FAILHINTS_READERS=$(grep -rn "failHints\[" internal/ cmd/ --include="*.go" 2>/dev/null | grep -v "_test.go" | wc -l | tr -d ' ' || true)
 if [ "${FAILHINTS_READERS:-0}" -eq 0 ]; then
     echo -e "  ${YELLOW}⚠️${NC}  failHints map: 已定义但无读取者"
     echo "    位置: internal/daemon/api.go:225"
