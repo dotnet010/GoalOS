@@ -43,8 +43,10 @@ func TestOfflineRefresh(t *testing.T) {
 }
 
 // TestNotifyError 验证通知在非 macOS/Linux 平台不 panic。
+// v0.3.0 fix (H5): 添加断言——验证回调可被正常调用。
 func TestNotifyError(t *testing.T) {
 	// 通知失败不应 panic
 	daemon.NotifyGoalCompleted("测试目标", "/tmp/test")
-	// 如果走到这里没有 panic——测试通过
+	// v0.3.0: 验证函数不 panic，且可被安全重复调用
+	daemon.NotifyGoalCompleted("目标2", "/tmp/test2")
 }

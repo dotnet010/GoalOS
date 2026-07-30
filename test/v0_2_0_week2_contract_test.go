@@ -135,9 +135,28 @@ func TestI3_Goal_TerminalState(t *testing.T) {
 // ─── J3: TokenBudget Graceful Wait ──────────────────────────────
 
 func TestJ3_TokenBudget_GracefulWait(t *testing.T) {
-	t.Run("BudgetTracker存在", func(t *testing.T) {
-		// BudgetTracker 集成——Week 3 完整实现
-		_ = 1 // 占位——Week 3 实现
+	t.Run("BudgetTracker存在并可追踪token消耗", func(t *testing.T) {
+		// v0.3.0 fix (H6): 验证 BudgetTracker 正确初始化和基本操作
+		tracker := scheduler.NewBudgetTrackerWithBudget(10000)
+		if tracker == nil {
+			t.Fatal("BudgetTracker MUST NOT be nil")
+		}
+		if used := tracker.Used(); used != 0 {
+			t.Errorf("initial Used MUST be 0, got %d", used)
+		}
+		// 记录 500 token 消耗——不应超出预算
+		tracker.RecordUsageSimple(500)
+		if tracker.IsExceededSimple(10000) {
+			t.Error("RecordUsageSimple(500) within 10000 budget MUST NOT be exceeded")
+		}
+		if used := tracker.Used(); used != 500 {
+			t.Errorf("Used after RecordUsageSimple(500) MUST be 500, got %d", used)
+		}
+		// 超出预算
+		tracker.RecordUsageSimple(10000)
+		if !tracker.IsExceededSimple(10000) {
+			t.Error("IsExceededSimple(10000) MUST return true after RecordUsageSimple(10000)")
+		}
 	})
 }
 

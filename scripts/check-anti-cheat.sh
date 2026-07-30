@@ -31,7 +31,15 @@ echo ""
 
 # ─── Layer A: 测试覆盖率 ───
 echo "── Layer A: 测试覆盖率 ──"
-# v0.2.0: 计算 internal/ 包的平均覆盖率（排除 test/ 集成测试包）
+# v0.3.0 fix (H7): go test build failure 不再被 2>/dev/null 静默。
+# 先运行 go test 并捕获退出码，build 失败时立��失败。
+COVERAGE_TMP=$(mktemp)
+if ! go test -cover ./internal/... > "$COVERAGE_TMP" 2>&1; then
+    echo -e "  ${RED}❌${NC} go test 构建失败——检查编译错误:"
+    grep -E "FAIL|error|undefined" "$COVERAGE_TMP" | head -5
+    rm -f "$COVERAGE_TMP"
+    exit 1
+fi
 COVERAGE_SUM=0
 COVERAGE_COUNT=0
 while IFS= read -r line; do
@@ -40,7 +48,8 @@ while IFS= read -r line; do
         COVERAGE_SUM=$((COVERAGE_SUM + pct))
         COVERAGE_COUNT=$((COVERAGE_COUNT + 1))
     fi
-done < <(go test -cover ./internal/... 2>/dev/null | grep "coverage:")
+done < <(grep "coverage:" "$COVERAGE_TMP")
+rm -f "$COVERAGE_TMP"
 if [ "$COVERAGE_COUNT" -gt 0 ]; then
     AVG_COVERAGE=$((COVERAGE_SUM / COVERAGE_COUNT))
 else
@@ -61,7 +70,7 @@ echo "── Layer B: 空壳检测 ──"
 EMPTY_FUNCS=0
 
 # 检测 1: 纯 return nil/true/false（原有逻辑）
-for f in $(find internal/ -name "*.go" -not -name "*_test.go"); do
+for f in $(find internal/ cmd/ pkg/ -name "*.go" -not -name "*_test.go" 2>/dev/null); do
     awk '/^func /{ fn=$0; body=""; in_body=0; next }
          /^{/{ in_body=1; next }
          /^}/{ if(in_body && body ~ /^[[:space:]]*return (nil|true|false)[[:space:]]*$/) print fn; in_body=0; body=""; next }

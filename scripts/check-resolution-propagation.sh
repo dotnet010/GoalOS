@@ -163,7 +163,7 @@ resolve_path() {
             elif [ -f "$f" ]; then
                 echo "$f"
             else
-                echo ""
+                echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
             fi
             ;;
     esac
@@ -256,9 +256,9 @@ check_layer1() {
         fi
     done < "$yaml"
 
-    echo ""
+    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
     echo -e "  ${BOLD}层1 结果${NC}: ${GREEN}$LAYER1_PASS 通过${NC} / ${RED}$LAYER1_FAIL 失败${NC}"
-    echo ""
+    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
 }
 
 # =============================================================================
@@ -381,9 +381,9 @@ check_layer2() {
     rm -f "$rules_file"
     trap - EXIT
 
-    echo ""
+    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
     echo -e "  ${BOLD}层2 结果${NC}: ${GREEN}$LAYER2_PASS 通过${NC} / ${RED}$LAYER2_FAIL 失败${NC}"
-    echo ""
+    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
 }
 
 # ─── 层2 子函数: _check_must_not_exist ───
@@ -505,9 +505,9 @@ check_ghost_resolutions() {
     if [ "$ghost_count" -eq 0 ]; then
         echo -e "  ${GREEN}✅${NC} 幽灵决议检测通过——所有文档引用的 R-xxx 均在 resolutions.yaml 中有定义"
     fi
-    echo ""
+    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
     echo -e "  ${BOLD}幽灵检测结果${NC}: ${GREEN}$(( $(grep -cE '^[0-9]+$' "$valid_resolutions" 2>/dev/null || echo 0) - ghost_count )) 有效${NC} / ${RED}$GHOST_FAIL 幽灵${NC}"
-    echo ""
+    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
 }
 
 # =============================================================================
@@ -529,7 +529,7 @@ print_summary() {
     echo "  层1（修改记录引用）: ${GREEN}$LAYER1_PASS 通过${NC} / ${RED}$LAYER1_FAIL 失败${NC}"
     echo "  层2（正文内容一致性）: ${GREEN}$LAYER2_PASS 通过${NC} / ${RED}$LAYER2_FAIL 失败${NC}"
     echo "  耗时: ${elapsed}s"
-    echo ""
+    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
 
     if [ $FAILED -gt 0 ]; then
         echo "修复方法:"
@@ -603,11 +603,11 @@ main() {
     done
 
     # Banner
-    echo ""
+    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
     echo -e "${BOLD}=== GoalOS 决议传播完整性检查（两层验证） ===${NC}"
     echo "  配置: $RESOLUTIONS"
     echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
-    echo ""
+    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
 
     # 自检
     validate_environment

@@ -35,20 +35,23 @@ func TestFailHints_Lookup_ExactMatch(t *testing.T) {
 }
 
 // TestFailHints_Lookup_NoFalseMatch 验证非精确匹配不会误匹配（W6-T2）。
+// v0.3.0 fix (H4): 误匹配时记录为测试失败而非仅 log。
 func TestFailHints_Lookup_NoFalseMatch(t *testing.T) {
 	// "execution_error_something" 不应匹配 "execution_error"（非分隔符结尾）
 	hint := "execution_error_something"
+	falseMatch := false
 	for key := range failHints {
 		if len(hint) >= len(key) && hint[:len(key)] == key {
 			// 只有后接 : 或空格才是合法匹配
 			if len(hint) == len(key) || hint[len(key)] == ':' || hint[len(key)] == ' ' {
-				t.Logf("hint=%q matched key=%q (valid)", hint, key)
-				return
+				falseMatch = true
+				t.Errorf("hint=%q falsely matched key=%q (substring without delimiter)", hint, key)
 			}
 		}
 	}
-	// 没有误匹配——正确
-	t.Logf("hint=%q did not falsely match any key", hint)
+	if !falseMatch {
+		t.Logf("hint=%q correctly did not match any key", hint)
+	}
 }
 
 // TestSetGoalErrorHint_FillsSuggestions 验证 SetGoalErrorHint 自动查表补全（W6-T2）。
@@ -101,9 +104,15 @@ func TestSetGoalErrorHint_DefaultSuggestions(t *testing.T) {
 }
 
 // TestSetGoalErrorHint_UnknownGoal_SilentlyIgnored 验证不存在 goalID 时静默跳过。
+// v0.3.0 fix (H4): 验证不存在的 goal 没有被意外创建。
 func TestSetGoalErrorHint_UnknownGoal_SilentlyIgnored(t *testing.T) {
 	h := NewHandler()
-	// 不存在的 goalID——不应 panic
+	// 不存在的 goalID——不应 panic，不应被创建
 	h.SetGoalErrorHint("nonexistent", "error", nil)
-	// 没有 panic 就是通过
+	h.mu.RLock()
+	_, exists := h.Goals["nonexistent"]
+	h.mu.RUnlock()
+	if exists {
+		t.Error("SetGoalErrorHint MUST NOT create goal for nonexistent ID")
+	}
 }
