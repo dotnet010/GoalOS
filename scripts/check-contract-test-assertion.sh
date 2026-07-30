@@ -22,7 +22,7 @@ while IFS= read -r file; do
     # 统计断言库调用（testify: assert./require.）
     TESTIFY_COUNT=$(grep -cE '(assert|require)\.(Equal|NotEqual|Nil|NotNil|True|False|Error|NoError|Contains|NotContains|Empty|NotEmpty|Less|Greater|Len)\(' "$file" 2>/dev/null || echo 0)
 
-    TOTAL_ASSERTIONS=$((ASSERTION_COUNT + TESTIFY_COUNT))
+    TOTAL_ASSERTIONS=$(( ${ASSERTION_COUNT:-0} + ${TESTIFY_COUNT:-0} ))
 
     # 统计 assert.NotNil 使用次数——NotNil 不算精确 assertion
     WEAK_NOTNIL=$(grep -cE '(assert|require)\.NotNil\(' "$file" 2>/dev/null || echo 0)
