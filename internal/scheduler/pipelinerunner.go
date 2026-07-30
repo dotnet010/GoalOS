@@ -184,13 +184,47 @@ func (pr *PipelineRunner) Run(goalID string, state *statestore.GoalState) (*Pipe
 // check 评估 Action 的准入条件。v0.1.1 重写：集成 MultiLLMVerifier。
 // check 评估 Action 的准入条件（Pre-Exec Gate）。
 // R-840: MultiLLM 代码审查已移到 decide()——Check 只做准入检查。
+// v0.3.0 fix (C1): 检查 Action 是否已经过 Governance 审批。
 func (pr *PipelineRunner) check(actionID string, code ...string) CheckResult {
+	// 基础校验：actionID 非空
+	if actionID == "" {
+		return CheckREJECT
+	}
+	// 检查 Governance 审批状态——从 store 中确认 ActionApproved 已发布
+	if pr.store != nil {
+		state, err := pr.store.LoadState(pr.currentGoalID)
+		if err == nil && state != nil {
+			// 检查 ApprovalPending——若挂起则 BLOCK，等待审批
+			if state.ApprovalPending {
+				log.Printf("[PipelineRunner] check: action=%s approval pending — BLOCK", actionID)
+				return CheckBLOCK
+			}
+			// 检查是否已完成（幂等保护）
+			for _, id := range state.CompletedNodes {
+				if id == actionID {
+					return CheckPASS
+				}
+			}
+		}
+	}
+	// R-839: Scheduler/Governance 已通过 ActionApproved → Check PASS
 	return CheckPASS
 }
 
-// exec 标记 Action 进入执行阶段（R-839: Scheduler 已调度——不再重复发布 ActionScheduled）。
+// exec 标记 Action 进入执行阶段，发布 ActionStarted 事件。
+// v0.3.0 fix (C2): 发布 ActionStarted——PluginRunner 已在 ActionApproved 中异步执行。
 func (pr *PipelineRunner) exec(goalID string, actionID string) error {
 	log.Printf("[PipelineRunner] goal=%s action=%s: executing", goalID, actionID)
+	if pr.bus != nil {
+		pr.bus.Publish(events.Event{
+			Type:   events.TypeActionStarted,
+			GoalID: goalID,
+			Source: "pipelinerunner",
+			Payload: map[string]interface{}{
+				"action_id": actionID,
+			},
+		})
+	}
 	return nil
 }
 

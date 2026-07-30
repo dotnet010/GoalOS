@@ -9,7 +9,7 @@
 #
 # 退出码: 0=全部通过, 1=存在死代码
 # =============================================================================
-set -eu
+set -euo pipefail
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; NC='\033[0m'
 FAILED=0
@@ -31,10 +31,12 @@ echo ""
 echo "── Layer 2: 孤儿代码检查 ──"
 
 # 检查 StateMachineRun 是否有生产调用者（排除测试文件和自身定义）
+# v0.3.0 fix (H10): 孤儿代码检测递增 FAILED 计数器——CI 不再静默通过。
 STATEMACHINE_CALLERS=$(grep -rn "StateMachineRun" internal/ cmd/ --include="*.go" | grep -v "_test.go" | grep -v "func.*StateMachineRun" | wc -l | tr -d ' ')
 if [ "${STATEMACHINE_CALLERS:-0}" -eq 0 ]; then
     echo -e "  ${YELLOW}⚠️${NC}  StateMachineRun: 无生产代码调用者（仅测试引用）"
     echo "    位置: internal/scheduler/pipelinerunner_statemachine.go"
+    FAILED=$((FAILED + 1))
 else
     echo -e "  ${GREEN}✅${NC} StateMachineRun: $STATEMACHINE_CALLERS 个生产调用者"
 fi
@@ -44,6 +46,7 @@ GOALSTATE_CALLERS=$(grep -rn "\.Run(stopCh)" internal/ cmd/ --include="*.go" | g
 if [ "${GOALSTATE_CALLERS:-0}" -eq 0 ]; then
     echo -e "  ${YELLOW}⚠️${NC}  GoalState.Run: 无生产代码调用者（仅测试引用）"
     echo "    位置: internal/scheduler/goalrunner_select.go"
+    FAILED=$((FAILED + 1))
 else
     echo -e "  ${GREEN}✅${NC} GoalState.Run: $GOALSTATE_CALLERS 个生产调用者"
 fi
@@ -53,6 +56,7 @@ FAILHINTS_READERS=$(grep -rn "failHints\[" internal/ cmd/ --include="*.go" | gre
 if [ "${FAILHINTS_READERS:-0}" -eq 0 ]; then
     echo -e "  ${YELLOW}⚠️${NC}  failHints map: 已定义但无读取者"
     echo "    位置: internal/daemon/api.go:225"
+    FAILED=$((FAILED + 1))
 else
     echo -e "  ${GREEN}✅${NC} failHints: $FAILHINTS_READERS 个读取者"
 fi

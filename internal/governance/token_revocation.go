@@ -3,6 +3,7 @@
 package governance
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -101,6 +102,24 @@ func (ts *TokenStore) VerifyToken(tokenID string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// VerifyTokenWithSignature 同时验证签名和撤销状态（v0.3.0 fix M1）。
+// 实现 pluginrunner.TokenVerifier 接口——先验证 HMAC 签名，再检查撤销/过期。
+// governance.VerifyToken 负责签名验证，TokenStore 负责撤销检查。
+func (ts *TokenStore) VerifyTokenWithSignature(tokenStr string, secretKey []byte) (*TokenClaims, error) {
+	// Step 1: 验证 HMAC 签名（governance.VerifyToken）
+	claims, err := VerifyToken(tokenStr, secretKey)
+	if err != nil {
+		return nil, err
+	}
+	// Step 2: 检查撤销/过期（TokenStore）
+	tokenID := claims.GoalID + "/" + claims.ActionID
+	valid, _ := ts.VerifyToken(tokenID)
+	if !valid {
+		return nil, fmt.Errorf("token revoked or expired: %s", tokenID)
+	}
+	return claims, nil
 }
 
 // Revoke 撤销 Token（S1）。

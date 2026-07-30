@@ -100,7 +100,7 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 	}
 
 	// 发送 init（含 session_token + seccomp_profile + protocol_version）
-	writeJSON(stdin, map[string]interface{}{
+	if err := writeJSON(stdin, map[string]interface{}{
 		"type":             "init",
 		"protocol_version": "v2.0-two-line-hmac", // R-724: 内部协议版本。Plugin 必须支持此版本
 		"session_token":    sessionToken,
@@ -108,21 +108,27 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 		"capabilities":     action.RequiredCapabilities,
 		"workspace":        cfg.WorkDir,
 		"tmp":              cfg.TmpDir,
-	})
+	}); err != nil {
+		cmd.Process.Kill()
+		return nil, fmt.Errorf("executor: init message write failed: %w", err)
+	}
 
 	resultCh := make(chan *ExecResult, 1)
 	errCh := make(chan error, 1)
 	go readStdout(stdout, resultCh, errCh, sessionToken)
 
 	log.Printf("[executor] sending execute: action=%s type=%s target_len=%d", action.ActionID, action.ActionType, len(action.Target))
-	writeJSON(stdin, map[string]interface{}{
+	if err := writeJSON(stdin, map[string]interface{}{
 		"type":        "execute",
 		"action_id":   action.ActionID,
 		"action_type": action.ActionType,
 		"target":      action.Target,
 		"params":      action.Params,
 		"timeout_ms":  cfg.Timeout.Milliseconds(),
-	})
+	}); err != nil {
+		cmd.Process.Kill()
+		return nil, fmt.Errorf("executor: execute message write failed: %w", err)
+	}
 
 	var result *ExecResult
 	select {
@@ -141,10 +147,12 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 		}
 	}
 
-	writeJSON(stdin, map[string]interface{}{
+	if err := writeJSON(stdin, map[string]interface{}{
 		"type":   "shutdown",
 		"reason": "completed",
-	})
+	}); err != nil {
+		log.Printf("[executor] shutdown message write failed (process may have exited): %v", err)
+	}
 	stdin.Close()
 	cmd.Wait()
 

@@ -28,7 +28,14 @@ func TestSafeMap_ConcurrentReadWrite(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	// 不 crash + race detector 不告警 = 通过
+	// v0.3.0 fix (H1): 验证并发写入后数据完整性
+	v, ok := sm.Load("k")
+	if !ok {
+		t.Error("concurrent Store+Load: key 'k' should exist after writes")
+	}
+	if v < 0 || v >= 100 {
+		t.Errorf("concurrent Store+Load: unexpected value %d for key 'k'", v)
+	}
 }
 
 // TestSafeMap_RangeConsistency 验证 Range 期间并发 Store 不 panic
@@ -43,6 +50,7 @@ func TestSafeMap_RangeConsistency(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
+	rangeCompleted := make(chan bool, 1)
 	// Goroutine 1: 遍历 Range——回调中尝试 Store（模拟"遍历发现过期删除"）
 	go func() {
 		defer wg.Done()
@@ -51,6 +59,7 @@ func TestSafeMap_RangeConsistency(t *testing.T) {
 			sm.Store(k+100, "new")
 			return true
 		})
+		rangeCompleted <- true
 	}()
 
 	// Goroutine 2: 并发 Store——模拟其他 goroutine 写入
@@ -62,7 +71,16 @@ func TestSafeMap_RangeConsistency(t *testing.T) {
 	}()
 
 	wg.Wait()
-	// 不 deadlock = 通过（R-761 快照方案保证）
+	// v0.3.0 fix (H2): 验证 Range 完成且并发写入成功
+	select {
+	case <-rangeCompleted:
+		// Range 完成——通过
+	default:
+		t.Error("Range did not complete (possible deadlock)")
+	}
+	if v, ok := sm.Load(200); !ok || v != "concurrent" {
+		t.Errorf("concurrent Store during Range: value mismatch (ok=%v, val=%s)", ok, v)
+	}
 }
 
 // TestSafeMap_RangeSnapshotIsolation 验证 Range 快照语义

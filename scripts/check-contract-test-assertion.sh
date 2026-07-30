@@ -98,9 +98,9 @@ if [ "$FAILED" -eq 1 ]; then
     echo "规则: contract_test assertion 数 ≥ 模块 MUST 数。虚假的绿色测试比没有测试更危险。R-735 层 3。"
     exit 1
 elif [ "$WARNINGS" -eq 1 ]; then
-    echo "=== check-contract-test-assertion: ⚠️  PASSED WITH WARNINGS ==="
-    echo "建议: 审查弱 assertion 和 assert.NotNil 使用。每个 MUST 必须精确翻译为 assertion。"
-    exit 0
+    echo "=== check-contract-test-assertion: ⚠️  FAILED — weak assertions detected ==="
+    echo "规则: 每个 MUST 必须精确翻译为 assertion。弱 assertion（assert.NotNil/assert.True）不满足。v0.3.0 fix (H11): 警告现在阻塞 CI。"
+    exit 1
 else
     echo "=== check-contract-test-assertion: ✅ PASSED ==="
     exit 0

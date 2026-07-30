@@ -16,15 +16,15 @@ import (
 
 // ─── StateCheck 转换 ──────────────────────────────────────────
 
-// TestContract_StateMachine_CheckPASS_ToExec 验证 CheckPASS→StateExec。
-// MUST: checkAction 返回 CheckPASS 时，状态转移到 StateExec。
+// TestContract_StateMachine_CheckPASS_ToExec 验证 CheckPASS→StateExec→Async Wait。
+// v0.3.0 fix (C3): executeAction 返回 Async=true → StateMachineRun 进入 post_exec Wait。
+// PluginRunner 在 ActionApproved 事件中异步执行。PipelineRunner 等待 ActionCompleted 唤醒。
 func TestContract_StateMachine_CheckPASS_ToExec(t *testing.T) {
 	bus := eventbus.New()
 	defer bus.Shutdown()
 	store := statestore.New(t.TempDir())
 	pr := NewPipelineRunner(bus, store)
 
-	// CR-T1: 验证 ActionScheduled 发布内容——不只是事件存在，还要验证字段
 	var capturedActionID string
 	bus.Subscribe("ActionScheduled", func(evt events.Event) error {
 		if id, ok := evt.Payload["action_id"].(string); ok {
@@ -38,12 +38,13 @@ func TestContract_StateMachine_CheckPASS_ToExec(t *testing.T) {
 	if result == nil {
 		t.Fatal("StateMachineRun MUST return non-nil result")
 	}
-	// R-839: Scheduler 已调度——PipelineRunner 同步执行完成
-	if result.Status != PipelineCompleted {
-		t.Fatalf("CheckPASS MUST return PipelineCompleted, got %v", result.Status)
+	// v0.3.0: executeAction 返回 Async=true → 期望 PipelineWaiting（post_exec）
+	if result.Status != PipelineWaiting {
+		t.Fatalf("CheckPASS→Async exec MUST return PipelineWaiting, got %v", result.Status)
 	}
-	// R-839: ActionScheduled 由 Scheduler 发布（非 PipelineRunner）
-	// CR-T1: 验证 StateMachineRun 正确返回 completed（不 panic）
+	if len(result.PendingWaits) == 0 || result.PendingWaits[0].Type != "post_exec" {
+		t.Fatalf("expected post_exec wait condition, got %v", result.PendingWaits)
+	}
 	_ = capturedActionID
 }
 
@@ -77,22 +78,25 @@ func TestContract_StateMachine_CheckBLOCK_ToWait(t *testing.T) {
 	store := statestore.New(t.TempDir())
 	pr := NewPipelineRunner(bus, store)
 
-	// 模拟过载：大量 retry entries 触发 CheckBLOCK
-	pr.retryCount = make(map[string]int)
-	for i := 0; i < 200; i++ {
-		pr.retryCount[string(rune(i))] = 1
-	}
+	// v0.3.0: 模拟审批挂起——store 中标记 ApprovalPending 触发 CheckBLOCK
+	store.SaveState("goal-test", &statestore.GoalState{
+		ApprovalPending: true,
+		NodeIDs:         []string{"act-overload"},
+	})
+	// 初始化 pluginCache 避免空 cache 触发 CheckWARN（掩盖 CheckBLOCK）
+	pr.pluginCache = NewPluginCache()
+	pr.pluginCache.OnPluginRegistered(&PluginInfo{PluginName: "act-overload", PluginType: "capability"})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
 	result := pr.StateMachineRun(ctx, "goal-test", "act-overload")
 	if result == nil {
 		t.Fatal("StateMachineRun MUST return non-nil result")
 	}
-	// R-839: CheckBLOCK→Check→Decide→PipelineCompleted（Scheduler handles scheduling）
-	if result.Status != PipelineCompleted {
-		t.Fatalf("CheckBLOCK MUST return PipelineCompleted, got %v", result.Status)
+	// v0.3.0: CheckBLOCK（审批挂起）→ StateWait → ctx timeout → PipelineFailed
+	if result.Status != PipelineFailed {
+		t.Fatalf("CheckBLOCK with timeout MUST return PipelineFailed, got %v", result.Status)
 	}
 }
 
@@ -164,7 +168,8 @@ func TestContract_StateMachine_Exec_ValidAction_ReturnsResult(t *testing.T) {
 // TestContract_StateMachine_Decide_ReturnsCompleted 验证 Decide→PipelineCompleted。
 // MUST: StateDecide 返回 PipelineCompleted（CONTINUE 路径）。
 func TestContract_StateMachine_Decide_ReturnsCompleted(t *testing.T) {
-	// v0.2.0 W2: 同步执行 → Async=false → Decide → Completed
+	// v0.3.0 fix (C3): executeAction→Async=true→post_exec Wait。
+	// PluginRunner 异步执行，PipelineRunner 等待 ActionCompleted 唤醒。
 	bus := eventbus.New()
 	defer bus.Shutdown()
 	store := statestore.New(t.TempDir())
@@ -175,8 +180,12 @@ func TestContract_StateMachine_Decide_ReturnsCompleted(t *testing.T) {
 	if result == nil {
 		t.Fatal("StateMachineRun MUST return non-nil result")
 	}
-	if result.Status != PipelineCompleted {
-		t.Fatalf("Sync exec MUST return PipelineCompleted, got %v", result.Status)
+	// v0.3.0: Async exec → PipelineWaiting（post_exec）
+	if result.Status != PipelineWaiting {
+		t.Fatalf("Async exec MUST return PipelineWaiting, got %v", result.Status)
+	}
+	if len(result.PendingWaits) == 0 || result.PendingWaits[0].Type != "post_exec" {
+		t.Fatalf("expected post_exec wait, got %v", result.PendingWaits)
 	}
 }
 
@@ -239,8 +248,8 @@ func TestContract_StateMachine_ValidBus_ReturnsResult(t *testing.T) {
 	if result == nil {
 		t.Fatal("StateMachineRun MUST return non-nil result even with valid store")
 	}
-	if result.Status != PipelineCompleted {
-		t.Fatalf("valid bus pipeline MUST complete, got %v", result.Status)
+	if result.Status != PipelineWaiting {
+		t.Fatalf("valid bus pipeline MUST return PipelineWaiting (async exec), got %v", result.Status)
 	}
 }
 
@@ -258,8 +267,8 @@ func TestContract_StateMachine_WithStore_Completes(t *testing.T) {
 		t.Fatal("StateMachineRun MUST return non-nil result")
 	}
 	// 无 bus → executeAction returns {Async: false} → Decide → Completed
-	if result.Status != PipelineCompleted {
-		t.Fatalf("valid store pipeline MUST complete, got %v", result.Status)
+	if result.Status != PipelineWaiting {
+		t.Fatalf("valid store pipeline MUST return PipelineWaiting (async exec), got %v", result.Status)
 	}
 }
 

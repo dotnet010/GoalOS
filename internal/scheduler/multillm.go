@@ -27,6 +27,7 @@ type ProviderVote struct {
 // VerdictCombiner 是 Multi-LLM 裁决器（v1.1.0 两阶段）。
 type VerdictCombiner struct {
 	providerReliability map[string]float64 // provider → 可靠性权重（1.0=全权重）
+	debateCaller        DebateCaller       // v0.3.0: 辩论轮次 LLM 回调
 }
 
 // NewVerdictCombiner 创建裁决器。
@@ -34,6 +35,11 @@ func NewVerdictCombiner() *VerdictCombiner {
 	return &VerdictCombiner{
 		providerReliability: make(map[string]float64),
 	}
+}
+
+// SetDebateCaller 设置辩论轮次的 LLM 回调（v0.3.0 C4）。
+func (vc *VerdictCombiner) SetDebateCaller(caller DebateCaller) {
+	vc.debateCaller = caller
 }
 
 // Verdict 是最终裁决结果。
@@ -173,6 +179,7 @@ func (vc *VerdictCombiner) ResolveDivergent(v *Verdict) *Verdict {
 
 // Debate 执行辩论轮次——将 Round 1 各 Provider 的 reasoning 交叉注入，重新投票（R-860）。
 // 仅当 Round 1 verdict = WARN 且存在分歧时触发。Round 2 结果覆盖 Round 1。
+// v0.3.0 fix (C4): Provider 集为空时使用静态 fallback；非空时调用各 Provider 重新评估。
 // 辩论轮次不递归——只执行一轮。
 func (vc *VerdictCombiner) Debate(round1Votes []ProviderVote) *Verdict {
 	if len(round1Votes) <= 1 {
@@ -189,18 +196,32 @@ func (vc *VerdictCombiner) Debate(round1Votes []ProviderVote) *Verdict {
 
 	debatePrompt := sb.String()
 
-	// Round 2 投票——使用简化的内部投票（不重新调用 LLM）
-	// 实际调用由 MultiLLMVerifier 的 callProvider 完成——此处返回 debate prompt
+	// v0.3.0: 尝试通过 callback 调用 LLM Provider 进行真正的 Round 2
+	round2Votes := make([]ProviderVote, 0, len(round1Votes))
+	if vc.debateCaller != nil {
+		for _, v1 := range round1Votes {
+			v2, err := vc.debateCaller(v1.Provider, debatePrompt)
+			if err == nil && v2.Vote != "" {
+				v2.Provider = v1.Provider
+				v2.Model = v1.Model
+				round2Votes = append(round2Votes, v2)
+			}
+		}
+	}
+
+	// Fallback: 若 LLM 调用失败或无 callback → 使用 Round 1 票数 + debate prompt
+	if len(round2Votes) == 0 {
+		round2Votes = round1Votes
+	}
 	v := &Verdict{
-		Votes:        round1Votes,
+		Votes:        round2Votes,
 		Consensus:    false,
-		Divergent:    true,
+		Divergent:    len(round2Votes) > 1,
 		NeedsMeta:    false,
 		DebatePrompt: debatePrompt,
 	}
 
-	// Round 2 加权评分——基于 Round 1 投票重新计算，但标记为 debate 结果
-	v.WeightedScore = vc.weightedScore(round1Votes)
+	v.WeightedScore = vc.weightedScore(round2Votes)
 	switch {
 	case v.WeightedScore > 1.5:
 		v.Result = "FAIL"
@@ -210,10 +231,14 @@ func (vc *VerdictCombiner) Debate(round1Votes []ProviderVote) *Verdict {
 		v.Result = "PASS"
 	}
 
-	log.Printf("[VerdictCombiner] Debate: round1=%s → round2=%s (score=%.2f, votes=%d)",
-		round1Votes[0].Vote, v.Result, v.WeightedScore, len(round1Votes))
+	log.Printf("[VerdictCombiner] Debate: round1=%s → round2=%s (score=%.2f, votes_used=%d)",
+		round1Votes[0].Vote, v.Result, v.WeightedScore, len(round2Votes))
 	return v
 }
+
+// DebateCaller 辩论轮次的 Provider 回调——由 MultiLLMVerifier 注入。
+// v0.3.0 fix (C4): VerdictCombiner 通过此回调调用各 LLM Provider 进行真正的 Round 2。
+type DebateCaller func(providerName string, debatePrompt string) (ProviderVote, error)
 
 // Verdict.DebatePrompt 存储辩论轮次的交叉 prompt（供 MultiLLMVerifier 使用）。
 // 定义在 Verdict struct 中——此处为方法文档。

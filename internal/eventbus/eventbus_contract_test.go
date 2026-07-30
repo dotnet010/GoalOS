@@ -189,4 +189,9 @@ func TestContract_EventBus_MUST_NOT_ModifySubscribersOnPublish(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	// v0.3.0 fix (H3): 验证并发 Publish 期间事件正常投递
+	finalCount := atomic.LoadInt32(&callCount)
+	if finalCount < 100 {
+		t.Errorf("concurrent Publish+Subscribe: expected >=100 deliveries, got %d", finalCount)
+	}
 }

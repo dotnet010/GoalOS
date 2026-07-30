@@ -37,7 +37,9 @@ type WaitCondition struct {
 
 // StateMachineRun 执行 PipelineRunner 状态机循环（R-765 + R-771）。
 // 替代旧的线性 Check→Exec→Wait→Decide 管线。
+// v0.3.0 fix: 设置 currentGoalID 以支持 check() 中的 Governance 审批状态查询。
 func (pr *PipelineRunner) StateMachineRun(ctx context.Context, goalID string, actionID string) *StateMachineResult {
+	pr.currentGoalID = goalID
 	state := StateCheck
 	const maxRetries = 1 // R-741: 最多 1 次新 Session 重做
 	// S4: retryCount 使用 pr.retryCount[actionID]（跨 StateMachineRun 调用持久）
@@ -143,7 +145,7 @@ func (pr *PipelineRunner) checkAction(actionID string, code ...string) CheckResu
 		log.Printf("[PipelineRunner] checkAction: workspace code loaded for %s (%d chars)", actionID, len(c))
 		return pr.check(actionID, c)
 	}
-	// fallthrough to basic checks
+	// fallthrough to basic checks + governance review
 	// 验证 Action 对应的 Plugin 是否已注册（Fan-Out cache）
 	if pr.pluginCache != nil && pr.pluginCache.Count() == 0 {
 		return CheckWARN
@@ -151,11 +153,14 @@ func (pr *PipelineRunner) checkAction(actionID string, code ...string) CheckResu
 	if pr.retryCount != nil && len(pr.retryCount) > 100 {
 		return CheckBLOCK
 	}
-	return CheckPASS
+	// v0.3.0 fix: 最终通过 governance check() 验证审批状态
+	return pr.check(actionID)
 }
 
 // executeAction 执行 Exec 原语。
-// v0.2.0 audit fix: 发布 ActionScheduled 事件到 EventBus，由 PluginRunner 异步执行。
+// v0.3.0 fix (C3): Scheduler→Governance→PluginRunner 异步执行链。
+// PipelineRunner 确认 ActionApproved 已发布后返回 Async=true，
+// 让 StateMachineRun 进入 post_exec Wait 等待 ActionCompleted。
 func (pr *PipelineRunner) executeAction(actionID string) (*execResult, error) {
 	if actionID == "" {
 		return nil, &actionError{
@@ -174,8 +179,11 @@ func (pr *PipelineRunner) executeAction(actionID string) (*execResult, error) {
 			}
 		}
 	}
-	// R-839: Scheduler 已调度——PipelineRunner 不再重复发布
-	return &execResult{Async: false}, nil
+	// v0.3.0: PluginRunner 在 ActionApproved 事件中异步执行。
+	// 返回 Async=true → StateMachineRun 进入 post_exec Wait，
+	// GoalRunner 订阅 ActionCompleted 唤醒后继续 Decide。
+	log.Printf("[PipelineRunner] executeAction: action=%s dispatched async — waiting for PluginRunner", actionID)
+	return &execResult{Async: true}, nil
 }
 
 // actionError 实现 CategorizedError 接口——用于 executeAction 的错误路由。
