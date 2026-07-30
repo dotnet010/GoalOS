@@ -9,9 +9,6 @@ package pluginrunner
 import (
 	"bufio"
 	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -228,7 +225,9 @@ func readStdout(stdout io.Reader, resultCh chan<- *ExecResult, errCh chan<- erro
 	}
 }
 
-// verifyHMAC 验证消息的 HMAC-SHA256 签名（会议 #63）。
+// verifyHMAC 验证旧版单行 JSON 消息中的 HMAC-SHA256 签名（会议 #63）。
+// v0.3.0 fix (M3): 委托给 fd3_protocol.SignMessage——统一 HMAC 实现。
+// @Deprecated: 新版 Plugin 使用两行协议（verifyTwoLineHMAC）。
 func verifyHMAC(rawJSON []byte, msg map[string]interface{}, token string) error {
 	receivedHMAC, _ := msg["hmac"].(string)
 	if receivedHMAC == "" {
@@ -239,29 +238,23 @@ func verifyHMAC(rawJSON []byte, msg map[string]interface{}, token string) error 
 	json.Unmarshal(rawJSON, &raw)
 	delete(raw, "hmac")
 	payload, _ := json.Marshal(raw)
-	expectedHMAC := computeHMAC(payload, token)
+	expectedHMAC := SignMessage(token, payload) // v0.3.0: 统一 HMAC 实现
 	if !hmac.Equal([]byte(expectedHMAC), []byte(receivedHMAC)) {
 		return fmt.Errorf("hmac mismatch")
 	}
 	return nil
 }
 
-// computeHMAC 计算 HMAC-SHA256。
-func computeHMAC(payload []byte, token string) string {
-	mac := hmac.New(sha256.New, []byte(token))
-	mac.Write(payload)
-	return hex.EncodeToString(mac.Sum(nil))
-}
-
 // generateSessionToken 生成 64 字符随机 hex token。
+// v0.3.0 fix (M4): 委托给 fd3_protocol.GenerateSessionToken——统一实现+错误语义。
+// crypto/rand 失败时返回带时间戳的 fallback（比返回 error 对子进程更健壮）。
 func generateSessionToken() string {
-	b := make([]byte, 32)
-	// E15: crypto/rand.Read 失败时 token 为全零——fallback 到时间戳
-	if _, err := rand.Read(b); err != nil {
-		log.Printf("[executor] crypto/rand.Read failed: %v — falling back to timestamp token", err)
+	token, err := GenerateSessionToken()
+	if err != nil {
+		log.Printf("[executor] GenerateSessionToken crypto/rand failed: %v — falling back to timestamp token", err)
 		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
 	}
-	return hex.EncodeToString(b)
+	return token
 }
 
 func str(v interface{}) string {
@@ -289,6 +282,7 @@ func writeJSON(w io.Writer, v interface{}) error {
 }
 
 // isHexLine 判断一行是否是 HMAC hex 签名行（64 字符 hex）。
+// v0.3.0: VerifyHMAC 已在 fd3_protocol 中实现完整的十六进制+HMAC 比较。
 func isHexLine(line []byte) bool {
 	if len(line) != 64 {
 		return false
@@ -302,18 +296,11 @@ func isHexLine(line []byte) bool {
 }
 
 // verifyTwoLineHMAC 验证 v0.2.0 两行协议的 HMAC 签名。
-// hmacHex: 第一行的 HMAC-SHA256 hex 字符串（64 字符）
-// payload: 第二行的 JSON payload 原始 bytes
+// v0.3.0 fix (M3): 委托给 fd3_protocol.VerifyHMAC——统一 HMAC 实现。
 func verifyTwoLineHMAC(hmacHex string, payload []byte, token string) error {
-	expectedHMAC, err := hex.DecodeString(hmacHex)
-	if err != nil {
-		return fmt.Errorf("hmac decode: %w", err)
-	}
-	mac := hmac.New(sha256.New, []byte(token))
-	mac.Write(payload)
-	actualHMAC := mac.Sum(nil)
-	if !hmac.Equal(expectedHMAC, actualHMAC) {
-		return fmt.Errorf("HMAC mismatch")
+	result := VerifyHMAC(token, payload, hmacHex)
+	if !result.Valid {
+		return fmt.Errorf("HMAC verification failed: %s", result.ErrorType)
 	}
 	return nil
 }

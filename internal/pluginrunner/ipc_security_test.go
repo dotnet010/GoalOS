@@ -24,7 +24,7 @@ func TestHMAC_ValidSignature(t *testing.T) {
 		"status":    "success",
 	}
 	payload, _ := json.Marshal(msg)
-	msg["hmac"] = computeHMAC(payload, token)
+	msg["hmac"] = SignMessage(token, payload)
 
 	// 模拟 PluginRunner 验证
 	finalJSON, _ := json.Marshal(msg)
@@ -46,7 +46,7 @@ func TestHMAC_InvalidSignature(t *testing.T) {
 		"status":    "success",
 	}
 	payload, _ := json.Marshal(msg)
-	msg["hmac"] = computeHMAC(payload, wrongToken) // 用错误 token 签名
+	msg["hmac"] = SignMessage(wrongToken, payload) // 用错误 token 签名
 
 	finalJSON, _ := json.Marshal(msg)
 	var received map[string]interface{}
@@ -85,12 +85,12 @@ func TestHMAC_TamperedMessage(t *testing.T) {
 		"status":    "success",
 	}
 	payload, _ := json.Marshal(msg)
-	msg["hmac"] = computeHMAC(payload, token)
+	msg["hmac"] = SignMessage(token, payload)
 
 	// 篡改 status=failure
 	msg["status"] = "failure"
 	delete(msg, "hmac")             // 移除旧 HMAC
-	msg["hmac"] = computeHMAC(payload, token) // 使用原始 payload 的 HMAC（已过期）
+	msg["hmac"] = SignMessage(token, payload) // 使用原始 payload 的 HMAC（已过期）
 
 	finalJSON, _ := json.Marshal(msg)
 	var received map[string]interface{}
@@ -117,8 +117,8 @@ func TestHMAC_Deterministic(t *testing.T) {
 	token := "test-token-32-bytes-xxxxxxxxxxxxxx"
 	payload := []byte(`{"action_id":"test","status":"success"}`)
 
-	h1 := computeHMAC(payload, token)
-	h2 := computeHMAC(payload, token)
+	h1 := SignMessage(token, payload)
+	h2 := SignMessage(token, payload)
 
 	if h1 != h2 {
 		t.Fatal("HMAC must be deterministic")
@@ -128,8 +128,8 @@ func TestHMAC_Deterministic(t *testing.T) {
 func TestHMAC_DifferentPayloads(t *testing.T) {
 	token := "test-token-32-bytes-xxxxxxxxxxxxxx"
 
-	h1 := computeHMAC([]byte(`{"status":"success"}`), token)
-	h2 := computeHMAC([]byte(`{"status":"failure"}`), token)
+	h1 := SignMessage(token, []byte(`{"status":"success"}`))
+	h2 := SignMessage(token, []byte(`{"status":"failure"}`))
 
 	if h1 == h2 {
 		t.Fatal("different payloads must produce different HMACs")
@@ -145,7 +145,7 @@ func TestHMAC_StandardLibraryCompatible(t *testing.T) {
 	mac.Write(payload)
 	expected := hex.EncodeToString(mac.Sum(nil))
 
-	actual := computeHMAC(payload, token)
+	actual := SignMessage(token, payload)
 
 	if actual != expected {
 		t.Fatalf("HMAC mismatch: expected=%s actual=%s", expected, actual)
