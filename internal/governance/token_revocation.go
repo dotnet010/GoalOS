@@ -115,7 +115,7 @@ func (ts *TokenStore) VerifyTokenWithSignature(tokenStr string, secretKey []byte
 	}
 	// Step 2: 检查撤销/过期（TokenStore）
 	tokenID := claims.GoalID + "/" + claims.ActionID
-	valid, _ := ts.VerifyToken(tokenID)
+	valid, err := ts.VerifyToken(tokenID); if err != nil { return nil, fmt.Errorf("token verification failed: %w", err) }
 	if !valid {
 		return nil, fmt.Errorf("token revoked or expired: %s", tokenID)
 	}
