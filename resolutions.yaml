@@ -1175,3 +1175,828 @@ resolutions:
   R-725:
     desc: "内部协议边界管理规范——6个内部协议边界(IPC/Token/Event/Snapshot/LLM)必须含版本标识+自动检测+CI强制。三条铁律(版本号/自动检测/边界清晰)。Plugin构建统一化(make plugins)。开发规范§5新增协议边界管理。05-架构§0新增Protocol契约要素。验收规范Phase 0新增协议合规检查"
     files: [05软件架构文档.md, 开发规范.md, 验收规范.md, check-plugin-protocol.sh]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #170 (2026-08-01): 历史补录 + 编号冲突修复 + 路线重定向
+  # ═══════════════════════════════════════════════════════════════
+  #
+  # 补录政策（R-910）:
+  #   1. 历史决议(R-863~R-902) files 为空——传播已发生，证据以会议纪要为准;
+  #      层1 义务自会议 #170 起的新决议生效
+  #   2. 编号冲突修复: 7/9 会议 #161~#163 的 R-863~R-877 保留原号(先到先得);
+  #      7/30 会议 #164 的 12 个冲突决议改号 R-930~R-941
+  #   3. 每条标注 disposition: 生效 / 推迟(批准人) / 替代→R-xxx
+  # ═══════════════════════════════════════════════════════════════
+
+  # ── 7/9 会议 #161~#163 历史决议(原号保留) ──
+
+  R-863:
+    desc: "R-858 ColdVerify 撤销——不在架构层做数据隔离。R-862 prompt 级独立性声明+Evaluator 冷验证已覆盖需求。disposition: 已落地(历史)"
+    files: []
+  R-864:
+    desc: "PromptBuilder 分离——新增 BuildVerificationPrompt() 用于 MultiLLM 验证子进程,与 BuildReasoningPrompt() 独立。disposition: 已落地(历史)"
+    files: []
+  R-865:
+    desc: "ReviewReport 诚实标注——审查面板显示'AI 审查是概率性判断,不替代确定性验证'。disposition: 已落地(历史)"
+    files: []
+  R-866:
+    desc: "R-862 prompt 升级确认有效(81.8% 检出率,0 误报)。保留独立性声明+置信度+结构化输出。disposition: 已落地(历史)"
+    files: []
+  R-867:
+    desc: "06 §5 'stdin/stdout'→'FD3 (IPC 控制通道)',对齐 05/08。disposition: 已落地(历史)"
+    files: []
+  R-868:
+    desc: "06 安全 §1.1/§4/§5/§9.6 新增 MUST/MUST_NOT 标记。disposition: 已落地(历史)"
+    files: []
+  R-869:
+    desc: "Kernel 统一为 05 §2.2 定义(4 组件: Event Bus+PipelineRunner+Scheduler+State Store),PRD/GLOSSARY 同步。disposition: 已落地(历史)"
+    files: []
+  R-870:
+    desc: "05 A.9 补充缺失字段,对齐 08 §3.2 完整定义。disposition: 已落地(历史)"
+    files: []
+  R-871:
+    desc: "07 注册 3 个缺失事件(含 publisher/layer/payload schema/precondition)。disposition: 已落地(历史)"
+    files: []
+  R-872:
+    desc: "05 A.7 补 layer+session_id;07 §3 补 idempotency_key+session_id。disposition: 已落地(历史)"
+    files: []
+  R-873:
+    desc: "05 §4 补充环境变量白名单(R-777 传播)。disposition: 已落地(历史)"
+    files: []
+  R-874:
+    desc: "05 §3.1 补充旧 Token 撤销+单次使用语义。disposition: 已落地(历史)"
+    files: []
+  R-875:
+    desc: "GLOSSARY 新增 QualityGate。disposition: 已落地(历史)"
+    files: []
+  R-876:
+    desc: "GLOSSARY 新增 Verification Pyramid+与 VerificationPrecedence 关系。disposition: 已落地(历史)"
+    files: []
+  R-877:
+    desc: "GLOSSARY 任务生命周期用户可见状态表补充(NeedsReview)。disposition: 已落地(历史)"
+    files: []
+
+  # ── 会议 #165~#167: v0.2.1 审计/v0.2.2 发布 ──
+
+  R-878:
+    desc: "v0.2.1 审计 Phase A(9 项 CRITICAL)必须在 v0.3.0 启动前全部修复。disposition: 已完成(v0.2.2)"
+    files: []
+  R-879:
+    desc: "Phase B 测试与 CI 修复(12 项)在 v0.3.0 Week 1-2 内完成。disposition: 已完成(v0.2.2)"
+    files: []
+  R-880:
+    desc: "Phase C: M2 Ed25519 签名与 agentbox 集成一并;M1/M3/M4 前期修复。disposition: 已完成(v0.2.2)"
+    files: []
+  R-881:
+    desc: "修复后必须通过全量测试+CI 脚本+3D 魔方 E2E+构建 v0.2.2。disposition: 已完成(v0.2.2)"
+    files: []
+  R-882:
+    desc: "CI 脚本必须支持 Linux runner grep/bash 行为差异——变量使用 ${VAR:-0} 和 ${VAR//[^0-9]/} 防护。disposition: 已落地"
+    files: []
+  R-883:
+    desc: "grep 管道在 set -euo pipefail 下必须加 || true 防止误杀。disposition: 已落地"
+    files: []
+  R-884:
+    desc: "Plugin 签名: Ed25519 非对称签名优先(public_key 非空时)+SHA256 hash 兼容降级。disposition: 已落地"
+    files: []
+  R-885:
+    desc: "HMAC 实现统一: executor.go 委托 fd3_protocol.SignMessage/VerifyHMAC,删除重复实现。disposition: 已落地"
+    files: []
+  R-886:
+    desc: "Session Token 统一: executor.generateSessionToken 委托 fd3_protocol.GenerateSessionToken。disposition: 已落地"
+    files: []
+  R-887:
+    desc: "文档更新: 06-安全 §1.2 STRIDE+§4 Plugin 安全+08-沙箱 §8.2/§8.3 签名验证流程。disposition: 已落地"
+    files: []
+
+  # ── 会议 #168: v0.3.0 Run 模式计划(会议 #170 路线重定向处置) ──
+
+  R-888:
+    desc: "v0.3.0 开发计划批准——8周4里程碑10项验收。disposition: 替代→R-927(Week 结构重排: Run 模式推迟 v0.5.0)"
+    files: []
+  R-889:
+    desc: "新增代码量目标~1100行Go,零外部二进制依赖(MXC 除外)。disposition: 修订→R-927(~1500行,跨平台沙箱范围)"
+    files: []
+  R-890:
+    desc: "NFR 基准: 沙箱启动<50ms agentbox/<200ms MXC 等。disposition: 修订→R-918(全部 CI 可验证,Run 指标移除)"
+    files: []
+  R-891:
+    desc: "风险降级: agentbox beta→fallback Job Object;seccomp-notify 不可用→降级 BPF;macOS PATH 代理 L2 标注。disposition: 修订→R-916(agentbox STRIDE+自建预案);seccomp-notify/PATH 代理部分推迟 v0.5.0"
+    files: []
+  R-892:
+    desc: "v0.3.0 验收: 10 项场景+CI 全绿+contract_test 覆盖率≥90%。disposition: 替代→R-912/R-924(平台三级矩阵 15 项验收)"
+    files: []
+
+  # ── 会议 #169: 计划 v2.0 审议(会议 #170 处置) ──
+
+  R-893:
+    desc: "Sandbox 接口 Start/Stop/Wait→Execute(ctx,cmd,profile)→(*Result,error)。disposition: 生效(并入 R-926 架构中心制品)"
+    files: [会议纪要.md, GLOSSARY.md]
+  R-894:
+    desc: "classifier.go 去重——internal/sandbox/ 统一定义。disposition: 生效(并入 R-914)"
+    files: [会议纪要.md]
+  R-895:
+    desc: "外部依赖最小化——BurntSushi→专用parser/creack/pty→x/term。disposition: 替代——parser 部分→R-907(BurntSushi 采用,Ken 否决自建);PTY 部分→R-905(x/term 不能分配 PTY,推迟 v0.5.0 重议)"
+    files: [会议纪要.md]
+  R-896:
+    desc: "删除 cmd/goalos-migrate/,新增 internal/migrate/,goalos migrate 为 CLI 子命令。disposition: 推迟(v0.4.0 之后,R-939/R-941)"
+    files: [会议纪要.md]
+  R-897:
+    desc: "seccomp-notify 5 项技术补齐(EINTR/TOCTOU/clone3/recover/WaitKillable)。disposition: 推迟 v0.5.0(信创 4.19 无 seccomp-notify,非 v0.3.0 关键路径)"
+    files: [会议纪要.md]
+  R-898:
+    desc: "exec 过滤盲区诚实标注——解释型语言内部危险操作由文件系统/网络白名单兜底。disposition: 保留(设计文化;兜底层 v0.3.0 由各后端独立强制;exec 层随 Exec Monitor 推迟 v0.5.0)"
+    files: [会议纪要.md, GLOSSARY.md]
+  R-899:
+    desc: "Week 0 STRIDE——5 个新增攻击面威胁建模。disposition: 修订→R-916(按路线重定向重构为六场景)"
+    files: [会议纪要.md]
+  R-900:
+    desc: "测试先行——W1 Beck 产出全部模块 contract_test 骨架,Ken 闸口验收后开代码。disposition: 生效(模块集改为 sandbox/profile/ipc-transport,R-927)"
+    files: [会议纪要.md]
+  R-901:
+    desc: "TOML Profile Validate()+Exec Monitor session 决策缓存。disposition: 拆分——Validate() 生效(并入 R-907/R-908);session 缓存推迟 v0.5.0(R-913)"
+    files: [会议纪要.md, GLOSSARY.md]
+  R-902:
+    desc: "Windows cmd /c echo/TOML ${secret} daemon 端解密/fork-bomb benchmark。disposition: 拆分——secret daemon 端解密生效(并入 R-917);Windows echo/fork-bomb benchmark 推迟 v0.5.0"
+    files: [会议纪要.md]
+
+  # ── 会议 #170: 计划审议发现(上半场 R-903~R-920) ──
+
+  R-903:
+    desc: "FD3 exec 边界协议转换——handshake→grant→fd3 显式关闭(CLOEXEC)→execve;exec 后 daemon 切换 exit-wait 模式,RunCompleted 由 Plugin Runner 从 waitpid 合成。disposition: 推迟 v0.5.0(Jobs+Meyer 双批);设计种子入 08-沙箱 §15.1;fd CLOEXEC 卫生剥离立即生效(入 R-928)"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+  R-904:
+    desc: "Passthrough 跨平台语义分裂定义——Unix=进程替换(约束随 execve 继承);Windows=CreateProcess+Job 显式挂接+退出码代理。disposition: 推迟 v0.5.0(Jobs+Meyer 双批);设计种子入 08-沙箱 §15.2"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+  R-905:
+    desc: "R-895 PTY 部分作废(Ken 否决)——x/term 不能分配 PTY;Unix=creack/pty 或 x/sys/unix;Windows=ConPTY。disposition: 推迟 v0.5.0(Jobs+Meyer 双批);v0.3.x 不引入任何 PTY 依赖;设计种子入 08-沙箱 §15.3"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-906:
+    desc: "Run 治理链路→泛化为不变量(R-906a): Sandbox.Execute 调用点必须位于 Governance 治理闸门之后;Sandbox.Execute 四态 error 契约(Timeout/Retryable/Fatal/NeedHuman)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-907:
+    desc: "TOML parser 采用 BurntSushi/toml(Ken 否决自建)——自建门槛=EBNF+go-fuzz+拒绝未知键+大小深度限制;原则 #5 补充: 安全关键解析组件豁免依赖最小化。disposition: 生效"
+    files: [会议纪要.md, GLOSSARY.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-908:
+    desc: "profile 缓存键=内容 SHA-256(废 mtime);三层配置体系合并语义: deny 并集/allow 交集;CWD 层推迟 v0.5.0。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-909:
+    desc: "CWD 自动检测 profile 信任模型——仅收紧(deny 并集/allow 交集),放松须显式 --trust-local。disposition: 推迟 v0.5.0(Jobs+Meyer 双批);设计种子入 08-沙箱 §15.4"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md]
+  R-910:
+    desc: "resolutions.yaml 补注册 R-863~R-902+本次全部决议;补注册标注路线重定向处置+编号冲突修复。disposition: 生效 P0(本条目即执行产物)"
+    files: [会议纪要.md]
+  R-911:
+    desc: "AWAIT 审批通道设计——/dev/tty 直写+stdin 归属仲裁+TUI 恢复语义。disposition: 推迟 v0.5.0(Jobs+Meyer 双批);设计种子入 08-沙箱 §15.5"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+  R-912:
+    desc: "验收矩阵平台诚实化——按 R-924 三级定义如实标注。disposition: 生效(开发计划 §7 平台三级矩阵 15 项)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-913:
+    desc: "actionID 规范化算法到伪代码级(二进制真实路径+参数规范化+风险类归属)。disposition: 推迟 v0.5.0(随 Exec Monitor UX);classifier 底层保留入 Risk 引擎;设计种子入 08-沙箱 §15.6"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+  R-914:
+    desc: "44 条规则完整枚举——08-沙箱 §11 列出全部 44 条+L0-L5 映射全表+agentbox 版本 pin+集成验证计数;classifier 接入 Governance Risk 引擎。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md]
+  R-915:
+    desc: "Linux 内核版本矩阵升为架构中心章——Landlock 5.13+/seccomp-notify 5.0+/WAIT_KILLABLE 版本待核实(初步记录 5.19)。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+  R-916:
+    desc: "v0.3.0 STRIDE 重构六场景: agentbox 供应链(单点+自建预案)/Windows token 降权缺口/信创 4.19 fallback/TOML 恶意输入/Windows named pipe 冒充/平台现状盘点;migrate 场景推迟。disposition: 生效(修订 R-899)"
+    files: [会议纪要.md, 06安全模型文档.md]
+  R-917:
+    desc: "secret 红线 MUST_NOT——解密 secret 永不进事件/审计/日志;仅 daemon 进程内解密+env 注入;/proc/environ 风险标注;leak contract test 机检。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+  R-918:
+    desc: "NFR 自动化——全部指标 CI 可验证;人工测量条目须 Jobs+Meyer 双批挂起(§0.4 程序)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-919:
+    desc: "进程树生命周期语义泛化三平台——Windows KILL_ON_JOB_CLOSE/Linux subreaper/macOS 进程组;僵尸收割+daemon 崩溃清理。disposition: 生效"
+    files: [会议纪要.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-920:
+    desc: "W4 末中期检查点(Jobs 评审)——三级矩阵进度/STRIDE 闭环/进度对冲裁决。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  # ── 会议 #170: 路线重定向(下半场 R-921~R-929) ──
+
+  R-921:
+    desc: "v0.3.x 重定义=跨平台沙箱+底层安全。平台优先级 Windows 主>信创次>macOS 专业。Run 模式推迟 v0.5.0(Jobs+Meyer 双批);v0.4.0=MCP+skills;迁移工具在 0.4.0 之后。disposition: 生效(PM 批准)"
+    files: [会议纪要.md, 01-prd产品需求文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-922:
+    desc: "Windows 一等公民化: (a)插件协议传输层化——Unix=fd 继承/Windows=named pipe,HMAC 消息语义不变;(b)agentbox 后端(Restricted Token+Low IL+ACL);(c)Windows CI runner 即日进 CI(PM 强调同 Linus 观点)。disposition: 生效(PM 批准)"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md, 模块实现指南.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-923:
+    desc: "信创后端原表述(seccomp BPF+mount namespace;交叉编译+qemu+真机签字)。disposition: 替代→R-929(离线验证协议)"
+    files: [会议纪要.md]
+  R-924:
+    desc: "平台支持三级定义(1 编译通过/2 测试通过/3 沙箱强制生效)写入 06-安全+08-沙箱;会议 #170 基线: Windows=1/信创=1/macOS=3/Linux=3。disposition: 生效(PM 批准)"
+    files: [会议纪要.md, 06安全模型文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-925:
+    desc: "推迟项目管理——Run 组件(passthrough/PTY/Exec Monitor UX/CWD profile)推迟 0.5.0,Jobs+Meyer 双批,stub 追踪清单注册;R-903/R-904 设计种子入 08-沙箱 §15。disposition: 生效(PM 批准)"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-926:
+    desc: "Sandbox 接口为 v0.3.0 架构中心制品——四态 error 契约+Pre/Post/Invariant;第一消费者=Plugin Runner(Goal 模式);后端矩阵=windows-job/xinchuang-bpf/linux-bpf/darwin-seatbelt;fail-closed。disposition: 生效(PM 批准)"
+    files: [会议纪要.md, 05软件架构文档.md, GLOSSARY.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-927:
+    desc: "Week 结构重排: W0 STRIDE+平台盘点/W1-2 骨架(sandbox/profile/ipc-transport)+IPC 传输层+agentbox Windows/W3-4 TOML+classifier 入 Risk(W4 末 Jobs 检查)/W5-6 信创后端+macOS 收口+特性探测/W7-8 对抗测试+MXC+底层安全清单。disposition: 生效(PM 批准)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-928:
+    desc: "底层安全清单显式工作流: fd CLOEXEC 卫生/secret 红线(R-917)/audit 链/进程树清理(R-919)/沙箱逃逸对抗测试。disposition: 生效(PM 批准)"
+    files: [会议纪要.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-929:
+    desc: "信创平台落地与离线验证协议(替代 R-923): ①后端=seccomp BPF 自加载+mount namespace ②开发基线=Ubuntu LTS 代理入 CI ③内核能力模拟开关(GOALOS_SANDBOX_SIMULATE_KERNEL=4.19)CI 每日 exercised ④信创诊断包(goalos sandbox doctor tarball)⑤发布闸口=模拟 4.19 模式 CI 全绿,真机 3 级在 0.3.x 窗口收敛,发布时 06-安全附信创已知问题清单 ⑥loong64 交叉编译+qemu-user 冒烟(P1)。disposition: 生效(PM 批准)"
+    files: [会议纪要.md, 05软件架构文档.md, 06安全模型文档.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  # ── 编号冲突修复: 7/30 会议 #164 沙箱系决议改号 R-930~R-941 ──
+
+  R-930:
+    desc: "原 R-863(7/30 会议 #164,与 7/9 #161 冲突改号): 平台优先级 Windows #1/Linux(信创)#2/macOS #3。disposition: 保留生效(与 R-921 同向)"
+    files: [会议纪要.md, 01-prd产品需求文档.md, GLOSSARY.md, 06安全模型文档.md]
+  R-931:
+    desc: "原 R-864(冲突改号): 沙箱引擎 agentbox 为核心,MXC 可选;GoalOS 原生自建 Windows 沙箱废弃;原则 #5 外部 Go 库引入标准首个实例。disposition: 保留生效(W0 STRIDE 验证,R-916)"
+    files: [会议纪要.md, GLOSSARY.md]
+  R-932:
+    desc: "原 R-865(冲突改号): 沙箱封装层+TOML 编译器+全平台 contract tests(~910 行,8 周)。disposition: 保留生效(结构按 R-927 修订)"
+    files: [会议纪要.md]
+  R-933:
+    desc: "原 R-866(冲突改号): 双模式产品定位(Goal+Run 共享 Kernel+Governance+Sandbox)。disposition: 修订——定位保留,Run 实现推迟 v0.5.0(R-921)"
+    files: [会议纪要.md, 01-prd产品需求文档.md, GLOSSARY.md, 07事件注册表.md]
+  R-934:
+    desc: "原 R-867(冲突改号): Passthrough Plugin 为 Capability Plugin 子类型,不新建 Plugin 类型。disposition: 推迟 v0.5.0(Jobs+Meyer 双批)"
+    files: [会议纪要.md, GLOSSARY.md, 08沙箱隔离与进程通信规范.md, 05软件架构文档.md]
+  R-935:
+    desc: "原 R-868(冲突改号): TOML Profile 三层配置体系(显式路径>目录自动检测>命名引用>内置默认)。disposition: 修订——CWD 自动检测层推迟 v0.5.0(R-909),其余生效"
+    files: [会议纪要.md, GLOSSARY.md, 08沙箱隔离与进程通信规范.md]
+  R-936:
+    desc: "原 R-869(冲突改号): Exec Monitor 不属于 Kernel,Sandbox 层新模块(internal/execmonitor/),与 Plugin Runner 并列。disposition: 推迟 v0.5.0(syscall 级 UX);classifier 底层保留入 Risk(R-914)"
+    files: [会议纪要.md, GLOSSARY.md, 05软件架构文档.md]
+  R-937:
+    desc: "原 R-870(冲突改号): 双层 exec 安全模型——Governance Action 级+Exec Monitor syscall 级;agentbox 44 规则→GoalOS L0-L5 映射。disposition: 推迟 v0.5.0(syscall 级);Governance Action 级保留"
+    files: [会议纪要.md, GLOSSARY.md, 05软件架构文档.md]
+  R-938:
+    desc: "原 R-871(冲突改号): 双后端架构——agentbox 默认(编译进二进制)+MXC 可选(独立安装,后端可切换)。disposition: 保留生效"
+    files: [会议纪要.md, GLOSSARY.md, 08沙箱隔离与进程通信规范.md]
+  R-939:
+    desc: "原 R-872(冲突改号): 迁移工具 goalos migrate 按需安装独立组件,扫描→预览→一个回车→全量迁移。disposition: 推迟(v0.4.0 之后,Jobs+Meyer 双批)"
+    files: [会议纪要.md, GLOSSARY.md, 07事件注册表.md]
+  R-940:
+    desc: "原 R-873(冲突改号): 产品形态最终定稿(Goal 模式+Run 模式+迁移工具)。disposition: 修订——三形态路线图重排(R-921)"
+    files: [会议纪要.md, 01-prd产品需求文档.md, GLOSSARY.md]
+  R-941:
+    desc: "原 R-874(冲突改号): 迁移工具产品设计原则(迁移是 onboarding/一个授权全量迁移/默认 Y/'我认识你'时刻/Run 模式作为安全网)。disposition: 推迟(v0.4.0 之后,Jobs+Meyer 双批)"
+    files: [会议纪要.md, GLOSSARY.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #171 (2026-08-01): 外部顾问 G/D/Q 反馈 v0.3.0-1 审议
+  # 21 议题: 采纳 12 / 部分采纳 5 / 不采纳 4(附证据)
+  # 注: R-942~R-962 的施工落点在开发计划 v3.1(v0.3.0-2)各周任务;
+  #     05/06/08/GLOSSARY 的正文落地随 W0 制品冲刺(0.8~0.12)与 W7-8(7.8)完成
+  # ═══════════════════════════════════════════════════════════════
+
+  R-942:
+    desc: "Windows Plan B 分层预案: ①vendor 锁定+W0 全库代码审查 ②STRIDE 不通过→Windows 目标降 2 级如实标注+v0.3.x 正式自研任务(重新估工作量) ③决策点=W0 末。全部文档删除'300 行'表述(顾问 G/D 部分采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-943:
+    desc: "《Error 映射矩阵》: OS 原生错误(errno/NTSTATUS/退出码)→四态判定决策树(Sandbox 层单点判定)→AgentErrorCode→failHints §17.9 行。W0 Meyer 产出,覆盖 windows-job+linux-bpf,其余随后端周增量(顾问 G/D/Q 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-944:
+    desc: "*Result 结构体完整定义: ExitCode/Stdout/Stderr 引用/Duration/PIDTree/BackendID+跨平台一致性约束+退出码透传格式。W0 入 05 §X(顾问 D 采纳,P0 制品)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-945:
+    desc: "后端选择算法决策树(伪代码级): 启动期探测→prefer 解析→fallback 链(strict=Fatal/warn=降级链)→结果缓存与失效。W0 入 05 §X(顾问 D 采纳,P0 制品)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-946:
+    desc: "《Profile Schema & 编译规则 & Validate Rulebook》: TOML→四后端翻译规则(Windows ACL+Linux BPF 两完整示例)+业务语义冲突规则集+共享代码 bpf_common.go 约定。W0 定稿,W3-4 纯实现(顾问 D/Q 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-947:
+    desc: "数据流修正——Detect 启动期化: PlatformCapabilities daemon 启动探测+缓存;Governance Risk 以上下文消费(降级环境→高风险审批收紧);调用链仅剩 fail-closed 复核;05/开发计划图修正+审批分支交叉引用(R-794)(顾问 G 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-948:
+    desc: "mount namespace 语义前置 W0 定稿(bind-mount 白名单 vs chroot);信创 contract test W1-2 接口级骨架+W4 后语义级断言(顾问 G 采纳——TDD 倒挂修复)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-949:
+    desc: "存储文档补强: PRD §9 补 Snapshot 触发时机(05 §3.9 已有)/原子写(tmp+rename 已实现)/单写者模型交叉引用+轮转压缩规则(每 Goal 完成=Checkpoint;单 Goal events>10MB 触发压缩评估)(顾问 G 大部分不采纳——已实现;文档层残余采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-950:
+    desc: "渲染边界落地机制: CompletionContract 核心条款=代码模板填充(不经 LLM,既有原则)+MessageContent 增加 is_safety_critical 标记字段(Persona 跳过润色)(顾问 G/Q 部分采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-951:
+    desc: "数据通道目录跨平台映射: Unix=$TMPDIR 或 /tmp;Windows=%PROGRAMDATA%\\goalos\\channels\\(ACL 限制);路径规范化入 08(顾问 G 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-952:
+    desc: "CLI 断线保活与重连: Keep-Alive 心跳+断线后主动拉取 events.jsonl 增量(非纯被动订阅)+重连状态恢复 UX,入 04-CLI+验收场景;W7-8 任务 7.10 实现(顾问 G 断线部分采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-953:
+    desc: "治理不变量技术强制: CI import 白名单(check-sandbox-import.sh——仅 pluginrunner 可 import internal/sandbox)+绕过尝试 contract test(编译期必须失败)。文档约定→编译期强制(顾问 Q 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-954:
+    desc: "《Simulation Fidelity Spec》: mock 边界=特性探测层能力位;syscall 全 passthrough;偏差容忍=零;不可模拟差异清单(NTFS 语义/LoongArch)归真机窗口(顾问 Q 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-955:
+    desc: "08 §17 扩展为 IPC 协议规格 v0.3: HMAC 签名范围/Nonce 抗重放/named pipe 握手序列/ACL 基线(作为 W0 输入非 STRIDE 输出)(顾问 Q 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-956:
+    desc: "classifier v0.3.0 消费链明确化: Governance Risk 引擎对 shell.execute 类 action 命令定级(Goal 模式);无消费者部分维持推迟 v0.5.0(顾问 D 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-957:
+    desc: "进程树生命周期规范: 范围含孙子进程;终止=SIGTERM→2s→SIGKILL(Unix)/TerminateJobObject(Windows);daemon 崩溃清理(Win 自动/Unix 进程组+subreaper);创建/退出入审计事件(顾问 D 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-958:
+    desc: "MXC 降为检测+预留接口 stub(ProcessContainer 调用不实现);W7-8 时间重分配给对抗测试+编译器余量(顾问 D 采纳,Jobs 产品判断: One over Many)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-959:
+    desc: "同包共享约定: backend_linux/xinchuang 同属 package sandbox,共享逻辑入 bpf_common.go——无循环依赖可能(顾问 D-7 不采纳,澄清记录)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-960:
+    desc: "GLOSSARY 概念补齐 5 条: 诚实标注格式+通道(CLI 启动横幅+Dashboard 徽章)/fail-closed=Fatal/模拟开关 per-feature 枚举(LANDLOCK/SECCOMP_NOTIFY/NAMESPACE/ALL)/语义一致=安全决策等价/逃逸向量清单(参考 runc CVE 系列)(顾问 D 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-961:
+    desc: "W0 增加 P0 施工制品冲刺(Ken+Meyer+Brad,2-3 天: Error 矩阵/Result/选择算法/编译规则)+Beck W1 前 2 天消化窗口;与 STRIDE(Lipner+Kees)双线并行不抢人(顾问 D 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-962:
+    desc: "工作量重估 2500-3500 行(原 1500 过于乐观——单编译器 500+);W3-4 转纯实现(设计已 W0 定稿);NFR 改区间制(顾问 D 采纳)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #172 (2026-08-01): W0 评审闭环
+  # ═══════════════════════════════════════════════════════════════
+
+  R-963:
+    desc: "agentbox STRIDE 裁决: 通过(有条件)——①vendor 目录锁定+commit pin v0.0.0-20260409110136-e003e7574798 ②Go 1.24 升级(R-964) ③热点代码审查(platform/windows、reexec、proxy/) ④分类器枚举以实测 14F/16E/~14A 规则组为准('44 条'证伪)。不触发 R-942 Plan B"
+    files: [会议纪要.md, 06安全模型文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-964:
+    desc: "Go 1.24 工具链升级——agentbox go.mod 要求 go>=1.24(项目当前 1.23);go.mod/CI runner/Makefile 同步升级(W1-2 前置任务 1.10a)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-965:
+    desc: "mount namespace 语义定稿: bind-mount 白名单+pivot_root(否决 chroot——需拷贝动态库/非安全边界/与声明式 profile 语义不匹配);挂载序列 7 步/写穿审计点/子进程锁死(seccomp deny CLONE_NEWNS)/4.19 降级 seccomp-only——08 §18"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #173 (2026-08-01): 顾问反馈 v0.3.0-2 审议 (G/Q/C)
+  # 22 项: 采纳 16 / 部分采纳 6 / 不采纳 6(附证据)
+  # 注: 部分文档制品(错误体验/Watcher 时序/能力矩阵/合并语义/沙箱错误映射)
+  #     按开发计划 v3.3 的任务 1.15~1.17/3.10~3.12 在对应周落地
+  # ═══════════════════════════════════════════════════════════════
+
+  R-973:
+    desc: "error 语义边界钉死(C-1): error 仅描述沙箱基础设施层面失败(Job/namespace/seccomp 加载/IPC 超时/fail-closed);子进程业务失败(exit≠0)经 Result.ExitCode 表达,error=nil。沙箱结果与领域对象状态转换矩阵入 05 §3.10.1——沙箱结果永不自动修改 CompletionContract;Retryable 自动重试≤2 次;contract test TestSandbox_ChildExitCode_ErrorNil/TestSandbox_MechFail_ErrorFatal"
+    files: [会议纪要.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-974:
+    desc: "用户可见错误体验规格(Q-3): 四态错误用户模板(Fatal=错误码+排查指引;NeedHuman=风险等级+操作+超时+按钮)入 04-CLI(W1-2 任务 1.15)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-975:
+    desc: "Windows 异常用户感知(Q-4): 插件被拦截/崩溃/句柄泄露→主动告警+诊断指引,不静默;入 04-CLI/08(W1-2 任务 1.17)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-976:
+    desc: "PlatformCapabilities 生命周期(C-2): 启动时探测一次→内存缓存→Daemon 生命周期不变;探测失败 fail-closed;模拟开关仅 CI/诊断,生产检测到→拒绝启动。入 05 §X.1c"
+    files: [会议纪要.md, 05软件架构文档.md]
+  R-977:
+    desc: "SandboxLevel 语义澄清(C-3): 实际生效能力级别;3 级=该平台当前配置可达最高;降级=能力受限非不安全。入 GLOSSARY"
+    files: [会议纪要.md, GLOSSARY.md]
+  R-978:
+    desc: "信任根文档补强(G-1 残余+G-2): 05 §3.3 验证金字塔防御引用链显性化(AI 生成测试=第一层非裁决+Test Manifest 用户可见);语义校验边界声明(结构性非语义性,用户是最终裁决)"
+    files: [会议纪要.md, 05软件架构文档.md]
+  R-979:
+    desc: "跨平台安全表达统一(G-3): 安全机制按后端表述(四后端原生术语),seccomp 不作通用语;文档更新入 06/08"
+    files: [会议纪要.md, 06安全模型文档.md, 08沙箱隔离与进程通信规范.md]
+  R-980:
+    desc: "Watcher 与 CLI 控制指令交互时序图(Q-4 部分): 审批/取消/stop 竞态状态流转入 04-CLI(W1-2 任务 1.16)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-981:
+    desc: "《Simulation Fidelity Spec》W2 聚合定稿(C-12 回应): 原则已在 R-954/08 §18.3(mock 边界=特性探测层/syscall 全 passthrough/偏差零);W2 聚合为 08 §19 独立章节+不可模拟差异清单"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-982:
+    desc: "W0→W1 Go/No-Go 决策清单(Q-5): Go=制品 4/4 全过;有条件 Go=≤1 B 级缺口+补齐期限;No-Go=≥2 B 级或 A 级→W1 顺延。Ken 闸口+Jobs 否决权;书面记录非口头"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-983:
+    desc: "§X.1 时序澄清(C-7 表述修正): detect 启动期(Governance 前,Context 一部分)/Execute 运行时(Governance 后);两者时机天然不同,架构无冲突"
+    files: [会议纪要.md, 05软件架构文档.md]
+  R-984:
+    desc: "平台能力矩阵(Q-2): 三级定义扩展为功能白/黑名单(降级时哪些沙箱能力关闭/保留);4×3 小矩阵入 06 §1.3(W3-4 任务 3.10)"
+    files: [会议纪要.md, 06安全模型文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-985:
+    desc: "三层合并语义决策表(C-4): 6 种冲突场景+优先级链入 08 §11.5;CWD 层推迟目标=v0.5.0(W3-4 任务 3.11)"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-986:
+    desc: "分类器→L0-L5 映射全表 W2 末前交付 08 §11.4(C-5): W3-4 阻塞项前置,勿等 3.6 才开始"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-987:
+    desc: "沙箱特有错误→failHints 补齐(C-6): seccomp_violation/named pipe ACL/Job Object 失败→映射入 05 §X.1b(W3-4 任务 3.12)"
+    files: [会议纪要.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-988:
+    desc: "Execute cmd 参数=自定义 CommandSpec(C-8): 不暴露 exec.Cmd(Windows ExtraFiles 不支持);字段 Path/Args/Env/WorkingDir/Stdio/Resources/Timeout 入 05 §X.1a;ExecuteMessage(IPC)→CommandSpec(Sandbox)"
+    files: [会议纪要.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-989:
+    desc: "开发计划明确引用 08 §17.1-17.4 已定稿(C-9): transport_contract_test 编写依据明确,非待完成"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-990:
+    desc: "四平台统一走 Sandbox 接口(C-10): W1-2 Windows 后端+Linux/macOS 适配层(现有 executor 薄封装非重写,验收零回归);W5-6 完全收敛"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 05软件架构文档.md]
+  R-991:
+    desc: "08 §11.5 补 10 个 Validate 测试用例(C-11): 输入/期望输出——Beck 骨架直接输入"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+  R-992:
+    desc: "sandbox doctor 双轨输出(Q-6): --json 机器可解析+默认人类可读报告+修复命令建议;入 04-CLI/08 §16"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+  R-993:
+    desc: "Skill 基础设施 API 契约冻结声明(Q-7): Loader 接口契约冻结+v1.5 merge/parallel 兼容性验证计划(W5-6 任务 5.9)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-994:
+    desc: "AWAIT 弹窗生命周期强化(G-4): 种子 §15.5 强化——挂起→备用缓冲→审批→恢复完整生命周期"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+  R-995:
+    desc: "mount ns 真机验证风险标注(C-13): W0 矩阵标注 bind-mount+pivot_root 在麒麟 4.19=理论可行待真机验证,列为发布前关键风险"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #174 (2026-08-01): 开发文档深度自检裁决
+  # 输入: 深度自检报告(审计记录/v0.3.0/深度自检报告-20260801.md)
+  # 5 路并行审计 120 项发现 → 去重 57 主题 → A/B/C 三批裁决
+  # ═══════════════════════════════════════════════════════════════
+
+  R-996:
+    desc: "A 批 12 项安全契约级修正: ①分类器计数两表改实测 14F/16E/~14A(R-963) ②Kernel 统一四组件(GoalRunner 归调度层) ③HMAC 密钥以 08 §17.1 R-955 为准(§3 标旧版兼容) ④06 §X.5 单向引用 05 §X.1a/b ⑤Token 生命周期图修正(不含 token 入子进程) ⑥L5=自动拒绝(fail-closed)——05:2589/06:510/07 触发对齐 ⑦07 补注册 SecurityIncident/GoalStopRequested,DaemonCrashed 非事件 ⑧08 chroot 三处标注 R-965 ⑨05 架构图改后端引擎架构 ⑩08 §12.2 MXC stub 标注 ⑪R-957 统一替代 R-919 ⑫'300 行'改 R-942 Plan B"
+    files: [会议纪要.md, 05软件架构文档.md, 06安全模型文档.md, 07事件注册表.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  R-997:
+    desc: "B 批 9 项产品级修正: 04-CLI 全面对齐 R-921(Run/迁移推迟标注/§13 里程碑删除改设计种子/sandbox doctor 补入/Persona 默认=简洁/skill 版本标注 v0.4.0/示例改现行命令);PRD Skill 路线 v0.4.0 修正(替代 v1.2/v1.5);PRD §4/§6 Run 段落推迟标注+版本号 v6.1;原型状态徽章权威指引注(PRD §17.6 为准)"
+    files: [会议纪要.md, 04命令行界面设计规范.md, 01-prd产品需求文档.md, 02低保真原型.md]
+  R-998:
+    desc: "C 批 30 项概念层修正(按深度自检报告裁决): GLOSSARY CategorizedError 与四态关系/C7-1 IPC 密钥派生/AgentErrorCode 13 值/诚实标注合并等;08 §14 推迟标注/§18 双编号;05 NormalizedGoal/验证金字塔/状态机等;07 layer/seq/snapshot 触发;06 macOS 重写/STRIDE 30 格标注等——按报告逐项执行"
+    files: [会议纪要.md, 05软件架构文档.md, 06安全模型文档.md, 07事件注册表.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md]
+  R-999:
+    desc: "原型 UI 缺口登记 W1-2 文档制品待办: Failed 终态(含 failHints)/CompletionContract 展示区实装/状态徽章收敛——stub 追踪清单 D-UI-01~04"
+    files: [会议纪要.md, stub追踪清单.md]
+  R-1000:
+    desc: "Telegram MVP 承诺登记待决: v0.3.0 开发计划零工作项,R-518 原承诺顺延为 v0.3.x 窗口评估(Jobs 产品判断)——stub 追踪清单 D-PRD-01"
+    files: [会议纪要.md, stub追踪清单.md]
+  R-1001:
+    desc: "配套文档同步: 用户手册升 v0.2.2+Run/迁移推迟标注;开发日志记录 #174;开发/验收/发布规范引用对齐"
+    files: [会议纪要.md]
+  R-1002:
+    desc: "深度自检闭环: 追踪清单登记未决项(D-UI/D-PRD/D-SEC/D-DOC)+CI 验证+自检报告归档"
+    files: [会议纪要.md, stub追踪清单.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #175 (2026-08-01): 可实施性审计裁决 — 补录
+  # （上一轮未注册；会议 #177 会前核查发现 R-485 单一真相来源缺口，补录归档）
+  # 输入: 可实施性审计（3 路 68 项缺口：流程算法 11/接口实现 22/歧义 35）
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1003:
+    desc: "P0 六项修复(可实施性审计): ①05 §X.1a 补 ResourceLimit/PlatformCapabilities/sandbox 包函数签名(Classify/Detect/ParseProfile) ②macOS L2 能力矛盾以 08 §5.2 为准(Seatbelt 有网络白名单+文件限制,缺 syscall 级) ③Workspace 默认值=~/Goals/<目标名>/ ④Event 结构补 session_id(07 §3+05 A.7,R-772 落地) ⑤Action metadata/accept_criteria 归属补全 ⑥临时目录=/tmp/goalos/<action_id>/ 唯一。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+
+  R-1004:
+    desc: "P1 关键修复(可实施性审计): ①07 补注册 7 事件(SessionCreated/TokenRenewed/ActionCancelRequested/ActionCancelApproved/ActionCancelDenied/ActionSkipped/FlowGenerationRequested 含 payload schema) ②MultiLLMReviewCompleted→MultiLLMVerificationCompleted 全库统一 ③L5 审批流程改自动拒绝(06 审批流程) ④StubAgent 生产回退移除(Honest Feedback) ⑤FD3 大小限制/LLM 超时/重试级联统一 ⑥44 规则修正(07)。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, stub追踪清单.md]
+
+  R-1005:
+    desc: "剩余 36 项(P1 残余+P2)登记 W1-2 文档补强任务——stub 追踪 D-IMP-01~09(CheckWARN 分支/DAG 遍历/MissionGraph 校验规则表/Normalization prompt/CLI SSE 事件传输+review 命令/Policy 求值/附录 B 接口签名/error_type 枚举/经验模板等)。disposition: 生效"
+    files: [会议纪要.md, stub追踪清单.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  R-1006:
+    desc: "第三版开发计划 v0.3.0-3(v4.0) 编写——W1-2 双线结构(实现补强冲刺 D-IMP-01~09 与 contract_test 骨架并行交付)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  R-1007:
+    desc: "v0.3.0-3 内部顾问审议批准(会议 #176): CheckWARN 分支入 Beck 骨架(Linus)/SSE 事件传输(Rob Pike)/D-IMP 排序 W1 前半(Carmack)/L5 零弹窗验收项(Kees)/事件契约守住(Lipner)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #177 (2026-08-01): 外部顾问反馈 v0.3.0-3 逐条审议
+  # 输入: 审计记录/v0.3.0/顾问反馈v0.3.0-3.md——29 项 + 3 份规格补充
+  # 判定: 采纳 13 / 部分采纳 9 / 不采纳 6(已解决附证据)+ 2 记录性
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1008:
+    desc: "CompiledProfile 类型裁决(C-2/C-6/C-13): 值类型 struct(Level/Platform/Syscall/FS/Network/Process/Extensions)零值合法=Level 0 显式形态;'不可为空'(R-975)修订为'必须由 Compile() 产出——禁止手造零值绕过编译';Result.SandboxLevel ≤ CompiledProfile.Level 契约断言;跨平台=超集+Extensions(08 §19)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "CompiledProfile"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.1a 必须定义 CompiledProfile 类型"
+      - must_exist: "CompiledProfile（R-1008）"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 必须登记 CompiledProfile 词条"
+
+  R-1009:
+    desc: "Sandbox 生命周期(C-8): 接口补 Close() error(幂等);实例绑定单次 Execute(不并发/不复用);New→Execute(≤1)→Close(必须调用,即使 Execute 失败)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "Close\(\) error"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.1a Sandbox 接口必须含 Close"
+
+  R-1010:
+    desc: "ctx 取消语义(C-9): 取消→先发终止信号(TerminateJobObject/SIGKILL+cgroup-kill)→等待子进程退出(独立硬超时 5s)→返回 Result(ExitCode=-1+Signal);等待超时→Result+WARN 日志(非 error,R-973 边界不变,不留孤儿进程)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  R-1011:
+    desc: "sandbox doctor 可读性补(Q-7 补): --human 显式别名(默认已人类可读)+可读性走查要求(04 §2 系统命令组);模拟开关生效时输出 SIMULATED 标记(R-1014 联动,与 REAL 真机结果区分)。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md]
+    verify:
+      - must_exist: "sandbox doctor.*human"
+        in_file: 04命令行界面设计规范.md
+        reason: "doctor 必须支持 --human 显式别名"
+
+  R-1012:
+    desc: "SandboxLevel 静态性(C-3): 编译期经 PlatformCapabilities 一次性确定(含降级),实例生命周期内不可变,运行时零二次判断——降级仅发生在 Compile 期。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  R-1013:
+    desc: "Windows named pipe 安全防线(G-1+G 规格): 08 §17.5——Client SQOS(SECURITY_SQOS_PRESENT|SECURITY_IDENTIFICATION 强制,禁 IMPERSONATION/DELEGATION)/Server FIRST_PIPE_INSTANCE+PIPE_REJECT_REMOTE_CLIENTS+强 DACL(17.4 基线不变)/x/sys/windows 直写(禁 npipe 类无 SQOS 参数库)/CI 静态检查 check-windows-ipc-security.sh(D-IMP-10)/契约测试 TestPipe_SqosFlags+TestPipe_RemoteRejected。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, stub追踪清单.md]
+    verify:
+      - must_exist: "SECURITY_IDENTIFICATION"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §17.5 必须写死 Client SQOS 标志"
+
+  R-1014:
+    desc: "模拟开关边界(G-2): GOALOS_SANDBOX_SIMULATE_KERNEL 仅用于验证功能降级(Fallback)逻辑与诊断路径,不是底层 OS 沙箱能力的验收标准(应用层 feature flag 无法模拟内核真实限制);信创 2 级闸口=模拟 CI 全绿(R-929),3 级验收=真实 4.19 物理机/QEMU 镜像(0.3.x 真机窗口);doctor 输出 SIMULATED/REAL 标记。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, 04命令行界面设计规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "不是底层 OS 沙箱能力的验收标准"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 必须显式声明模拟≠3 级验收"
+
+  R-1015:
+    desc: "降级决策树(Q-2): 平台能力矩阵'灰度功能'统一判定——功能有独立开关→默认关闭(显式启用);无开关→必须提供 Mock 实现+日志(不静默);两者皆不可→该平台标记不支持;禁止静默失败(Fail-fast with dignity,R-377 延伸)。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, GLOSSARY.md]
+    verify:
+      - must_exist: "降级决策树"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 必须登记降级决策树词条"
+
+  R-1016:
+    desc: "08 §19 跨平台策略(C 规格,部分采纳): 三原则(平台无关接口/编译时绑定禁 runtime.GOOS switch/降级在编译期)+目录组织(含 xinchuang build tag)+共享文件红线(禁平台 import)+测试分类+CI 交叉编译验收;能力矩阵以 06 §1.3 为权威(修正顾问稿 Darwin=2 级→3 级 Seatbelt);信创 4.19 特殊降级表采纳;合并语义=并集+精确去重,不做覆盖化简(R-1016a)。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 05软件架构文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "跨平台策略"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 必须含 §19 跨平台策略章节"
+
+  R-1017:
+    desc: "路径规范化(G-3): 08 §11.4 所有路径规则编译期强制绝对化+规范化(清理 ./../、统一分隔符、EvalSymlinks 可用时解析);运行时前缀匹配基于规范化绝对路径;插件无相对路径解析能力(WorkingDir 由 PluginRunner 显式设置 R-977)——../../.goalos 无法绕过绝对路径 ACL;TestSandbox_WindowsFSDeny 含相对路径攻击用例。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "路径规范化"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §11.4 必须声明编译期路径规范化"
+
+  R-1018:
+    desc: "CWD 术语二分(C-7): working_directory(进程工作目录,PluginRunner 设置 R-977,v0.3.0 实现)vs cwd_conditional_rules(基于 CWD 的条件规则,推迟 v0.5.0 R-909)——两个概念不同,全文档禁止单用'CWD 推迟'表述。disposition: 生效"
+    files: [会议纪要.md, GLOSSARY.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "cwd_conditional_rules"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 必须二分两个概念"
+
+  R-1019:
+    desc: "审批生命周期规格(G-4+Q-3): pending 合法出口=4 种(Approved/Denied/approval_timeout/system_restart);超时可配置(PolicyConfig.approval_timeout,daemon.yaml,默认 300s)→ActionRejected(approval_timeout)+用户通知;daemon 重启反序列化时一切 approval_pending 强制转 ActionRejected(system_restart)——不自动重弹窗(fail-closed,杜绝幽灵状态);07 reject_reason 补 system_restart;契约测试 TestApproval_RestartRecovery/TestApproval_TimeoutReject。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 06安全模型文档.md, 07事件注册表.md, 04命令行界面设计规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "system_restart"
+        in_file: 07事件注册表.md
+        reason: "07 ActionRejected reject_reason 必须含 system_restart"
+
+  R-1020:
+    desc: "错误冒泡优先级(G-5): 安全越权>资源耗尽>逻辑错误>信息提示;并发错误取最高优先级根因上报(用户可见=最根本致死原因,非'哪个 Goroutine 先 return');05 §X.1b 增补优先级列;契约测试 TestSandbox_ConcurrentErrors_RootCausePrecedence。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "错误冒泡优先级"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.1b 必须含错误优先级"
+
+  R-1021:
+    desc: "Contract 状态变更原子性(Q-1): 单一写入点=State Store 事件流;contract 相关事件载荷携带完整新状态(全量覆盖语义,非增量追加——消除 VerificationMethods 重复/丢失);崩溃恢复=事件重放,幂等由 per-Goal seq+session_id 保证(R-772/R-1003);杜绝半更新状态。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 07事件注册表.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+
+  R-1022:
+    desc: "错误码知识库 v1(Q 规格,部分采纳): 新文档 09错误码知识库规范.md——四段式编码[域]-[子域]-[严重级]-[序号](SBX/IPC/CTR/SKL/CFG×F/R/W/I 对齐四态)/条目模板(用户可见消息/触发条件/关联需求/状态机影响/行动指南/诊断命令/日志关键字)/错误码即常量(pkg/errors/codes.go)/CI 比对检查 check-error-codes.sh(替代 Q 原案编译失败绑定,Carmack 裁决)/goalos error explain 命令(W1-2,数据嵌入二进制)/UI 文案单一入口(禁止写死);P0 码(SBX-WIN-F-001~010/SBX-LNX-F-001~005/IPC-WIN-R-001~005)W1-2 完成,P1/P2 W3-4 前;D-IMP-08 error_type 枚举并入。disposition: 生效"
+    files: [会议纪要.md, 09错误码知识库规范.md, 05软件架构文档.md, 04命令行界面设计规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, stub追踪清单.md]
+    verify:
+      - must_exist: "SBX-WIN-F-001"
+        in_file: 09错误码知识库规范.md
+        reason: "09 规范必须含四段式错误码示例"
+
+  R-1023:
+    desc: "Q 建议类登记: 建议 1(规格冻结三日冲刺)不采纳——会议决议即冻结机制,三规格(原子性/错误码/Go-No-Go)已随本会议落地,W1 不得拖延(Jobs 一票否决);建议 3(可验证性嵌入设计评审)采纳→并入 R-1024(时序验收用例)+R-1026(制品可执行性检查);建议 4(基础设施演进看板)部分采纳→R-1027 @Stable/@Experimental 标注+兼容桩替代独立看板。disposition: 生效(记录性)"
+    files: [会议纪要.md]
+
+  R-1024:
+    desc: "交互验收用例(Q-6): 04 Watcher 时序图(任务 1.16,R-980 交付物)配套带时间窗断言验收用例表(状态转换+时间窗口,如 stop 输入后 2s 内 Watcher 消失显示'已取消');W3 异常体验走查会(Q 建议 2 采纳)——非开发人员体验 NeedHuman 超时/IPC 失败/诊断命令输出。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "异常体验走查会"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "W3-4 必须含走查会任务"
+
+  R-1025:
+    desc: "IPC 消息 extensions 字段(C-12): 08 §17.1 消息头预留 extensions map[string]string——分类器等后续模块(W3-4)追加字段不破坏 v0.3 协议兼容;transport 契约测试断言透传。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "extensions"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §17.1 必须含 extensions 预留"
+
+  R-1026:
+    desc: "制品可执行性检查(C-11): W1-2 每个交付物附可执行性检查清单('下游开发者能否凭此独立完成编码'——非'文档写完了吗'),下游开发人员签字确认后算完成;并入 R-982 Go/No-Go 门禁流程。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "可执行性检查"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划 W1-2 必须含可执行性检查要求"
+
+  R-1027:
+    desc: "Skill 接口稳定性标注(Q-8 补): 05 §4.4 Loader/Registry/Gate 接口标注 @Stable(核心加载契约冻结,R-993——v0.3.0 内禁止破坏性变更)/@Experimental(merge/parallel 预留——允许演进);@Experimental 部分登记兼容性测试桩(v0.4.0 兑现);W5-6 任务 5.9 兼容性验证计划保留。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "@Experimental"
+        in_file: 05软件架构文档.md
+        reason: "05 §4.4 必须含稳定性标注"
+
+  R-1028:
+    desc: "不采纳清单登记(附证据): C-1(error 语义边界'无处可寻')已解决——R-973+05 §X.1b 显式声明+禁止反例+契约测试名; C-10(Result 字段不完整)已解决——05 §X.1a 九字段+StdioMode CAPTURE/FILE+≤4KB Tail; Q-5(W0 Go/No-Go 无量化)已解决——R-982+计划任务 1.18; Q-7(doctor 可读性)主体已解决——R-992+04:130 双轨输出(补 --human=R-1011); Q 建议 1 冻结冲刺否决(Jobs 一票否决)。disposition: 生效(记录性)"
+    files: [会议纪要.md]
+
+  R-1029:
+    desc: "G-1 不采纳登记(附证据): 'Windows 隔离机制完全缺失'不属实——06 §1.3 平台矩阵 Windows 行(AppContainer/ACL+进程缓解策略+WFP/AppContainer+Restricted Token+Job, L2+ 目标 3 级)+05 windows-job 后端(agentbox: Restricted Token+Job Object+Low IL+ACL, GLOSSARY R-931/R-926)+R-947 探测; G 的 IExecutorBoundary v2.0 契约重构(IsolationLevel/ExecutionReceipt/IsolationProof/ValidateIsolation)与 R-1008 Sandbox 契约重复+引入新概念层——不采纳; 08 §19.3 补 Windows 隔离机制权威落点注(记录性修正)。disposition: 生效(记录性)"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "Restricted Token \+ Job Object"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.3 必须含 Windows 机制权威落点注"
+
+  R-1030:
+    desc: "rollback 物理语义(G-2 部分采纳): goalos rollback=状态机回滚(恢复至上个 Checkpoint R-772)+物理文件不撤销(既有原则显式化)+重做基于当前文件态(不假设干净起点, 残留由确定性验证兜底)+v0.3.0 无文件级快照承诺(无 CoW/快照/Git 自动封装); statefs 不可变状态树拒绝入 v0.3.0——登记 v0.5.0 候选(R-1034); CLI 反馈文案'文件未改动'提示(04); W3-4 任务 3.14。disposition: 生效(注: 第4条'无文件级快照承诺'已由 R-1035 替代——statefs 入 v0.3.0, rollback 升级为文件级版本回滚)"
+    files: [会议纪要.md, 05软件架构文档.md, 04命令行界面设计规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "rollback 物理语义"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 必须含 rollback 物理语义段"
+
+  R-1031:
+    desc: "behavioral_tests 人类锚点(G-3 部分采纳): 验证金字塔终极裁决来源显式化——至少 1 条行为测试必须来自人类锚点(HUMAN_INJECTED=用户 CompletionContract 确认/修正注入, 确认即锚点事件入审计; GOLDEN_SET=用户预置回归测试集); AI 生成测试不得为终极裁决唯一来源(无锚点→human_anchor WAIVED 用户显式确认路径); 完整 Provenance 协议(生成指纹污染检测/三份 Schema)不采纳——登记 v0.5.0 候选(R-1034); W7-8 任务 7.11 契约测试桩 TestContract_HumanAnchorRequired。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, GLOSSARY.md, 01-prd产品需求文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "人类锚点"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.3 必须含 behavioral_tests 来源标注段"
+
+  R-1032:
+    desc: "离线模式验证策略(G-4 部分采纳): '完全离线可用'(01 §7)与'Multi-LLM 必须跨 Provider'(05 §3.3)冲突显式裁决——L0-L1 离线=仅本地单模型(已有 06 §9.1); L2-L3 离线=单模型验证+用户显式确认+Confidence LOW 入审计+恢复联网后补跨 Provider 复核(复核 FAIL→撤销/回滚提示); L4-L5 离线=阻断 fail-closed; 离线执行记录 offline_verified+单模型 ID 入审计(Confidence 禁止 HIGH); 完整 CCA 协议不纳入 v0.3.0——登记 v0.5.0 候选(R-1034)。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, GLOSSARY.md, 01-prd产品需求文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "离线模式验证策略"
+        in_file: 06安全模型文档.md
+        reason: "06 §9.2 必须含离线模式验证策略节"
+
+  R-1033:
+    desc: "审批拒绝路由(G-5 采纳): ActionRejected(approval_denied/approval_timeout/system_restart)统一路由——Action 终态 Rejected, 不触发新 Session 重做(重做白名单仅 ErrorTemporary R-771); system_restart=第三类'会话失效'(非执行失败非用户主动拒绝)→fail-closed 终止管线+Goal→Paused+用户重新发起(04 §9 文案'审批已失效(系统重启)。请重新发起。'); 05 状态转换表补行+07 ActionRejected 补路由注; 任务 1.22 扩展 TestApproval_RestartRecovery 路由断言。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 07事件注册表.md, 04命令行界面设计规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "system_restart"
+        in_file: 05软件架构文档.md
+        reason: "05 必须含 system_restart 路由定义"
+      - must_exist: "不触发新 Session 重做"
+        in_file: 07事件注册表.md
+        reason: "07 ActionRejected 必须含路由注"
+
+  R-1034:
+    desc: "G 候选设计登记: statefs 不可变状态树(.states/v1..vn 版本目录+原子符号链接切换+Snapshot/Switch/Discard 语义——'文件即状态'物理回滚候选机制, R-1030 拒绝入 v0.3.0 后登记)+CCA 承诺-挑战-裁决协议(离线承诺封印 sealed payload/挑战/三级裁决 L1_AUTO/L2_CONSENSUS/L3_HUMAN/信任锚点/REJECTED→回滚)——入开发计划 §十 v0.5.0 设计种子索引, v0.5.0 立项时直接启用不重新踩坑。disposition: 生效(记录性)(注: statefs 部分已由 R-1035 启用入 v0.3.0——本决议保留 CCA 部分)"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "statefs"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划 §十 必须含 statefs 设计种子"
+
+  R-1035:
+    desc: "statefs 入 v0.3.0(会议 #179 第一性原理复审, Jobs 一票否决——替代 R-1030 第 4 条'无文件级快照承诺'与 R-1034 statefs 推迟项, §0.4 零推迟原则): 文件系统事务性=执行地基物理支柱(逻辑原子性 R-1021 的物理镜像)——workspace 版本化(.states/v1..vn 版本目录+workspace 链接指向当前版本: Unix symlink 原子 rename/Windows junction+提交锁毫秒级窗口诚实标注; .current 指针 tmp+rename 原子更新); 核心操作 Snapshot(begin)/写入新版本/Commit(原子切换, 与 Checkpoint R-772+事件流提交点对齐——一次提交=状态快照+文件指针同时落定)/Discard(逻辑删除物理保留); 历史版本 ACL 只读(OS 机制非约定, 盲区 4); 崩溃恢复=指针+事件流双对账(与 R-1021 统一); 用户直改=写当前版本(链接语义天然统一); 与沙箱正交互补('写不越界'+'写了可回滚'); rollback 升级为版本切换(文件级回滚, 替代物理副作用不撤销); 契约测试 6 项(计划任务 1.24/3.15); CoW/硬链接/GC/迁移工具=分阶段优化(Jobs+Meyer 双批, 非推迟)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 04命令行界面设计规范.md, 08沙箱隔离与进程通信规范.md, 01-prd产品需求文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "statefs"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 必须含 statefs 章节"
+      - must_exist: "文件已恢复至该版本"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 rollback 文案必须升级为文件级回滚"
+      - must_exist: "TestStatefs"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须含 statefs 契约测试"
+
+  R-1036:
+    desc: "CompiledProfile opaque 强化(讨论第 1 条——C 附录A 类型消除折中采纳, 搜索验证: Go issue #28053 复合字面量未导出字段编译拒绝 + issue #333 零值声明无法阻止): 保留 R-1008 导出值类型+Execute 签名不变+零值=Level 0 合法+显式 Compile() 编译点; 规则字段全不导出+导出 getter 读路径(Level()/Platform()/Syscall()/...); 唯一非零构造途径=Compile(profile SandboxProfile, caps PlatformCapabilities)(CompiledProfile, error)——外部包复合字面量构造=Go 编译期拒绝(语言级机制非约定, 盲区 4 正确形态); 零值声明 Go 允许——零值=Level 0 合法语义恰好使该缺口非安全漏洞; 不采纳 C 接口隐藏变体(破坏 return-concrete-type 谚语/强制单实现)与 Execute 内部编译(丢失显式编译点——R-1012 降级发生地); 契约测试 TestSandbox_ProfileLevel_LeHonestLevel 改白盒(sandbox 包内)或经 getter; 同包手造=信任边界。disposition: 生效(修订 R-1008 字段可见性部分)(修订补充: 同包手造升级为 CI 静态检查 check-compiledprofile-construction.sh——go/ast 扫描 CompiledProfile{ 仅 Compile() 内允许, constructor-check 模式)")
+    files: [会议纪要.md, 05软件架构文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "opaque"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.1a 必须含 opaque 强化说明"
+      - must_exist: "opaque"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY CompiledProfile 词条必须含 opaque"
+
+  R-1037:
+    desc: "存储完整性强化(讨论第 2 条——Q-M2.1 SyncWrite 修正采纳, 搜索验证: PG fsync 错误语义(VFS dirty-bit 重试假成功→fatal 不重试) + OpenZFS #2526(写后回读被设备缓存欺骗/SCSI VERIFY 极慢/SSD GC 介质漂移) + ZFS 校验链 ~3% 开销): fsync 错误=Fatal 不重试(fail-closed, 并入 R-661 原子写入协议); 事件条目写时 checksum(CRC32)+随条目持久化+恢复/重放验证——与 R-1035 statefs 崩溃双对账统一三层对账(指针+事件+校验和); 不采纳每次回读 CRC32 默认化(设备缓存欺骗+IO 放大); storage.SyncWrite 原语(write→fsync fatal→可选 read-back verify 诊断模式默认关); goalos storage doctor 信创 fsync 诚实性诊断(pg_test_fsync 思路, W1 真机压测 P99 基线); 联动错误码 CTR-WAL-CORRUPT-F-003(Q-M3 第 4 条注册)。disposition: 生效(修订补充: tail scrub 周期验证——每 500 条事件/5 分钟对最近写入段读回+checksum 比对, 损坏发现窗口从"下次重启"缩短到"周期内", OpenZFS PR #15250 机制; storage doctor 手动全量触发)")
+    files: [会议纪要.md, 05软件架构文档.md, 04命令行界面设计规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "SyncWrite"
+        in_file: 05软件架构文档.md
+        reason: "05 附录 C.2 必须含 SyncWrite 原语"
+      - must_exist: "storage doctor"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 必须含 storage doctor 命令"
+
+  R-1038:
+    desc: "提交组队/组提交(讨论第 3 条——Q-M2.2 优先级队列根本化, 搜索验证: PG group commit/RocksDB/SQLite/redb 先例 + arXiv:2606.18187 greedy-pipelined 自时钟 + NodeDB 优先级类 + NoKV sync 解耦): 采纳 Q 目标(审批不被批量回填阻塞, P99≤200ms 验收), 机制替换为组提交——单条 Apply 语义(无批次边界/无长事务概念, 无饥饿由构造保证: 每等待者最多等一个刷盘周期); 所有等待者共享下次 SyncWrite(greedy 设备空闲立即刷, 自时钟无调参); 优先级类: ApprovalUpdate=Critical 独立刷盘组/Backfill=Standard/Metrics=Bulk(组内按到达顺序); fsync 与提交循环解耦(syncWorker+背压, apply 临界区最小化); 恢复重放=启动专用快速路径(批量, 恢复期无交互窗口); 混沌测试混合负载 P99≤200ms 锚点。disposition: 生效(已被 R-1039 替代——Q 前提不成立, 组提交为过度设计)")
+    files: [会议纪要.md, 05软件架构文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "组提交"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.10.1 必须含组提交段"
+      - must_exist: "Critical"
+        in_file: 05软件架构文档.md
+        reason: "05 必须含优先级类 Approval=Critical"
+
+  R-1039:
+    desc: "Q-M2.2 不采纳(附证据——替代 R-1038, 会议 #183 重审: PM 追问决策过程后事实核查): 事件写入模型=单条 Append+单次 fsync(statestore.go:68 单条+mu 锁串行+O_APPEND 原子写+fsync; atomic_event_store.go:32 Append 内含 fsync; 全库 grep batch=0; max_parallel_branches 默认 8 并行分支各自独立提交)——'批量回填沙箱结果阻塞人工审批'场景在现有架构下不存在(审批最多等 1 次 fsync ~ms), 无批次无长事务无饥饿; R-1038 组提交+优先级类+syncWorker 为过度设计(违反反模式'过度设计'——组提交收益场景=高频并发提交, 与 GoalOS Action 级事件频率不匹配)撤销; 吸收项: 单一写入点并发语义显式化=契约测试 TestAppend_ConcurrentSerialized(N goroutine 并发 Append 断言串行有序, 把 mu 保证从注释升级为契约, 计划任务 3.17); 组提交机制选型(Critical/Standard/Bulk+syncWorker 解耦)登记 §十 设计种子(未来若出现真实批量写入路径再启用, 不预先实现)。disposition: 生效(替代 R-1038)"
+    files: [会议纪要.md, 05软件架构文档.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "TestAppend_ConcurrentSerialized"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划任务 3.17 必须含并发契约测试"
+      - must_exist: "不采纳"
+        in_file: 05软件架构文档.md
+        reason: "05 必须含 Q-M2.2 判定记录"
+
+  R-1040:
+    desc: "Q-M3 强制错误码清单裁决(讨论第 4 条——事实核查后逐码裁决, 替代原清单中的 CONFLICT 码): 采纳 5 码注册 09 知识库——CTR-RECOV-I-001(重放≥500ms 提示)/CTR-RECOV-I-002(重放成功)/CTR-RECOV-F-001(BeforeHash 不匹配→fatal 中止+SeqID 位点, 强化幂等校验=seq 判定'是否已应用'+hash 校验'是否被意外修改'双轨)/CTR-WRITE-TIMEOUT-R-002(Apply 挂起>2s→重试 3 次→NeedHuman; 区分挂起超时 Retryable vs fsync 返回错误 Fatal 不重试——R-1037 PG 教训)/CTR-WAL-CORRUPT-F-003(CRC32 失败→停服保留现场, R-1037 tail scrub 已引用); 不采纳 CTR-CONFLICT-R-001(附证据: 单一写入点 mu 串行无并发写冲突, R-1021 seq 幂等已覆盖重放, 乐观锁解决不存在的多写入者问题——其重试语义并入 R-002); 恢复过程用户反馈入 05 C.3(沉默恢复=不可靠体验); 错误码注册交付物随任务 3.16(W3-4 前)+error explain 验证。disposition: 生效"
+    files: [会议纪要.md, 09错误码知识库规范.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "CTR-RECOV-I-001"
+        in_file: 09错误码知识库规范.md
+        reason: "09 必须含恢复反馈码条目"
+      - must_exist: "CTR-WAL-CORRUPT-F-003"
+        in_file: 09错误码知识库规范.md
+        reason: "09 必须含 WAL 损坏码条目"
+
+  R-1041:
+    desc: "Q-M3 WAL 提交协议完整讨论(会议 #185, 第一性原理补全 R-1040): 三条完整性防线——L1=CRC32 条目级(R-1037 介质损坏)+L2=seq 单调性(防丢失乱序)+L3=hash chain(prev_hash SHA-256 link 防篡改/中间被替换, R-1041); events.jsonl 每条目加 prev_hash 字段, 恢复时从 checkpoint 向后逐条验证 hash 链——断裂点=损坏位点, 定位精度=单条目级; CTR-WAL-CORRUPT-F-003 触发条件扩展(CRC32 失败 OR hash chain 断裂)。不采纳(BeforeImage/AfterImage 双 hash——snapshot 可完全从 events.jsonl 重建保护冗余; 二进制 WAL 格式——JSONL 保持'File over Database'原则可 grep/可手动修复; 异步批量刷盘——单条 fsync 已有 R-661+R-1039 事实)。WAL 元数据(prev_hash/seq/timestamp)内嵌 JSON 字段不入二进制头。验收: kill -9/断电注入 100%恢复一致+hash chain 校验通过。disposition: 生效(扩展 R-1040)"
+    files: [会议纪要.md, 05软件架构文档.md, 09错误码知识库规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "hash chain"
+        in_file: 05软件架构文档.md
+        reason: "05 附录 C.2 必须含 hash chain 段"
+      - must_exist: "hash chain"
+        in_file: 09错误码知识库规范.md
+        reason: "09 CTR-WAL-CORRUPT-F-003 触发条件必须含 hash chain 断裂"
+
+  R-1042:
+    desc: "降级可编程告知(讨论第 6 条——Q-M2.3 采纳): X-GoalOS-Degradation 响应头(格式 <component>=<mode>,... 如 sandbox-loader=mock-noop)+响应体 degraded_components 字段([{component, mode}])——数据同源(PlatformCapabilities.DegradedItems()+活跃 Mock), 每次 API 响应实时投影; 契约测试 TestAPI_DegradationHeaderPresent(降级缺头→FAIL)+TestAPI_DegradationHeaderBodyConsistency(不同→FAIL); 正常路径头缺席(非空值); '诚实标注'(R-960)从文档原则升级为 API 契约——不伪造安全能力, 降级不能静默(R-1015 对偶)。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, 04命令行界面设计规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "X-GoalOS-Degradation"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 必须含降级告知段"
+      - must_exist: "degraded_components"
+        in_file: 06安全模型文档.md
+        reason: "06 必须含响应体字段定义"
+
+  R-1043:
+    desc: "Mock 身份标签(讨论第 7 条——Q-2 采纳): 统一数据源(MockRegistry+PlatformCapabilities.DegradedItems(), 与 R-1042 同源)→四通道输出——日志([MOCK] <component>: <mode> prefix, grep 友好, R-1015 格式落地)/doctor(逐组件 [MOCK: mode] 清单替代 R-1014 全局 SIMULATED/REAL, --json mocked_components)/CLI --version(Degraded 行)/API 响应头(R-1042)——Mock 永远可追溯, 降级不能静默。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, 04命令行界面设计规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "\[MOCK\]"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 必须含 [MOCK] 日志标签格式"
+
+  R-1044:
+    desc: "C-5 合并矩阵简化(讨论第 8 条——不采纳已解决, 搜索证据升级): 08:707 R-1016a 已显式声明'并集+精确去重(完全相同路径才合并), 不做覆盖化简'——与 C 顾问原例(deny /etc/*+etc/ssl/*+etc/ssl/certs/* 三条保留)一致; 业界依据(Cisco FMC 策略优化/ACL 优化研究): deny 规则保持显式(合并 deny 有意外放行风险), 规则简化需语义规范化+验证闭环(merge→verify→monitor)——v0.3.0 无此闭环, 不做化简正确。disposition: 生效(记录性, 08 §11.4 补业界依据)"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "Cisco"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 必须含业界依据注"
+
+  R-1045:
+    desc: "错误码版本感知(讨论第 9 条——Q-4 加强采纳, 搜索证据: Kubernetes deprecation policy——版本感知=运行时行为非文档字段): 09 条目模板补 deprecated_in/superseded_by 可选字段+deprecation window 政策(公告→警告→等待→移除, deprecate 后至少存活 1 个 minor 版本); 运行时 deprecated 警告(K8s Warning header+audit annotation 模式——触发已 deprecated 码时 CLI/API 输出警告+审计标记); 行动指南不得引用实施推迟中的命令(goalos migrate——04:128 推迟 v0.4.0 之后)——引用当前可用工具(error explain/doctor)。disposition: 生效"
+    files: [会议纪要.md, 09错误码知识库规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "deprecated_in"
+        in_file: 09错误码知识库规范.md
+        reason: "09 条目模板必须含版本感知字段"
+
+  R-1046:
+    desc: "时序断言分层(讨论第 10 条——Q-5 加强采纳, 搜索证据: promptfoo flaky 修复——绝对时间断言=flaky 根源, 重叠检测更环境无关; TUnit 教训——防 vacuous 余量): 验收用例时间断言按环境无关性排序——顺序/重叠检测(最优)>相对基线(≤基准×120%+200ms, doctor 诊断缓存首启测定)>绝对时间(仅功能宽阈值); 相对阈值不得放宽到检测不出真实回归; 性能断言独立套件。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "时序断言分层"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 必须含时序断言分层原则"
+
+  R-1047:
+    desc: "理解度测试+走查前置+宣誓处置(讨论第 11 条——Q-6 采纳/不采纳组合, 搜索证据: UX 内容测试成熟领域——cloze 填空特别适合错误消息; 3-5 用户样本符合业界): 采纳理解度测试升级(5 人/30 秒复述/≥80%+cloze 填空方法——取代主观评审, 09 §5 产品 AC); 采纳 W2 End 轻量走查前置(错误码 explain/降级标识/恢复提示三验证点, W3 正式走查会保留); 不采纳宣誓仪式(附证据: check-error-codes.sh 机制已存在——'无条目的 error return'已是机械 CI 失败, 机制>仪式, 盲区 4)——'每人注册一个示例码'作为 onboarding 并入任务 1.20 验收。disposition: 生效"
+    files: [会议纪要.md, 09错误码知识库规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "cloze"
+        in_file: 09错误码知识库规范.md
+        reason: "09 §5 必须含 cloze 填空方法"

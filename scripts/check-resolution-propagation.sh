@@ -603,11 +603,11 @@ main() {
     done
 
     # Banner
-    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
+    echo ""
     echo -e "${BOLD}=== GoalOS 决议传播完整性检查（两层验证） ===${NC}"
     echo "  配置: $RESOLUTIONS"
     echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
+    echo ""
 
     # 自检
     validate_environment
