@@ -2000,3 +2000,14 @@ resolutions:
       - must_exist: "cloze"
         in_file: 09错误码知识库规范.md
         reason: "09 §5 必须含 cloze 填空方法"
+
+  R-1048:
+    desc: "v0.3.0 开发计划第五版重制(会议 #189——团队全部讨论, PM 指令'重新制定'): 整合 R-1008~R-1047 全部决议为自洽计划——修正任务编号乱序(W1-2 1.24/1.25 换位, W3-4 3.14~3.17 排序, W5-6 删 5.8 重复)/验收标准缺口(W1-2 statefs 闸口归位+check-compiledprofile+R-1045 deprecated+onboarding; W3-4 存储完整性三层防线+TestAppend_ConcurrentSerialized+理解度测试)/全量验收清单 18 重复修复+补 4 项(20 statefs 回滚/21 存储完整性/22 降级告知/23 [MOCK])+Jobs 签字条件 18→23 项; 新增任务 5.10(离线验证策略 R-1032——L2-L3 降级路径+offline_verified 审计+复核队列)/7.12(API 降级契约测试 R-1042)/7.13([MOCK] 标签契约测试 R-1043)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "第五版 v0.3.0-5 重制"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划修改记录必须含重制声明"
+      - must_exist: "5.10"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须含离线验证策略任务"
