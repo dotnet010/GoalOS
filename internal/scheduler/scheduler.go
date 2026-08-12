@@ -16,6 +16,11 @@ import (
 	"github.com/goalos/goalos/pkg/events"
 )
 
+// execTimeoutSec 是 Action 执行超时秒数（R-1059）。
+// 与审批超时（policy.approval_timeout）、令牌 TTL（policy.token_ttl）三值独立——
+// 此前为裸魔法数 30，且被 governance 误读为令牌 TTL 计算基数（2×30=60s 偶然耦合）。
+const execTimeoutSec = 30
+
 // Scheduler 是 Goal 和 Action 状态机的唯一驱动者。
 type Scheduler struct {
 	bus              *eventbus.EventBus
@@ -36,7 +41,12 @@ type Scheduler struct {
 }
 
 // SetAutonomyLevel sets autonomy level（v0.1.1）。
-func (s *Scheduler) SetAutonomyLevel(level string) { s.autonomyLevel = level }
+// R-1058: mu 保护——热重载（handleConfigReloaded）与读取并发。
+func (s *Scheduler) SetAutonomyLevel(level string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.autonomyLevel = level
+}
 
 // New creates a Scheduler.
 func New(bus *eventbus.EventBus, store *statestore.Store, goalAnchor *GoalAnchorTracker) *Scheduler {
@@ -69,7 +79,20 @@ func (s *Scheduler) Start() {
 	s.bus.Subscribe(events.TypeVerificationResult, s.handleVerificationResult)
 	s.bus.Subscribe(events.TypeGoalPauseRequested, s.handlePauseRequested)
 	s.bus.Subscribe(events.TypeGoalRollbackRequested, s.handleRollbackRequested)
+	s.bus.Subscribe(events.TypeConfigReloaded, s.handleConfigReloaded) // R-1058: 热重载参数经事件总线进入
 	log.Println("[Scheduler] started, subscribed to state machine events")
+}
+
+// handleConfigReloaded 应用热重载后的调度参数（R-1058）。
+// 只影响"新一代"决策；进行中 Goal 的状态机照旧运行。
+func (s *Scheduler) handleConfigReloaded(evt events.Event) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if v, ok := evt.Payload["autonomy_level"].(string); ok && v != "" {
+		s.autonomyLevel = v
+		log.Printf("[Scheduler] config reloaded: autonomy=%s", v)
+	}
+	return nil
 }
 
 func (s *Scheduler) handleActionFailed(evt events.Event) error {
@@ -258,7 +281,11 @@ func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 	}
 
 	// v0.1.1: autonomous/full 模式下自动确认，否则等待用户通过 Channel Adapter 确认。
-	if s.autonomyLevel == "autonomous" || s.autonomyLevel == "full" {
+	// R-1058: 读锁——热重载写入经 handleConfigReloaded 同锁保护。
+	s.mu.Lock()
+	autonomy := s.autonomyLevel
+	s.mu.Unlock()
+	if autonomy == "autonomous" || autonomy == "full" {
 		s.publish(events.Event{
 			Type:   events.TypeUserConfirmed,
 			GoalID: evt.GoalID,
@@ -316,7 +343,7 @@ func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 				"action_type":           actionType,
 				"target":                target,
 				"required_capabilities": []interface{}{actionType},
-				"timeout_seconds":       float64(30),
+				"timeout_seconds":       float64(execTimeoutSec), // R-1059: 命名常量，语义=执行超时
 				"risk_level_pre":        riskLevel,
 			},
 		})

@@ -63,8 +63,9 @@ type Engine struct {
 	capRegistry     map[string][]string
 	policy          []PolicyRule
 	secretKey       []byte
-	autonomyLevel   string
-	approvalTimeout time.Duration // "autonomous"→自动放行L3+
+	autonomyLevel   string        // 由 pendingMu 保护（R-1058: 热重载写入与读取竞态）
+	approvalTimeout time.Duration // "autonomous"→自动放行L3+。由 pendingMu 保护（R-1054）
+	tokenTTL        time.Duration // R-1059: 行动令牌执行窗口，独立于审批/执行超时。由 pendingMu 保护
 	seq             atomic.Int64
 
 	// Audit Engine: ring buffer (1000 entries) + async flush
@@ -86,15 +87,16 @@ type Engine struct {
 }
 
 type pendingApproval struct {
-	goalID       string
-	actionID     string
-	actionType   string
-	target       string
-	params       map[string]interface{}
-	requiredCaps []interface{}
-	timeoutSec   float64
-	timer        *time.Timer
-	decision     Decision // R-363: 异步审批路径承载 Policy/Capability/Risk 评估结果
+	goalID         string
+	actionID       string
+	actionType     string
+	target         string
+	params         map[string]interface{}
+	requiredCaps   []interface{}
+	timeoutSec     float64 // R-1054: 审批超时创建时刻快照
+	execTimeoutSec float64 // R-1059: 执行超时原值（调度器下发），批准后透传执行层
+	timer          *time.Timer
+	decision       Decision // R-363: 异步审批路径承载 Policy/Capability/Risk 评估结果
 }
 
 // New creates a Governance Engine with default policies.
@@ -109,6 +111,7 @@ func New(bus *eventbus.EventBus, secretKey []byte) *Engine {
 		capRegistry:      make(map[string][]string),
 		secretKey:        secretKey,
 		approvalTimeout:  300 * time.Second, // R-362: 默认 300s 审批超时
+		tokenTTL:         300 * time.Second, // R-1059: 默认 300s——与审批窗口同尺度，独立演进
 		auditBuf:         make([]auditEntry, 1000),
 		auditLogDir:      home + "/.goalos/logs/",
 		pendingApprovals: make(map[string]pendingApproval),
@@ -139,8 +142,18 @@ done:             make(chan struct{}),
 }
 
 // SetAutonomyLevel 设置自治等级。autonomous→L3+自动放行。
+// R-1058: pendingMu 保护——热重载（handleConfigReloaded）与决策读取并发。
 func (e *Engine) SetAutonomyLevel(level string) {
+	e.pendingMu.Lock()
+	defer e.pendingMu.Unlock()
 	e.autonomyLevel = level
+}
+
+// SetTokenTTL 设置行动令牌执行窗口（R-1059）。pendingMu 保护，与热重载并发安全。
+func (e *Engine) SetTokenTTL(d time.Duration) {
+	e.pendingMu.Lock()
+	defer e.pendingMu.Unlock()
+	e.tokenTTL = d
 }
 
 // Start subscribes to events and begins processing.
@@ -150,9 +163,30 @@ func (e *Engine) Start() {
 	e.bus.Subscribe(events.TypePluginProcessTerminated, e.handlePluginTerminated) // R-660: 监听 Plugin 退出→撤销 Token
 	go e.revokedTokensCleanup() // R-660: 定期清理过期撤销记录
 	e.bus.Subscribe(events.TypeActionCancelled, e.handleActionCancelled)
+	e.bus.Subscribe(events.TypeConfigReloaded, e.handleConfigReloaded) // R-1058: 热重载参数经事件总线进入
 	// 启动审计异步刷盘 goroutine
 	go e.auditFlushLoop()
 	log.Println("[Governance] started (5 engines + audit ring buffer + approval timeout)")
+}
+
+// handleConfigReloaded 应用热重载后的治理参数（R-1058，nginx 代际模型）。
+// 只影响"新一代"决策：进行中审批已按创建时刻快照运行（R-1054）；
+// 非法值 fail-closed——保持旧值（config 层 R-1060 已在上游拒绝，此处为纵深防御）。
+func (e *Engine) handleConfigReloaded(evt events.Event) error {
+	e.pendingMu.Lock()
+	defer e.pendingMu.Unlock()
+	if v, ok := evt.Payload["approval_timeout_seconds"].(float64); ok && v > 0 {
+		e.approvalTimeout = time.Duration(v * float64(time.Second))
+	}
+	if v, ok := evt.Payload["token_ttl_seconds"].(float64); ok && v > 0 {
+		e.tokenTTL = time.Duration(v * float64(time.Second))
+	}
+	if v, ok := evt.Payload["autonomy_level"].(string); ok && v != "" {
+		e.autonomyLevel = v
+	}
+	log.Printf("[Governance] config reloaded: approval_timeout=%v token_ttl=%v autonomy=%s",
+		e.approvalTimeout, e.tokenTTL, e.autonomyLevel)
+	return nil
 }
 
 // RegisterCapabilities 注册 Plugin 的 declared_capabilities（由 Plugin Runner 发现时调用）。
@@ -182,7 +216,11 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 	riskLevel := e.evaluateRisk(actionType)
 
 	// Step 5: Approval Engine — trigger if L3+
-	needsApproval := (riskGE(riskLevel, "L3") || policyResult == "APPROVAL_REQUIRED") && e.autonomyLevel != "autonomous"
+	// R-1058: autonomyLevel 读锁——热重载写入经 handleConfigReloaded 同锁保护。
+	e.pendingMu.Lock()
+	autonomy := e.autonomyLevel
+	e.pendingMu.Unlock()
+	needsApproval := (riskGE(riskLevel, "L3") || policyResult == "APPROVAL_REQUIRED") && autonomy != "autonomous"
 
 	decision := Decision{
 		Policy:     policyResult,
@@ -222,34 +260,45 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 	}
 
 	if needsApproval {
-		// 发布 ActionPendingApproval → handler 立即返回。不阻塞 Event Bus（R215）。
+		// R-1054: 超时快照语义——单一来源=引擎字段，创建时刻固化（载荷与计时器同源同值）。
+		// 热更新仅对新发起的审批生效；进行中审批的 AfterFunc 已在创建时捕获旧值。
+		e.pendingMu.Lock()
+		timeoutDur := e.approvalTimeout
+		timeoutSec := timeoutDur.Seconds()
+		e.pendingMu.Unlock()
+
+		// R-1059: 载荷键改名 approval_timeout_seconds——旧 timeout_seconds 与
+		// 执行超时（scheduler 的 30s）多义词，一个键两种语义是缺陷根因。
 		e.publish(events.Event{
 			Type:   events.TypeActionPendingApproval,
 			GoalID: evt.GoalID,
 			Source: "governance",
 			Payload: map[string]interface{}{
-				"action_id":           actionID,
-				"risk_level":          riskLevel,
-				"action_description":  actionType,
-				"impact_description":  fmt.Sprintf("风险等级 %s 的操作需要人工审批", riskLevel),
-				"timeout_seconds":     300,
+				"action_id":                actionID,
+				"risk_level":               riskLevel,
+				"action_description":       actionType,
+				"impact_description":       fmt.Sprintf("风险等级 %s 的操作需要人工审批", riskLevel),
+				"approval_timeout_seconds": timeoutSec,
 			},
 		})
 
 		// 启动审批超时计时器（R-362: 默认 300s → ActionRejected("approval_timeout")）
 		e.pendingMu.Lock()
 		params, _ := evt.Payload["params"].(map[string]interface{})
-		timeoutSec, _ := evt.Payload["timeout_seconds"].(float64)
+		// R-1059: 执行超时与审批超时分离——execTimeoutSec 取调度器的原始值，
+		// 批准后透传给执行层（此前误透传审批快照 300s）。
+		execTimeoutSec, _ := evt.Payload["timeout_seconds"].(float64)
 		e.pendingApprovals[actionID] = pendingApproval{
-			goalID:       evt.GoalID,
-			actionID:     actionID,
-			actionType:   actionType,
-			target:       target,
-			params:       params,
-			requiredCaps: requiredCaps, // R-365: 复用第152行已声明的变量
-			timeoutSec:   timeoutSec,
-			decision:     decision, // R-363: 承载 Policy/Capability/Risk 评估结果
-			timer: time.AfterFunc(e.approvalTimeout, func() {
+			goalID:         evt.GoalID,
+			actionID:       actionID,
+			actionType:     actionType,
+			target:         target,
+			params:         params,
+			requiredCaps:   requiredCaps,    // R-365: 复用第152行已声明的变量
+			timeoutSec:     timeoutSec,      // R-1054: 审批超时创建时刻快照，非入站事件载荷
+			execTimeoutSec: execTimeoutSec,  // R-1059: 执行超时原值透传
+			decision:       decision,        // R-363: 承载 Policy/Capability/Risk 评估结果
+			timer: time.AfterFunc(timeoutDur, func() {
 				e.handleApprovalTimeout(evt.GoalID, actionID, decision)
 			}),
 		}
@@ -260,9 +309,13 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 
 	decision.Approval = "AUTO"
 	// 自动放行路径也签发 Token
-	timeoutSec, _ := evt.Payload["timeout_seconds"].(float64)
+	// R-1059: TTL 独立字段——此前 ttl = 载荷 timeout_seconds×2（执行超时 30s→60s 的
+	// 偶然耦合）。引擎字段 tokenTTL 默认 300s，与审批窗口同尺度。
+	e.pendingMu.Lock()
+	ttl := int64(e.tokenTTL.Seconds())
+	e.pendingMu.Unlock()
+	if ttl <= 0 { ttl = 300 } // 纵深防御：config 层 R-1060 已拒绝 ≤0
 	now := time.Now().Unix()
-	ttl := int64(timeoutSec) * 2; if ttl <= 0 { ttl = 60 }
 	tokenID, tokenStr := "", ""
 	if len(e.secretKey) > 0 {
 		caps := make([]string, len(requiredCaps))
@@ -306,9 +359,15 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 	decision.Approval = "GRANTED"
 
 	// 签发 Capability Token
+	// R-1059: TTL 统一读引擎字段（此前硬编码 60s——与 auto 路径 2×30=60s 同为
+	// 偶然值，且不受 token_ttl 配置控制）。
+	e.pendingMu.Lock()
+	ttl := int64(e.tokenTTL.Seconds())
+	e.pendingMu.Unlock()
+	if ttl <= 0 { ttl = 300 } // 纵深防御：config 层 R-1060 已拒绝 ≤0
 	now := time.Now().Unix()
 	if len(e.secretKey) > 0 {
-		claims := TokenClaims{GoalID: pending.goalID, ActionID: actionID, Capabilities: []string{pending.actionType}, IssuedAt: now, ExpiresAt: now + 60}
+		claims := TokenClaims{GoalID: pending.goalID, ActionID: actionID, Capabilities: []string{pending.actionType}, IssuedAt: now, ExpiresAt: now + ttl}
 		if tok, err := IssueToken(claims, e.secretKey); err == nil {
 			decision.TokenStr = tok
 			decision.TokenID = fmt.Sprintf("%s_token_%d", actionID, now)
@@ -324,7 +383,7 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 			"target":                pending.target,
 			"params":                pending.params,
 			"required_capabilities": pending.requiredCaps,
-			"timeout_seconds":       pending.timeoutSec,
+			"timeout_seconds":       pending.execTimeoutSec, // R-1059: 执行超时原值，非审批快照
 		},
 	}
 	e.publishApproved(approvedEvt, decision)
@@ -636,7 +695,13 @@ var osUserHomeDir = os.UserHomeDir
 var osOpenAppend = func(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 }
-func (e *Engine) SetApprovalTimeout(d time.Duration) { e.approvalTimeout = d }
+// SetApprovalTimeout 设置审批超时（R-1054: 热更新安全——进行中的审批已在创建时刻
+// 捕获旧值，此调用仅影响新发起的审批请求；与审批创建路径共用 pendingMu 防竞态）。
+func (e *Engine) SetApprovalTimeout(d time.Duration) {
+	e.pendingMu.Lock()
+	e.approvalTimeout = d
+	e.pendingMu.Unlock()
+}
 
 // handlePluginTerminated 监听 PluginProcessTerminated 事件——撤销该 Plugin 的所有活跃 Token（R-660）。
 func (e *Engine) handlePluginTerminated(evt events.Event) error {

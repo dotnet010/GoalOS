@@ -173,6 +173,7 @@ func main() {
 	}
 	gov := governance.New(bus, secretKey)
 	gov.SetApprovalTimeout(time.Duration(cfg.Policy.ApprovalTimeout) * time.Second)
+	gov.SetTokenTTL(time.Duration(cfg.Policy.TokenTTL) * time.Second) // R-1059: 令牌执行窗口
 	gov.SetAutonomyLevel(cfg.Daemon.AutonomyLevel)
 	gov.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered"}`, time.Now().Format(time.RFC3339))
@@ -513,6 +514,17 @@ func main() {
 			http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"`+err.Error()+`"}}`, http.StatusInternalServerError)
 			return
 		}
+		// R-1058: 热重载参数经事件总线分发（nginx 代际模型）——组件自行订阅，
+		// 不再由 main 逐一直调（D-1: 手工接线每加一个参数就多一处遗漏点）。
+		bus.Publish(events.Event{
+			Type:   events.TypeConfigReloaded,
+			Source: "daemon",
+			Payload: map[string]interface{}{
+				"approval_timeout_seconds": float64(cfg.Policy.ApprovalTimeout),
+				"token_ttl_seconds":        float64(cfg.Policy.TokenTTL),
+				"autonomy_level":           cfg.Daemon.AutonomyLevel,
+			},
+		})
 		// E6: 优先级——config指定env > GOALOS_LLM_API_KEY > config文件值
 		apiKey := os.Getenv(cfg.LLM.APIKeyEnv)
 		if apiKey == "" {
@@ -569,6 +581,16 @@ func main() {
 			if err := cfg.Reload(configPath); err != nil {
 				log.Printf("[Daemon] SIGHUP reload failed: %v", err)
 			} else {
+				// R-1058: 热重载参数经事件总线分发（与 HTTP reload 同路径）。
+				bus.Publish(events.Event{
+					Type:   events.TypeConfigReloaded,
+					Source: "daemon",
+					Payload: map[string]interface{}{
+						"approval_timeout_seconds": float64(cfg.Policy.ApprovalTimeout),
+						"token_ttl_seconds":        float64(cfg.Policy.TokenTTL),
+						"autonomy_level":           cfg.Daemon.AutonomyLevel,
+					},
+				})
 				log.Printf("[Daemon] SIGHUP reloaded: model=%s", cfg.LLM.Model)
 			}
 		}

@@ -85,13 +85,22 @@ func TestGovernance_CapabilityDenied(t *testing.T) {
 }
 
 // TestGovernance_ApprovalTimeout 验证审批超时后发布 ActionRejected("approval_timeout")。
+// R-1061（D-4）重写：旧版是空壳——select 空 case + default 恒通过、零断言，
+// 超时机制任何回归都不会使测试变红。真断言：短超时（50ms）→ 先 ActionPendingApproval，
+// 后 ActionRejected(reject_reason="approval_timeout")，且 action_id 匹配。
 func TestGovernance_ApprovalTimeout(t *testing.T) {
 	bus := eventbus.New()
 	eng := governance.New(bus, nil)
 	eng.RegisterCapabilities("test-plugin", []string{"shell.execute"})
 	eng.Start()
+	eng.SetApprovalTimeout(50 * time.Millisecond) // R-1054: 快照取自引擎字段，测试可调
 
+	pending := make(chan events.Event, 1)
 	rejected := make(chan events.Event, 1)
+	bus.Subscribe(events.TypeActionPendingApproval, func(evt events.Event) error {
+		pending <- evt
+		return nil
+	})
 	bus.Subscribe(events.TypeActionRejected, func(evt events.Event) error {
 		rejected <- evt
 		return nil
@@ -107,14 +116,28 @@ func TestGovernance_ApprovalTimeout(t *testing.T) {
 		},
 	})
 
-	// 审批超时是 300s，太慢。直接通过 handleApprovalTimeout 验证机制存在。
-	// 我们发布 ActionCancelled（模拟 pause 取消 pending 审批）来验证竞态处理。
+	// ① 必须进入挂起审批（否则超时无从谈起）
 	select {
-	case <-rejected:
-		// 如果 ActionCancelled 导致 rejected
-	default:
-		// 审批超时计时器已启动但未触发——验证计时器存在即可
-		// 此测试确认 ActionPendingApproval 被发布
+	case evt := <-pending:
+		if id, _ := evt.Payload["action_id"].(string); id != "act_timeout_001" {
+			t.Fatalf("挂起审批 action_id 不匹配: got %s", id)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("L3 操作必须发布 ActionPendingApproval")
+	}
+
+	// ② 超时后必须发布 ActionRejected("approval_timeout")
+	select {
+	case evt := <-rejected:
+		reason, _ := evt.Payload["reject_reason"].(string)
+		if reason != "approval_timeout" {
+			t.Fatalf("expected reject_reason=approval_timeout, got %s", reason)
+		}
+		if id, _ := evt.Payload["action_id"].(string); id != "act_timeout_001" {
+			t.Fatalf("超时拒绝 action_id 不匹配: got %s", id)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("审批超时必须发布 ActionRejected（50ms 快照值未生效或计时器未启动）")
 	}
 }
 

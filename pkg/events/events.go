@@ -111,6 +111,9 @@ const (
 	TypeTokenUsage           = "TokenUsage"           // Token 消耗记录。Publisher: Scheduler
 	TypeSystemStarted        = "SystemStarted"        // Daemon 启动完成。Publisher: daemon
 	TypeMissionGraphRejected = "MissionGraphRejected" // MissionGraph 校验失败。Publisher: Mission Engine
+	// R-1058: 配置热重载完成事件——nginx 代际模型：新配置只影响"新一代"决策，
+	// 进行中审批/执行继续按旧快照运行。Publisher: daemon（HTTP reload + SIGHUP 两条路径）
+	TypeConfigReloaded = "ConfigReloaded"
 
 	// ── 消息 ──
 	TypeMessageReceived = "MessageReceived" // 收到用户消息。Publisher: Channel Adapter

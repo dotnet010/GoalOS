@@ -56,6 +56,7 @@ type MultiLLMProvider struct {
 // PolicyConfig 是运行时策略配置（v0.1.0）。
 type PolicyConfig struct {
 	ApprovalTimeout       int     `yaml:"approval_timeout"`        // 审批超时秒数。默认 300
+	TokenTTL              int     `yaml:"token_ttl"`               // 行动令牌有效期秒数（R-1059）。默认 300
 	TokenBudget           int     `yaml:"token_budget"`            // 单 Goal Token 上限。默认 1_000_000
 	TokenWarning          float64 `yaml:"token_warning"`           // 预算警告阈值。默认 0.8
 	AutoFixMax            int     `yaml:"auto_fix_max"`            // 自修正最大次数。默认 3
@@ -97,7 +98,7 @@ func Default() *Config {
 			PlanTimeout: 600 * time.Second,
 		},
 			Policy: PolicyConfig{
-				ApprovalTimeout: 300, TokenBudget: 1_000_000, TokenWarning: 0.8,
+				ApprovalTimeout: 300, TokenTTL: 300, TokenBudget: 1_000_000, TokenWarning: 0.8,
 				AutoFixMax: 3, FlowDegradeThreshold: 3, GoalAnchorInterval: 20, RecoveryRetryMax: 3,
 			},
 		Persona: "concise",
@@ -120,6 +121,10 @@ func Load(path string) (*Config, error) {
 	// 环境变量覆盖
 	applyEnv(cfg)
 
+	// R-1060: 启动路径强制校验（D-8——Validate 曾是死代码）。
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("config: 校验失败: %w", err)
+	}
 	return cfg, nil
 }
 
@@ -204,14 +209,18 @@ func loadYAML(path string, cfg *Config) error {
 	}
 	if fileCfg.LLM.PlanTimeout != 0 {
 		cfg.LLM.PlanTimeout = fileCfg.LLM.PlanTimeout
+	}
+	// R-1060 (D-9): Policy 段曾整段嵌在 PlanTimeout 的 if 块内——
+	// PlanTimeout 未显式配置时 Policy 全部静默丢弃（含负值不生效的假象）。
+	// 已提升到函数级，与 LLM 段并列。
 	if fileCfg.Policy.ApprovalTimeout != 0 { cfg.Policy.ApprovalTimeout = fileCfg.Policy.ApprovalTimeout }
+	if fileCfg.Policy.TokenTTL != 0 { cfg.Policy.TokenTTL = fileCfg.Policy.TokenTTL }
 	if fileCfg.Policy.TokenBudget != 0 { cfg.Policy.TokenBudget = fileCfg.Policy.TokenBudget }
 	if fileCfg.Policy.TokenWarning != 0 { cfg.Policy.TokenWarning = fileCfg.Policy.TokenWarning }
 	if fileCfg.Policy.AutoFixMax != 0 { cfg.Policy.AutoFixMax = fileCfg.Policy.AutoFixMax }
 	if fileCfg.Policy.FlowDegradeThreshold != 0 { cfg.Policy.FlowDegradeThreshold = fileCfg.Policy.FlowDegradeThreshold }
 	if fileCfg.Policy.GoalAnchorInterval != 0 { cfg.Policy.GoalAnchorInterval = fileCfg.Policy.GoalAnchorInterval }
 	if fileCfg.Policy.RecoveryRetryMax != 0 { cfg.Policy.RecoveryRetryMax = fileCfg.Policy.RecoveryRetryMax }
-	}
 	// R-836: MultiLLM 配置复制——之前遗漏导致始终 disabled
 	cfg.MultiLLM.Enabled = fileCfg.MultiLLM.Enabled
 	cfg.MultiLLM.Providers = fileCfg.MultiLLM.Providers
@@ -236,10 +245,18 @@ func (cfg *Config) Reload(path string) error {
 	}
 	cfg.Daemon.Port = oldPort
 	applyEnv(cfg)
+	// R-1060: 热重载路径强制校验（D-7——Reload 曾跳过 Validate，
+	// 非法配置可静默换入运行中 daemon；STS 语义：每次签发路径都校验）。
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("config: reload 校验失败: %w", err)
+	}
 	return nil
 }
 
-// Validate 校验配置合法性。不合法拒绝启动，给出具体错误信息（v0.1.0）。
+// Validate 校验配置合法性。不合法拒绝，给出具体错误信息（v0.1.0）。
+// R-1060: 三条加载路径（Load/LoadTest 经 Load/Reload）全部强制调用本函数——
+// 修复 D-8（Validate 曾是死代码）+ D-7（Reload 不过校验）。
+// 校验语义对照 AWS STS MaxSessionDuration：非法值在"签发时刻"（加载路径）失败，而非运行时。
 func (cfg *Config) Validate() error {
 	if cfg.Daemon.Port < 1 || cfg.Daemon.Port > 65535 {
 		return fmt.Errorf("daemon.port 必须在 1-65535，当前: %d", cfg.Daemon.Port)
@@ -256,6 +273,15 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.LLM.BaseURL != "" && !strings.HasPrefix(cfg.LLM.BaseURL, "http") {
 		return fmt.Errorf("llm.base_url 必须以 http:// 或 https:// 开头，当前: %s", cfg.LLM.BaseURL)
+	}
+	// R-1060 (D-3): 负值穿透 = AfterFunc 立即触发 = 审批全线秒拒（拒绝服务）。
+	// 合并语义保证默认值已应用（文件 0 值=未设置→默认），此处只拦显式非法值。
+	if cfg.Policy.ApprovalTimeout <= 0 {
+		return fmt.Errorf("policy.approval_timeout 必须为正整数，当前: %d", cfg.Policy.ApprovalTimeout)
+	}
+	// R-1059: token_ttl 为行动令牌执行窗口，非法值 fail-closed。
+	if cfg.Policy.TokenTTL <= 0 {
+		return fmt.Errorf("policy.token_ttl 必须为正整数，当前: %d", cfg.Policy.TokenTTL)
 	}
 	return nil
 }
@@ -290,6 +316,7 @@ llm:
 
 policy:
   approval_timeout: 300        # 审批超时秒数
+  token_ttl: 300               # 行动令牌有效期秒数（R-1059）
   token_budget: 1000000        # 单 Goal Token 上限
   token_warning: 0.8           # 预算警告阈值
   auto_fix_max: 3              # 自修正最大次数
