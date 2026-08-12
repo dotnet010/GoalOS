@@ -1901,12 +1901,14 @@ resolutions:
   R-960:
     desc: "GLOSSARY 概念补齐 5 条: 诚实标注格式+通道(CLI 启动横幅+Dashboard 徽章)/fail-closed=Fatal/模拟开关 per-feature 枚举(LANDLOCK/SECCOMP_NOTIFY/NAMESPACE/ALL)/语义一致=安全决策等价/逃逸向量清单(参考 runc CVE 系列)(顾问 D 采纳)"
     files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    修订: "会议 #192(R-1072): 逃逸向量清单扩充 ⑦DLL 搜索路径劫持 ⑧reparse point 替换 ⑨NULL DACL/FAT 卷 ⑩seccomp-notify TOCTOU ⑪默认白名单 syscall 参数级逃逸; 对抗时序=R-1064(随后端落地即对抗)。原 6 向量本体不变。"
   R-961:
     desc: "W0 增加 P0 施工制品冲刺(Ken+Meyer+Brad,2-3 天: Error 矩阵/Result/选择算法/编译规则)+Beck W1 前 2 天消化窗口;与 STRIDE(Lipner+Kees)双线并行不抢人(顾问 D 采纳)"
     files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
   R-962:
     desc: "工作量重估 2500-3500 行(原 1500 过于乐观——单编译器 500+);W3-4 转纯实现(设计已 W0 定稿);NFR 改区间制(顾问 D 采纳)"
     files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    修订: "会议 #192(R-1071): LOC 移出 NFR——重估数值保留为计划脚注范围估算, 取消'NFR 区间制'定位(LOC 是有毒指标, Goodhart)。工作量重估本体不变。"
 
   # ═══════════════════════════════════════════════════════════════
   # 会议 #172 (2026-08-01): W0 评审闭环
@@ -2535,3 +2537,121 @@ resolutions:
       - must_exist: "Gates, not vibes"
         in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
         reason: "计划签字条件必须补证据式签字机制依据"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #192 (2026-08-13): 第五版开发计划重新制定（第六版 v0.3.0-6）
+  # Ken 主持 / Jobs 一票否决权。流程：内部顾问（Linus/Pike/Carmack/
+  # Kees/Lipner）五透镜首轮审议→开发团队八路业界最佳实践搜索→
+  # 逐条方案形成→计划修订→顾问第二轮复审全部通过。
+  # 八路证据基：Chromium Windows 沙箱分层 / MS SDL FSR / reflink 与
+  # hardlink 教训（Nix·git-annex）/ 容器逃逸 CVE 时序教训（containerd
+  # checkpoint·Leaky Vessels·SCTPhantom）/ LOC 有毒指标 / Strangler Fig
+  # Branch by Abstraction / NTFS rename 原子性边界 / seccomp-notify TOCTOU。
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1064:
+    desc: "对抗测试时序前置(会议 #192——A1, Linus): 原计划对抗测试集中 W7-8 一次性执行=runc/containerd 逃逸史的重演条件——containerd checkpoint 代码 2023 合入、2026 年 7 个 CVE 集中爆发(审查滞后约三年); Leaky Vessels 单点补丁后旧 pin 二进制持续存活两年。改为**随后端落地即对抗**: 每后端合入当周接对应向量子集对抗用例(测试先行 R-571: 用例先红后绿), W7-8 收敛为四后端全集向量+跨后端互补。计划任务 7.1 重写+W1-2/W5-6 验收补后端子集对抗线。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "随后端落地即对抗"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划任务 7.1 与 W1-2/W5-6 验收必须落地对抗前置时序"
+
+  R-1065:
+    desc: "statefs 快照策略分层契约(会议 #192——A2, Linus/Carmack): 原'目录复制+cp -al 硬链接优化可选'有规模悬崖且硬链接方向危险——git-annex forcehardlink 被社区评为'aimed the gun right at the user's foot'(live 写入静默污染对象库); Nix 社区结论=hardlink 进 store 可被外部路径修改, reflink 无此问题。改为三层契约: ①能力探测→reflink 优先(Linux FICLONE: BTRFS/XFS, 内核 6.1+ 跨 VFS 边界; macOS APFS clonefile)→hardlink 树仅快照间共享→目录复制兜底 ②**禁止与 live 文件共享 inode**——live 写入一律 write-to-temp+rename ③CoW/reflink 入 v0.3.0 核心范围(原'分阶段优化'收敛为跨卷去重/GC/迁移工具)。契约测试: TestStatefs_Snapshot_LiveWriteIsolation(计划任务 1.24/3.15)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "禁止与 live 文件共享 inode"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 快照策略必须固化禁止 live 硬链接契约"
+
+  R-1066:
+    desc: "Windows statefs Commit 两段指针切换+意图日志(会议 #192——A2b, Linus): 原'junction 重建+毫秒级窗口诚实标注'是把事务洞标注而非修复——reparse point 设置=NtCreateFile+FSCTL_SET_REPARSE_POINT 两步非原子; ReplaceFile 多步序列多中间态; TxF 已弃用。改为: 新代构建→写私有事务 journal(意图日志: 目标态/代指针/清理清单)→旧代 rename 至 tombstone(NTFS 同卷 rename 原子)→新代 rename 至指针位→异步清理; 崩溃恢复=启动时 journal 幂等回放(前态/后态之一, 绝不中间态; NTFS journaling 保证目录结构一致)。提交锁保留; 诚实标注保留(journal 回放未完成前不进新代)。契约测试: TestStatefs_Commit_CrashRecovery_JournalReplay(计划任务 1.24/3.15)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "意图日志"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 Commit 语义必须落意图日志+幂等回放"
+
+  R-1067:
+    desc: "信创 3 级收敛期限承诺(会议 #192——A3, Linus/Kees): 原'3 级在 0.3.x 真机窗口收敛'为开放承诺——SDL 依据: FSR 要求 RTM 前 4-6 周完成安全里程碑, 带例外发布必须书面列明例外与条件; containerd 教训=推迟审查年复一年。改为期限承诺: **发布后 90 天**内真机 3 级达标 PM 签字; 逾期未达标→信创降级声明+下版 roadmap 最高优先。发布闸口保持 2 级模拟绿(既有政策 R-929 不变), 90 天承诺作为第 26 项签字条件书面登记(发布时)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "发布后 90 天"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划平台表+信创收敛窗口必须落 90 天期限承诺"
+
+  R-1068:
+    desc: "executor 双轴重构串行化(会议 #192——B1, Pike): 原 W1-2 同周 transport 提取(1.5-1.7)与 Linux/macOS 沙箱适配层(1.14)并行改同一 executor*.go 代码区=双轴踩踏。Strangler Fig/Branch by Abstraction 依据: 先建抽象→调用方切接口→旧实现迁移→删除旧路径, 同一代码区单轴推进。改为: W1-2 executor*.go 唯一改造者=transport 提取; 任务 1.14 移至 W3-4(任务 3.18)在已迁移 transport 之上落薄封装; 1.11 依赖 1.5-1.7 完成后合入。验收=git log 文件级审计证据。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "唯一改造者"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须固化 executor 单轴改造约束"
+
+  R-1069:
+    desc: "Error 映射矩阵分域冻结(会议 #192——B2, Pike): 原制品①仅覆盖 windows-job+linux-bpf 两后端即授权 contract test 骨架——闸口验证的契约不完整=假闸; darwin/xinchuang 矩阵 W5-6 补齐会造成契约 churn。改为: 契约测试授权按矩阵覆盖**分域冻结**——矩阵未覆盖后端不得创建占位/跳过用例(R-1061 反空壳), 矩阵补齐当周测试先行写入; 矩阵变更走**契约变更流程**(先改矩阵→再改测试→再改实现, 禁止静默改实现)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "契约变更流程"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划制品①与任务 1.1 必须固化分域冻结与变更流程"
+
+  R-1070:
+    desc: "detect API 契约冻结(会议 #192——C1, Carmack): 原 1.9(W1-2)只做'框架+模拟开关预留'、5.5(W5-6)才落完整矩阵——同一模块两段式实现无 API 冻结点, PlatformCapabilities 结构语义 W5-6 变更会倒灌 W1-2 消费方(治理 Risk 引擎 R-947)。改为: W1-2 即冻结完整 API 契约(PlatformCapabilities 类型/能力枚举/模拟开关函数签名)+契约测试 TestDetect_FrameworkDispatch(mock 探测源, 测试先行); 5.5 仅实现探测源与模拟数据源, 签名/枚举变更走契约变更流程(R-1069 同机制)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "API 契约冻结"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划任务 1.9/5.5 必须落 detect 契约冻结语义"
+
+  R-1071:
+    desc: "LOC 移出 NFR(会议 #192——C2, Carmack): 原'新增代码量 2500-3500 行'列为 NFR 目标值——LOC 是有毒指标(Bill Gates: 'Measuring software productivity by Lines of Code is like measuring progress on an airplane by how much it weighs'; Goodhart 定律: 成为目标即失效; AI 时代 1.3-2x 冗长放大失真)。改为: LOC 移出 NFR 表, 保留为计划脚注范围估算(非验收指标, 不计入 CI 闸门)。修订 R-962(工作量重估本体不变, 仅取消 NFR 目标值定位)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "LOC 移出 NFR"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划 NFR 章节必须落 LOC 移出+范围估算脚注"
+
+  R-1072:
+    desc: "Windows 硬化对照 Chromium 分层+对抗向量扩充(会议 #192——D1, Kees): ①原计划 Windows 后端仅'Restricted Token+Job Object+Low IL+ACL'组合——Chromium 生产实践: renderer=Restricted Token+Untrusted IL+Lockdown, AppContainer/LPAC 提供 Capabilities 细粒度能力(省略 INTERNET_CLIENT=网络默认禁); Restricted Token+Low IL 有已知逃逸史(Chrome 系已迁移/叠加 AppContainer)。新增计划任务 5.11: AppContainer 采用评估(Kees)+实施(Brad), 评估报告(采用/不采用+理由)入 08 §19.3 ②对抗向量清单(R-960)扩充 ⑦DLL 搜索路径劫持 ⑧reparse point 替换(handle-relative+身份校验 fail-closed)⑨NULL DACL/FAT 卷 ⑩seccomp-notify TOCTOU(指针参数判定=竞态面, PIN_ARGS 未落地内核前禁用 CONTINUE 指针判定)⑪默认白名单 syscall 参数级逃逸(SCTPhantom 教训: 按参数过滤非仅 syscall 号)——原清单 Linux 偏重。修订 R-960。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "Chromium 分层"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.3 必须落 Chromium 分层对照+AppContainer 评估项"
+      - must_exist: "DLL 搜索路径劫持"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 逃逸向量清单必须扩充 Windows/seccomp-notify 向量"
+
+  R-1073:
+    desc: "FSR 终审安全评审闸口(会议 #192——E1, Lipner): 原发布闸口无安全终审——MS SDL Release 阶段实践: FSR 是 RTM 前最后安全闸口(威胁模型复审+已延后/已拒绝安全问题复审+安全工具结果复核+已知漏洞清零 Critical~Low 不得带病发布, 例外书面申请安全顾问批准), 三态输出(通过/带例外通过/不通过=不可发布), 规划窗口=RTM 前 4-6 周。落地: 计划新增任务 7.14(W7 初启动, W8 收敛)+签字条件第 25 项(Kees+Lipner 证据式签字, Gates-not-vibes 终审实例)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "FSR 终审安全评审"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落 FSR 任务 7.14+第 25 项签字条件"
+
+  R-1074:
+    desc: "secret/CLOEXEC 契约前移 W1-2(会议 #192——E2, Lipner/Kees): 原 fd CLOEXEC 审计(7.3)与 secret 红线契约测试(7.4)全部后置 W7-8——防线应嵌在最早契约层(Leaky Vessels 教训: 补丁一次性, 防线要进契约)。改为: W1-2 transport 契约骨架同批落 TestTransport_FdCloseOnExec(逐 fd CLOEXEC 断言+显式 close 语义)与 TestTransport_NoSecretInEvent(秘密不进传输层事件/日志, R-917 契约子集); 7.3/7.4 保留为全量跨后端/跨模块收敛审计。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "TestTransport_FdCloseOnExec"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划任务 1.3+W1-2 验收必须落前移的契约测试"
+
+  R-1075:
+    desc: "Go/No-Go 安全签字(会议 #192——E3, Lipner): 原 W0 Go/No-Go 裁决人仅 Ken(闸口)+Jobs(否决)——STRIDE 六场景是安全闸门, 决策链缺安全代表(SDL 要求: 每项目指派 security advisor 负责 FSR 认证)。改为: 裁决人=Ken(闸口)+Kees(安全签字——STRIDE 六场景缓解与风险消解方案行使签字权)+Jobs(否决权)。计划 W0 裁决人与任务 1.18 同步更新。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "安全签字"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划 W0 裁决人+任务 1.18 必须落 Kees 安全签字"
+
+  R-1076:
+    desc: "计划一致性修订(会议 #192——首读发现的五处自洽性缺陷): ①任务 5.2'mount namespace 语义定稿 W4 前'为陈旧任务——语义已于 W0 定稿(R-965: bind-mount 白名单+pivot_root, 否决 chroot, 08 §18), 改为'实现对照定稿结论'(核对+偏差上报, 不得重新设计) ②任务 0.3/0.4/0.6/7.1 归属人'KSPP'(项目名非人名)→Kees ③W1-2 验收 statefs 契约测试清单漏 TestStatefs_Reconcile_Idempotent(R-1062 已入任务 1.24)——验收/任务漂移, 补齐为 9 项全绿 ④R-986'L0-L5 映射全表 W2 末前交付'仅写在 W3-4 任务 3.6 内, W2 末无闸口承接——补 W1-2 验收前置线 ⑤团队表未列内部/外部顾问——补两行(外部顾问不参与内部会议, 独立审计原则)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "实现对照定稿结论"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划任务 5.2 必须改为实现核对语义"
