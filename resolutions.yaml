@@ -2665,12 +2665,12 @@ resolutions:
         reason: "06 必须落五支柱体系章节(R-1077 登记)"
 
   R-1078:
-    desc: "L4-L5 隔离层级扩展(会议 #193——P1, Linus): seccomp+namespace 之上仍共享同一内核, 攻击面=内核 attack surface 全集——隔离强度上限由'与宿主共享多少代码'决定。L4=gVisor 后端(Sentry 用户态内核+Gofer 9P; Linux/信创: KVM 探测优先、无 KVM 自动 systrap——systrap 用 SECCOMP_RET_TRAP 无需硬件虚拟化, 信创 4.19 内核同样可跑 L4; 不兼容 syscall 一律 seccomp 兜底 fail-closed, 不用'放宽'补齐)+Windows Sandbox .wsb(Pro/Enterprise, air-gap 模式, 不可用诚实标注降级); L5=一次性执行环境; macOS 诚实标注维持 Seatbelt(无等价物, App Sandbox 增强维持 v1.5+ 排期); 能力探测+自动降级链 L5→L4→L3→L2, 每级降级=审计事件+诚实标注。落地: 06 §5 层级表+08 §19.4+计划任务 1.26/3.19/3.20。disposition: 生效"
+    desc: "L4-L5 隔离层级扩展(会议 #193——P1, Linus): seccomp+namespace 之上仍共享同一内核, 攻击面=内核 attack surface 全集——隔离强度上限由'与宿主共享多少代码'决定。L4=gVisor 后端(Sentry 用户态内核+Gofer 9P; Linux/信创: KVM 探测优先、无 KVM 自动 systrap——systrap 用 SECCOMP_RET_TRAP 无需硬件虚拟化, 信创 4.19 内核同样可跑 L4; 不兼容 syscall 一律 seccomp 兜底 fail-closed, 不用'放宽'补齐)+Windows Sandbox .wsb(Pro/Enterprise, air-gap 模式, 不可用诚实标注降级); L5=一次性执行环境; macOS 诚实标注维持 Seatbelt(无等价物, App Sandbox 增强维持 v1.5+ 排期); 能力探测+自动降级链 L5→L4→L3→L2, 每级降级=审计事件+诚实标注。落地: 06 §5 层级表+08 §19.8+计划任务 1.26/3.19/3.20。disposition: 生效"
     files: [会议纪要.md, 06安全模型文档.md, 08沙箱隔离与进程通信规范.md]
     verify:
       - must_exist: "gVisor"
         in_file: 08沙箱隔离与进程通信规范.md
-        reason: "08 §19.4 必须落 gVisor 后端规范"
+        reason: "08 §19.8 必须落 gVisor 后端规范"
       - must_exist: "Windows Sandbox"
         in_file: 06安全模型文档.md
         reason: "06 §5 层级表必须落 Windows Sandbox L4 后端"
@@ -2730,3 +2730,43 @@ resolutions:
       - must_exist: "五支柱组件"
         in_file: 06安全模型文档.md
         reason: "06 §1.2 STRIDE 必须落五支柱组件威胁场景"
+
+  R-1086:
+    desc: "统一 spawn 原语+通用 fd 卫生契约(会议 #194——P-A/P-F, Linus): 已打开 fd 是'已授权句柄'——子进程继承后无需 open() 即可读写, 绕过文件白名单与 seccomp 路径过滤双层; LWN 结论: CLOEXEC 是主防线但第三方库'哪怕一瞬间'非 CLOEXEC fd 即漏洞——子进程内关全部 fd 是必需纵深, 不能只靠 CLOEXEC。四防线: ①创建期——全部 fd 创建经统一 wrapper 强制 O_CLOEXEC, CI AST 检查直调 syscall/cgo 裸 fd 创建 ②启动期——daemon 启动即关全部非预期继承 fd: close_range(5.9+)优先, 信创 4.19 /proc/self/fd 遍历兜底; CPython bpo-47260 教训——seccomp 拒绝 close_range 返回 EPERM/EACCES 但不关任何 fd, 任何错误必须无条件 fallback, 禁止假设已关闭 ③spawn 期——全模块唯一 spawn 入口(散落 os/exec 直调=CI import 检查 FAIL, R-953 模式)+fork-exec 间独立 /proc/self/fd 扫描关闭(不依赖 runtime 行为); Windows PROC_THREAD_ATTRIBUTE_HANDLE_LIST 显式继承白名单(仅 stdio+FD3) ④验证期——对抗契约: 子进程枚举 /proc/self/fd 断言仅 {0,1,2,FD3}。落地: 08 §18.4 扩展+计划任务 1.32/3.24+TestProcess_Spawn_OnlyStdioAndFd3。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "统一 spawn 原语"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §18.4 必须落统一 spawn 原语四防线"
+
+  R-1087:
+    desc: "信创降级链重排+seccomp-only 硬化(会议 #194——P-B, Kees): seccomp BPF 无法安全按路径过滤(只能按 fd/参数)——路径在 BPF 检查后可经 /proc/self/fd 重解析(TOCTOU), 这正是 Landlock 被设计为 inode 级内核强制的原因(4.19 无 Landlock)——'未验完'不是进度问题是机制性缺陷。降级链重排: 信创 L4 主路径=gVisor systrap(无 KVM 依赖, SECCOMP_RET_TRAP, 4.19 可跑——R-1078 延伸); seccomp-only 仅作 gVisor 不可用时的 L2 兜底+硬化三件(①参数级路径前缀过滤+拒绝 /proc/self/fd 重解析 ②fd 卫生联动 R-1086 封 fd 通道 ③Compile 期强制最小挂载集 R-1090)。对抗向量分级: 可验证向量(路径穿越/符号链接劫持/写白名单滥用——BPF 可断言) vs 已知弱向量(TOCTOU 重解析竞态——不可完全验证, 诚实标注 L2 残余风险清单入 06)。90 天真机窗口(R-1067)内完成真机对抗验证或升级 L4。落地: 08 §18.3 硬化+§19.8 信创 L4 主路径+计划任务 5.15。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "seccomp-only 硬化"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §18.3 必须落 seccomp-only 硬化三件"
+
+  R-1088:
+    desc: "内核 CVE 威胁模型+风险分层强制(会议 #194——P-C, Lipner): L3 及以下与宿主共享内核——攻击面=内核 attack surface 全集, 任何内核提权 bug 定义上即容器逃逸; Copy Fail CVE-2026-31431(2017 以来几乎所有发行版 page-cache LPE, 跨租户传播)+runc CVE-2024-21626(Leaky Vessels)/Dirty Pipe/cgroup release_agent 同谱系; Bugcrowd 明确 gVisor 'not affected; no shared host kernel' 并推荐 AI 代码执行沙箱迁移 microVM/gVisor。①威胁模型登记: L3 及以下内核 CVE 残余风险入 06 §5+FSR bug bar(发布时逐级声明) ②风险分层强制: 高危目标(R-986 风险层级)强制 L4/L5 后端, L3 仅限低风险+诚实标注 ③运营闭环: 内核 CVE 订阅任务——CVE feed→影响分析(受影响后端/版本)→安全公告+必要时禁后端/升级 gVisor。落地: 06 §5 残余风险段+计划任务 7.17。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "内核 CVE 残余风险"
+        in_file: 06安全模型文档.md
+        reason: "06 §5 必须落内核 CVE 残余风险登记"
+
+  R-1089:
+    desc: "Windows DLL 搜索路径劫持防线(会议 #194——P-D, Kees): 应用目录在 DLL 搜索顺序第一(SafeDllSearchMode)——可写目录内同名 DLL 先于 system32 被加载, 劫持 DLL 以被加载进程权限执行(T1574.001, 向量⑦)。四件套: ①daemon 启动期 SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32|LOAD_LIBRARY_SEARCH_APPLICATION_DIR)(Microsoft 权威缓解 KB2533623; 单次调用——daemon 无第三方 DLL 加载方, 规避 SetDllDirectory 互相覆盖 caveat) ②插件可执行文件目录只读(copy-to-readonly 执行目录——应用目录搜索第一+不可写=劫持落点不存在) ③profile 编译期契约: writable dirs ∩ dll search dirs = ∅(Compile 校验+CI) ④检测: 插件进程 DLL 加载路径入审计(Sysmon Event 7 等价物)+SafeDllSearchMode 启动核验(被改→诚实标注警告)。落地: 08 §19.9 新节+计划任务 1.32/3.25+TestSandbox_Adversarial_Windows_DLLHijack(先红后绿)。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "SetDefaultDllDirectories"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.9 必须落 DLL 搜索路径劫持四件套"
+
+  R-1090:
+    desc: "运行时挂载集机制补全(会议 #194——P-E, Linus, 扩展 R-1084): R-1084 定义白名单集('什么')未定义机制链('怎么进')——工具链从宿主进入 namespace 的发现→冻结→挂载三步缺失, 宽 read 风险未真正收敛。机制链三步: ①工具链发现——daemon 启动期 ldconfig -p 快照(含 /etc/ld.so.cache 内容哈希; 不一致→重建或诚实降级——distroless 教训: 加库不重建 cache 找不到库) ②Compile 期冻结——工具链路径集+ld.so.cache 哈希冻结入 CompiledProfile(每次 Compile 快照, 不跨次复用; 运行时新增库=重新 Compile, 禁止运行时动态补挂载) ③挂载子序列(08 §18.2 补)——tmpfs 根→工具链条目 ro,nosuid bind→workspace 读写 bind→deny 遮蔽→procfs→/dev→pivot_root→seccomp 锁死。最小运行时可执行性契约: TestSandbox_MinimalRuntimeExec(/bin/sh -c 'echo ok' 成功+参与解析的路径全在白名单)。落地: 08 §18.4 机制链+计划任务 3.23 扩展。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "Compile 期冻结"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §18.4 必须落 Compile 期冻结机制链"
