@@ -42,16 +42,40 @@
 #   bash scripts/check-resolution-propagation.sh path/to/custom.yaml
 #
 # 维护者: GoalOS 架构团队
-# 最后更新: 2026-06-28（会议 #84 重写——正文提取/字段分隔/TAB 修复）
+# 最后更新: 2026-08-13（会议 #190 R-1049——valid 集合锚定提取/删除 7 处噪音 echo/幽灵计数修正/排除 *.bak.md/脚本自路径 resolve 修复；
+#                       会议 #190 R-1052——路径自适应(工作区/仓库/历史CWD 三布局)/编号连续性闸口(R-543 ③)/
+#                         repo-only 显式降级/显式前缀路径解析(GoalOS·开发文档)/空号豁免精确提取(仅声明部分)/
+#                         补 R-566~567,R-569,R-966~972 空号注释——make ci 第 7 硬闸口全绿）
 # =============================================================================
 
 set -euo pipefail
 
 # ─── 常量 ───
 readonly SCRIPT_NAME="$(basename "$0")"
-readonly DOC_DIR="开发文档"
-readonly DEFAULT_RESOLUTIONS="GoalOS/resolutions.yaml"
+readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+readonly REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly DELIM=$'\t'  # TAB——不会出现在 YAML 值或 grep 模式中
+
+# ─── 路径自适应（R-1052）───
+# 三种布局:
+#   1. 工作区布局: <root>/GoalOS + <root>/开发文档 → DOC_DIR/REPO_DIR 绝对路径
+#      （workspace 直跑与 make ci 从 GoalOS/ 运行结果一致）
+#   2. 仓库布局（GitHub Actions）: 仅 GoalOS 仓库，无 开发文档 → repo-only 模式
+#   3. 历史 CWD 相对布局: 向后兼容（找不到上述布局时回退）
+if [ -d "$SCRIPT_DIR/../../开发文档" ]; then
+    DOC_DIR="$SCRIPT_DIR/../../开发文档"
+    DEFAULT_RESOLUTIONS="$REPO_DIR/resolutions.yaml"
+    REPO_ONLY=false
+elif [ -f "$REPO_DIR/resolutions.yaml" ]; then
+    DOC_DIR=""
+    DEFAULT_RESOLUTIONS="$REPO_DIR/resolutions.yaml"
+    REPO_ONLY=true
+else
+    DOC_DIR="开发文档"
+    DEFAULT_RESOLUTIONS="GoalOS/resolutions.yaml"
+    REPO_ONLY=false
+fi
+readonly DOC_DIR DEFAULT_RESOLUTIONS REPO_ONLY
 
 # 颜色（仅终端输出；CI 重定向时自动禁用）
 if [ -t 1 ]; then
@@ -107,6 +131,15 @@ GoalOS 决议传播完整性检查 — CI 自动化（两层验证）
   层1（元数据追溯）: 每个文件的"修改记录"表必须引用决议编号（R-xxx）
   层2（正文内容一致性）: 文档正文必须满足 verify 规则——must_exist / must_not_exist
 
+附加检查:
+  编号连续性（R-543 ③）: 所有编号必须注册或注释为空号——纯 yaml，任何布局均执行
+  幽灵决议检测: 文档引用的 R-xxx 必须在 resolutions.yaml 中存在
+
+运行模式（路径自动检测）:
+  工作区布局（开发文档存在）: 全量——层1+层2+幽灵+连续性
+  仓库布局（开发文档不存在，如 GitHub Actions）: repo-only——连续性+YAML 格式；
+    层1/层2/幽灵显式 SKIP（开发文档不在仓库，GIT-RULES 规则5）
+
 退出码:
   0 — 全部通过。决议传播完整
   1 — 存在未传播的决议。必须在写代码前修复
@@ -130,6 +163,17 @@ EOF
 resolve_path() {
     local f="$1"
 
+    # 显式前缀路径（R-1052）: GoalOS/xxx → $REPO_DIR/xxx; 开发文档/xxx → $DOC_DIR/xxx
+    # 不依赖 CWD——make ci 从 GoalOS/ 运行时同样可解析
+    if echo "$f" | grep -qE '^GoalOS/'; then
+        echo "$REPO_DIR/${f#GoalOS/}"
+        return
+    fi
+    if echo "$f" | grep -qE '^开发文档/'; then
+        echo "$DOC_DIR/${f#开发文档/}"
+        return
+    fi
+
     # 开发计划子目录文件（v0.2.0-* 等）
     if echo "$f" | grep -qE '^开发计划/v[0-9]'; then
         echo "$DOC_DIR/$f"
@@ -149,12 +193,12 @@ resolve_path() {
         v[0-9]*开发计划.md|v[0-9]*测试计划.md|v[0-9]*预期目标与验收标准.md|v[0-9]*顾问审计意见.md)
             echo "$DOC_DIR/开发计划/v0.2.0/$f"
             ;;
-        # GoalOS/ 目录下的规范文档
+        # GoalOS/ 目录下的规范文档（REPO_DIR 绝对路径——不依赖 CWD，R-1052）
         测试规范.md|开发规范.md|发布规范.md|验收规范.md|用户手册.md|开发日志.md)
-            echo "GoalOS/$f"
+            echo "$REPO_DIR/$f"
             ;;
-        check-anti-cheat.sh|check-cross-verification.sh|check-doc-completeness.sh|check-schema-consistency.sh|check-plugin-protocol.sh|export-glossary-yaml.sh)
-            echo "GoalOS/scripts/$f"
+        check-anti-cheat.sh|check-cross-verification.sh|check-doc-completeness.sh|check-schema-consistency.sh|check-plugin-protocol.sh|export-glossary-yaml.sh|check-resolution-propagation.sh)
+            echo "$REPO_DIR/scripts/$f"
             ;;
         *)
             # 模糊查找——尝试多个位置
@@ -256,9 +300,7 @@ check_layer1() {
         fi
     done < "$yaml"
 
-    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
     echo -e "  ${BOLD}层1 结果${NC}: ${GREEN}$LAYER1_PASS 通过${NC} / ${RED}$LAYER1_FAIL 失败${NC}"
-    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
 }
 
 # =============================================================================
@@ -381,9 +423,7 @@ check_layer2() {
     rm -f "$rules_file"
     trap - EXIT
 
-    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
     echo -e "  ${BOLD}层2 结果${NC}: ${GREEN}$LAYER2_PASS 通过${NC} / ${RED}$LAYER2_FAIL 失败${NC}"
-    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
 }
 
 # ─── 层2 子函数: _check_must_not_exist ───
@@ -440,6 +480,27 @@ _check_must_exist() {
 }
 
 # =============================================================================
+# 函数: build_exempt_nums [yaml] [outfile]
+# 用途: 从 resolutions.yaml 的空号注释行提取豁免编号集合（R-1049 ① 延伸）。
+#       仅从 '^  #' 注释行且含"空号"的行提取；区间 R-a~R-b 展开为逐号。
+# 输入: $1 — resolutions.yaml 路径; $2 — 输出文件
+# =============================================================================
+
+build_exempt_nums() {
+    local yaml="$1" out="$2"
+    # 只提取"声明部分"——'R-NNN: 空号' / 'R-NNN~R-MMM: 空号'。
+    # 注释行中上下文提及的编号（如"合并到 R-394"、"R-780~R-785 中间"、
+    # 政策行"# R-543 编号纪律"）不得纳入豁免集合（R-1052 精确化）。
+    grep '^  #' "$yaml" | grep -oE 'R-[0-9]+(~R-[0-9]+)?: 空号' | grep -oE 'R-[0-9]+' | grep -oE '[0-9]+' > "$out"
+    grep '^  #' "$yaml" | grep -oE 'R-[0-9]+~R-[0-9]+: 空号' | grep -oE 'R-[0-9]+~R-[0-9]+' | while IFS='~' read -r ra rb; do
+        local a b
+        a="${ra#R-}"; b="${rb#R-}"
+        seq "$a" "$b" >> "$out"
+    done
+    sort -n -u "$out" -o "$out"
+}
+
+# =============================================================================
 # 函数: check_ghost_resolutions [resolutions_yaml]
 # 用途: 检测"幽灵决议"——在文档修改记录中被引用但在 resolutions.yaml 中不存在的 R-xxx 编号。
 #       验证空号区间注释与实际文档引用之间的一致性（R-544）。
@@ -458,12 +519,17 @@ check_ghost_resolutions() {
     # Step 1: 从 resolutions.yaml 提取所有有效 R-xxx 编号
     local valid_resolutions
     valid_resolutions=$(mktemp)
-    grep -oE 'R-[0-9]+' "$yaml" | grep -oE '[0-9]+' | sort -n | uniq > "$valid_resolutions"
+    grep -oE '^  R-[0-9]+:' "$yaml" | grep -oE '[0-9]+' | sort -n | uniq > "$valid_resolutions"
+
+    # 空号豁免集合（R-1049 ① 延伸）：仅从"空号"注释行提取——单号 + R-a~R-b 区间展开
+    local exempt_nums
+    exempt_nums=$(mktemp)
+    build_exempt_nums "$yaml" "$exempt_nums"
 
     # Step 2: 扫描所有文档中的 R-xxx 引用（排除 resolutions.yaml 自身和 check script）
     local all_refs
     all_refs=$(mktemp)
-    find "$DOC_DIR" "GoalOS" -name "*.md" -o -name "*.yaml" 2>/dev/null | \
+    find "$DOC_DIR" "$REPO_DIR" \( -name "*.md" -o -name "*.yaml" \) ! -name "*.bak.md" 2>/dev/null | \
         grep -v "resolutions.yaml" | \
         grep -v "会议纪要.md" | \
         xargs grep -ohE 'R-[0-9]+' 2>/dev/null | \
@@ -481,8 +547,8 @@ check_ghost_resolutions() {
             if [ "$num" = "508" ]; then
                 continue
             fi
-            # 检查是否在注释的空号区间中
-            if grep -q "R-$num.*空号\|$num.*空号\|~$num\|$num~\|$num.*跳过" "$yaml" 2>/dev/null; then
+            # 检查是否在注释的空号集合中（仅注释行+空号标记；区间已展开为逐号集合）
+            if grep -q "^$num$" "$exempt_nums" 2>/dev/null; then
                 log_verbose "R-$num: 空号区间内——已注释"
                 continue
             fi
@@ -491,7 +557,7 @@ check_ghost_resolutions() {
             ghost_count=$((ghost_count + 1))
             # 找到引用此编号的文档
             local ref_files
-            ref_files=$(find "$DOC_DIR" "GoalOS" -name "*.md" 2>/dev/null | \
+            ref_files=$(find "$DOC_DIR" "$REPO_DIR" -name "*.md" ! -name "*.bak.md" 2>/dev/null | \
                 xargs grep -l "R-$num" 2>/dev/null | head -3 | tr '\n' ' ')
             echo -e "  ${RED}❌ R-$num${NC}: ${RED}幽灵决议${NC}——被文档引用但不在 resolutions.yaml 中"
             echo "     引用文件: $ref_files"
@@ -500,14 +566,76 @@ check_ghost_resolutions() {
         fi
     done < "$all_refs"
 
-    rm -f "$valid_resolutions" "$all_refs"
+    # 注册条目数在临时文件删除前统计（R-1049 ③ 修正：不得在 rm -f 之后读取）
+    local registered_count
+    registered_count=$(grep -cE '^[0-9]+$' "$valid_resolutions" 2>/dev/null || echo 0)
+
+    rm -f "$valid_resolutions" "$all_refs" "$exempt_nums"
 
     if [ "$ghost_count" -eq 0 ]; then
         echo -e "  ${GREEN}✅${NC} 幽灵决议检测通过——所有文档引用的 R-xxx 均在 resolutions.yaml 中有定义"
     fi
-    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
-    echo -e "  ${BOLD}幽灵检测结果${NC}: ${GREEN}$(( $(grep -cE '^[0-9]+$' "$valid_resolutions" 2>/dev/null || echo 0) - ghost_count )) 有效${NC} / ${RED}$GHOST_FAIL 幽灵${NC}"
-    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
+    echo -e "  ${BOLD}幽灵检测结果${NC}: ${GREEN}注册条目: ${registered_count}${NC} / ${RED}幽灵: ${GHOST_FAIL}${NC}"
+}
+
+# =============================================================================
+# 函数: check_numbering_continuity [resolutions_yaml]
+# 用途: 编号纪律检查（R-543 ③）：1..max(注册) 范围内每个编号要么已注册、
+#       要么有空号注释（豁免集合）。另检查反向冲突——空号注释不得指向已注册编号。
+#       纯 resolutions.yaml 检查——不依赖文档，仓库侧 CI（GitHub Actions）也可执行（R-1052）。
+# 输入: $1 — resolutions.yaml 路径
+# 副作用: 更新 FAILED
+# =============================================================================
+
+check_numbering_continuity() {
+    local yaml="$1"
+    local CONT_FAIL=0
+
+    log_info "── ${BOLD}编号连续性检查${NC}（R-543 ③：编号必须注册或注释为空号）──"
+
+    local valid_resolutions
+    valid_resolutions=$(mktemp)
+    grep -oE '^  R-[0-9]+:' "$yaml" | grep -oE '[0-9]+' | sort -n | uniq > "$valid_resolutions"
+
+    local exempt_nums
+    exempt_nums=$(mktemp)
+    build_exempt_nums "$yaml" "$exempt_nums"
+
+    local max_num
+    max_num=$(tail -1 "$valid_resolutions")
+    if [ -z "$max_num" ]; then
+        log_error "resolutions.yaml 中未找到任何注册决议（锚定模式 '^  R-[0-9]+:' 无匹配）"
+        rm -f "$valid_resolutions" "$exempt_nums"
+        exit 2
+    fi
+
+    # 正向: 每个编号必须注册或注释为空号
+    # R-1~R-393: 预 v0.2.0 决议——记录于会议纪要，合法不要求注册（与幽灵检测豁免一致）
+    local n
+    for n in $(seq 1 "$max_num"); do
+        if [ "$n" -le 393 ]; then continue; fi
+        if grep -q "^$n$" "$valid_resolutions" 2>/dev/null; then continue; fi
+        if grep -q "^$n$" "$exempt_nums" 2>/dev/null; then continue; fi
+        echo -e "  ${RED}❌ R-$n${NC}: 编号断档——既未注册也无空号注释（R-543 ③）"
+        FAILED=$((FAILED + 1))
+        CONT_FAIL=$((CONT_FAIL + 1))
+    done
+
+    # 反向: 空号注释不得指向已注册编号
+    while IFS= read -r n; do
+        if grep -q "^$n$" "$valid_resolutions" 2>/dev/null; then
+            echo -e "  ${RED}❌ R-$n${NC}: 空号注释与注册冲突——已注册编号被声明为空号"
+            FAILED=$((FAILED + 1))
+            CONT_FAIL=$((CONT_FAIL + 1))
+        fi
+    done < "$exempt_nums"
+
+    rm -f "$valid_resolutions" "$exempt_nums"
+
+    if [ "$CONT_FAIL" -eq 0 ]; then
+        echo -e "  ${GREEN}✅${NC} 编号连续性通过——R-394~R-$max_num（v0.2.0 起）全部注册或已注释空号"
+    fi
+    echo -e "  ${BOLD}连续性结果${NC}: ${GREEN}通过${NC} / ${RED}失败: $CONT_FAIL${NC}"
 }
 
 # =============================================================================
@@ -529,7 +657,6 @@ print_summary() {
     echo "  层1（修改记录引用）: ${GREEN}$LAYER1_PASS 通过${NC} / ${RED}$LAYER1_FAIL 失败${NC}"
     echo "  层2（正文内容一致性）: ${GREEN}$LAYER2_PASS 通过${NC} / ${RED}$LAYER2_FAIL 失败${NC}"
     echo "  耗时: ${elapsed}s"
-    echo "WARNING:resolution_propagation:file_not_found:$f" >&2; echo ""
 
     if [ $FAILED -gt 0 ]; then
         echo "修复方法:"
@@ -550,13 +677,13 @@ validate_environment() {
     log_verbose "自检: 验证运行环境..."
 
     # 检查必需命令
-    for cmd in grep awk sed tail head wc date mktemp; do
+    for cmd in grep awk sed tail head wc date mktemp seq sort uniq find xargs tr; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             log_error "缺少必需命令: $cmd"
             exit 2
         fi
     done
-    log_verbose "  命令依赖: 全部就绪 (grep, awk, sed, tail, head, wc, date, mktemp)"
+    log_verbose "  命令依赖: 全部就绪 (grep, awk, sed, tail, head, wc, date, mktemp, seq, sort, uniq, find, xargs, tr)"
 
     # 检查 resolutions.yaml
     if [ ! -f "$RESOLUTIONS" ]; then
@@ -572,13 +699,19 @@ validate_environment() {
         exit 2
     fi
 
-    # 检查文档目录
+    # 检查文档目录（R-1052: 仓库布局下开发文档不存在 → repo-only 显式降级，而非报错）
     if [ ! -d "$DOC_DIR" ]; then
-        log_error "文档目录不存在: $DOC_DIR（当前目录: $(pwd)）"
-        log_error "提示: 请在项目根目录运行此脚本"
-        exit 2
+        if [ "$REPO_ONLY" = true ]; then
+            log_info "  文档目录: 不存在（仓库布局——GIT-RULES 规则5 排除 开发文档）"
+            log_info "  → repo-only 模式: 编号连续性 + YAML 格式硬闸口；层1/层2/幽灵显式 SKIP"
+        else
+            log_error "文档目录不存在: $DOC_DIR（当前目录: $(pwd)）"
+            log_error "提示: 请在项目根目录运行此脚本"
+            exit 2
+        fi
+    else
+        log_verbose "  文档目录: $DOC_DIR（存在）"
     fi
-    log_verbose "  文档目录: $DOC_DIR（存在）"
 
     # 统计决议数量
     local resolution_count
@@ -612,10 +745,31 @@ main() {
     # 自检
     validate_environment
 
-    # 执行两层检查 + 幽灵决议检测
-    check_layer1 "$RESOLUTIONS"
-    check_layer2 "$RESOLUTIONS"
-    check_ghost_resolutions "$RESOLUTIONS"
+    if [ "$REPO_ONLY" = true ]; then
+        echo ""
+        echo -e "  ${BOLD}模式${NC}: repo-only（仓库布局——开发文档不在仓库）"
+        echo ""
+    else
+        echo -e "  ${BOLD}模式${NC}: 全量（工作区布局）"
+        echo ""
+    fi
+
+    # 编号连续性（纯 yaml——所有模式均执行，R-1052）
+    check_numbering_continuity "$RESOLUTIONS"
+
+    if [ "$REPO_ONLY" = true ]; then
+        # 仓库布局（GitHub Actions）: 开发文档不在仓库（GIT-RULES 规则5）
+        echo ""
+        log_info "── ${YELLOW}[SKIP]${NC} 层1/层2/幽灵检测 —— 开发文档不在本仓库（GIT-RULES 规则5）──"
+        log_info "  机制: 仓库侧强制编号连续性+YAML格式；完整两层验证由本地 make ci 硬闸口执行"
+        log_info "  说明: 此 SKIP 是显式降级，不是静默跳过——见 docker-publish.yml 步骤注释"
+        echo ""
+    else
+        # 执行两层检查 + 幽灵决议检测
+        check_layer1 "$RESOLUTIONS"
+        check_layer2 "$RESOLUTIONS"
+        check_ghost_resolutions "$RESOLUTIONS"
+    fi
 
     # 总结
     print_summary

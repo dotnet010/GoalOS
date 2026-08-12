@@ -19,6 +19,8 @@ all: lint race deadcode test build
 
 # ci 目标：运行全部 CI 检查脚本（v0.2.0 audit fix）。
 # 首个失败即退出。成功后运行全量 race 测试。
+# 会议 #190 R-1052: check-resolution-propagation.sh 为第 7 硬闸口——
+# 工作区布局下全量（层1+层2+幽灵+连续性）；路径自动检测，不依赖 CWD。
 ci: lint build
 	@echo "=== Running CI check scripts ==="
 	@bash scripts/check-anti-cheat.sh . || exit 1
@@ -27,6 +29,7 @@ ci: lint build
 	@bash scripts/check-contract-test-assertion.sh . || exit 1
 	@bash scripts/check-plugin-protocol.sh . || exit 1
 	@bash scripts/check-dead-code.sh . || exit 1
+	@bash scripts/check-resolution-propagation.sh || exit 1
 	@echo "=== Running full race tests ==="
 	@go test -count=1 -timeout 180s -race ./...
 	@echo "=== CI ALL GREEN ==="

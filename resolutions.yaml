@@ -607,7 +607,8 @@ resolutions:
     files: [05软件架构文档.md]
 
   # ═══════════════════════════════════════════════════════════════
-  # 会议 #88: 开发计划制定+测试先行铁律 —— 10 新决议 R-562~R-571
+  # 会议 #88: 开发计划制定+测试先行铁律 —— 7 新决议 R-562~R-565/R-568/R-570~R-571
+  #   （R-566/R-567/R-569 空号，见下）
   # ═══════════════════════════════════════════════════════════════
 
   R-562:
@@ -622,6 +623,8 @@ resolutions:
   R-565:
     desc: "Week 4集成测试窗口——不排新任务。全量回归+L3+L4快速E2E+WARN16组合+静态分析pass+Meyer闸口"
     files: []
+  #   R-566~R-567: 空号——会议 #88 块头曾声明"10 新决议"但实际注册 7 条，无对应决议内容留存。2 个预留号未使用
+  #   R-569: 空号——同上（会议 #88）。1 个预留号未使用
   R-568:
     desc: "CI反欺骗检查——三层自动化: ①覆盖率≥80% ②空壳检测(return nil+<3行无error处理) ③assertion≥MUST数。28个A类历史遗留的根因防护"
     files: [GoalOS/scripts/check-anti-cheat.sh]
@@ -1168,13 +1171,401 @@ resolutions:
   R-723:
     desc: "Code Review+单元测试铁律——每次commit必须至少一人Review(核心模块Ken或Brad+Russ双人)。Review检查5项(规格匹配/MUST覆盖/错误处理/空壳/安全路径)。单元测试覆盖率核心≥90%其他≥80%。验收规范Phase 0新增Code Review闸口。开发规范§2.3-2.5新增铁律。05-架构§0开发启动许可清单新增。开发计划铁律新增。代码审计发现16项规格中15项代码缺失——此决议防止再次发生"
     files: [05软件架构文档.md, 开发规范.md, 验收规范.md, v0.2.0-8-开发计划.md]
+  # 会议 #106 补录（R-910 政策——证据以会议纪要为准）
+  R-724:
+    desc: "会议 #106: LLM Function Calling 降级——Provider 不支持 Tools 时自动回退纯文本模式。disposition: 已落地(历史)"
+    files: []
 
-  # 会议 #106: HMAC协议深度复盘 —— 1 新决议 R-725
+  # 会议 #106: HMAC协议深度复盘 —— 2 新决议 R-724/R-725
   # ═══════════════════════════════════════════════════════════════
 
   R-725:
     desc: "内部协议边界管理规范——6个内部协议边界(IPC/Token/Event/Snapshot/LLM)必须含版本标识+自动检测+CI强制。三条铁律(版本号/自动检测/边界清晰)。Plugin构建统一化(make plugins)。开发规范§5新增协议边界管理。05-架构§0新增Protocol契约要素。验收规范Phase 0新增协议合规检查"
     files: [05软件架构文档.md, 开发规范.md, 验收规范.md, check-plugin-protocol.sh]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #108~#161 (2026-07-07 ~ 07-09): 历史决议补录 —— 会议 #190 R-1050
+  # ═══════════════════════════════════════════════════════════════
+  #
+  # 补录政策（R-910 同款）:
+  #   1. files 为空——传播已发生，证据以会议纪要为准（层1 义务自会议 #170 起生效）
+  #   2. 每条标注 disposition: 已落地(历史) / 替代→R-xxx / 撤销(见 R-xxx)
+  #   3. 空号注释满足 R-543 编号纪律 ③
+  #   依据: 会议纪要 #108~#161 章节 + GoalOS/开发日志.md 会议系列表
+  # ═══════════════════════════════════════════════════════════════
+
+  R-726:
+    desc: "会议 #108~#112: 核心模块公开函数统一返回 (T, error)。CI go/analysis pass 检测吞 error。disposition: 替代→R-733"
+    files: []
+  R-727:
+    desc: "会议 #108~#112: CategorizedError 接口——Category() ErrorCategory+Suggestion() string。Category 固定 4 值: Temporary/Permanent/Security/Fatal。disposition: 替代→R-733"
+    files: []
+  R-728:
+    desc: "会议 #108~#112: PipelineRunner 是唯一的 error→事件转换点。模块只返回 error，不处理自己的 error 传播。disposition: 替代→R-733"
+    files: []
+  R-729:
+    desc: "会议 #108~#112: 并发边界=Goal 边界。GoalRunner 拥有独立状态实例。Goal 之间不共享可变状态。disposition: 替代→R-733"
+    files: []
+  R-730:
+    desc: "会议 #108~#112: 全局共享状态使用 SafeMap[K,V] 泛型类型。模块不声明包级裸 map[K]V。CI 静态检查强制执行。disposition: 替代→R-733"
+    files: []
+  R-731:
+    desc: "会议 #108~#112: 外部数据校验统一使用 Validatable 接口（复用 H8 EventPayload.Validate() error）。数据在第一接触点校验。disposition: 替代→R-733"
+    files: []
+  R-732:
+    desc: "会议 #108~#112: 校验失败=数据不发布为事件+发布 InvariantViolated 安全事件。用户可见错误来自 failHints 映射表。disposition: 替代→R-733"
+    files: []
+  R-733:
+    desc: "会议 #108~#112: 三统一简化——对外暴露两个接口+一个类型: Validatable（Validate）、CategorizedError（Category+Suggestion）、SafeMap[K,V]。零新框架组件、零注册表、零框架初始化代码。替代 R-726~R-732 统一表述。disposition: 已落地(历史)"
+    files: []
+  R-734:
+    desc: "会议 #108~#112: 模块开发者体验——payload 实现 Validate() error→PipelineRunner 自动校验；共享状态用 safemap.New[K,V]()；error 实现 CategorizedError→PipelineRunner 自动路由。disposition: 已落地(历史)"
+    files: []
+  R-735:
+    desc: "会议 #108~#112: CI 三层强制——①AST 扫裸 map[K]V 包级声明→CI 失败 ②go/analysis 扫吞 error→CI 失败 ③contract_test 验证该调 Validate() 时调了。disposition: 已落地(历史)"
+    files: []
+  R-736:
+    desc: "会议 #108~#112: 架构概念三层模型（产品层/契约层/执行层）写入 05-架构文档。后续架构讨论以此为基准框架。disposition: 已落地(历史)"
+    files: []
+  R-737:
+    desc: "会议 #108~#112: Plugin 注册表 Fan-Out 扇出模式——PluginRegistered/PluginUnregistered 事件→EventBus 广播→各模块本地 cache。消除共享 PluginRegistry。disposition: 已落地(历史)"
+    files: []
+  R-738:
+    desc: "会议 #108~#112: 数据共享范围决定并发方案——跨模块共享→Fan-Out+事件+本地 cache；模块内部共享→SafeMap。disposition: 已落地(历史)"
+    files: []
+  R-739:
+    desc: "会议 #113: v0.2.0-9 开发计划基于 R-733~R-738 新架构重制——Week 0 框架基础设施（SafeMap/CategorizedError/Validatable/Fan-Out Plugin 事件/CI），15 项 A 类 stub 由框架层统一消除。disposition: 已落地(历史)"
+    files: []
+  R-740:
+    desc: "会议 #114: 删除 05-架构 §3.13 RecoveryPipeline，清理 Wait Primitive 表述。Decide 仅 CONTINUE/ESCALATE。disposition: 已落地(历史)"
+    files: []
+  R-741:
+    desc: "会议 #114: 新 Session 重做机制——同一 GoalID、全新 PipelineState、保留已完成产出物、不重新 Align、重新 Plan、独立 SessionID、同样失败→ESCALATE。disposition: 已落地(历史)"
+    files: []
+  R-742:
+    desc: "会议 #114: 显式定义 MissionNode struct+Action struct+ToActions()。写入 05-架构附录 A。disposition: 已落地(历史)"
+    files: []
+  R-743:
+    desc: "会议 #114: 异常处理链路——Validate() 失败→InvariantViolated+ActionFailed(Security) 双事件→GoalRunner.ESCALATE。disposition: 已落地(历史)"
+    files: []
+  R-744:
+    desc: "会议 #114: EventBus 核心层 I/O 禁令修订——禁止网络 I/O/外部服务调用；允许本地磁盘 fsync（P95<10ms）；超阈值→InvariantViolated。disposition: 已落地(历史)"
+    files: []
+  R-745:
+    desc: "会议 #114: Agent.Verify() 调用链——QualityGate→Plugin Runner→Agent Plugin 子进程→VerificationResult→MultiLLMVerificationCompleted。disposition: 已落地(历史)"
+    files: []
+  R-746:
+    desc: "会议 #114: CompletionCriteria（Agent.Align() 产出）→Persona 渲染→CompletionContract（用户可见 UI）渲染链。disposition: 已落地(历史)"
+    files: []
+  R-747:
+    desc: "会议 #114: UI 原型——自动修正次数 3→1 次。disposition: 已落地(历史)"
+    files: []
+  R-748:
+    desc: "会议 #114: failHints 10×4 完整映射矩阵，写入 01-PRD §17.9。disposition: 已落地(历史)"
+    files: []
+  R-749:
+    desc: "会议 #114: P1/P2 逐项处理——P1-007/008/011/014/015/017、P2-019/021/023/024 文档修正。disposition: 已落地(历史)"
+    files: []
+  R-750:
+    desc: "会议 #115: 全局清理 P0 遗留引用——01-PRD/05-架构/GLOSSARY/08-沙箱/检查清单共 21 处。disposition: 已落地(历史)"
+    files: []
+  R-751:
+    desc: "会议 #115: 新增模块实现指南——Package 布局图、并发所有权图、初始化顺序、框架接口一页纸、安全自检清单。disposition: 已落地(历史)"
+    files: []
+  R-752:
+    desc: "会议 #115: 新增安全开发流程——PR 前 6 项自检+事件/Plugin 新增流程+Code Review 安全检查清单。disposition: 已落地(历史)"
+    files: []
+  R-753:
+    desc: "会议 #115: Event 开发规范（并入 07-事件注册表附录）。disposition: 已落地(历史)"
+    files: []
+  R-754:
+    desc: "会议 #115: 开发就绪检查清单 v3.0——纳入 R-733~R-749+CI 五层。disposition: 已落地(历史)"
+    files: []
+  R-755:
+    desc: "会议 #115: v0.2.0-10 Week 0 增加模块实现指南任务。disposition: 已落地(历史)"
+    files: []
+  R-756:
+    desc: "会议 #116: 07-事件注册表全面清理——删除/修正 7 处已废除概念引用。disposition: 已落地(历史)"
+    files: []
+  R-757:
+    desc: "会议 #116: Workspace 路径修正+06-安全 §9 标题+PRD §17.9 措辞。disposition: 已落地(历史)"
+    files: []
+  R-758:
+    desc: "会议 #116: check-schema-consistency.sh 扩展为概念一致性检查。disposition: 已落地(历史)"
+    files: []
+  R-759:
+    desc: "会议 #116: Validate() 调用者统一——PipelineRunner 自动调用。disposition: 已落地(历史)"
+    files: []
+  R-760:
+    desc: "会议 #116: PRD §4 Action 含义明确——MissionNode→Action 转换。disposition: 已落地(历史)"
+    files: []
+  R-761:
+    desc: "会议 #117: SafeMap Range 改为快照遍历——锁内复制 key 列表→释放锁→逐个 Load+回调。disposition: 已落地(历史)"
+    files: []
+  R-762:
+    desc: "会议 #117: IPC Scanner Buffer 10MB——§8.1a 示例加 scanner.Buffer(buf, 10*1024*1024)，清理 R-704 未落地引用。disposition: 已落地(历史)"
+    files: []
+  R-763:
+    desc: "会议 #117: EventBus FireAndForget 接口隔离——Handler 只持有 PublishAsync，编译期保证。disposition: 已落地(历史)"
+    files: []
+  R-764:
+    desc: "会议 #117: WaitReason string→PendingWaits []WaitCondition{Type, TargetID}。PipelineState+PipelinePaused payload 同步更新。disposition: 已落地(历史)"
+    files: []
+  R-765:
+    desc: "会议 #118: PipelineRunner 伪代码从线性改为状态机循环——Wait 是中间状态: Pre-Exec Wait（Check BLOCK→Wait→重新 Check→Exec）+Post-Exec Wait。disposition: 已落地(历史)"
+    files: []
+  R-766:
+    desc: "会议 #118: Token 流式心跳推迟 v0.3.0——v0.2.0 不做精确截断，J3 Graceful Wait 覆盖请求级追踪，J6 ProgressMessage 预留。disposition: 已落地(历史)"
+    files: []
+  R-767:
+    desc: "会议 #118: C.9 恢复算法增加物理对账——扫描 workspace 产出物→补发 ActionCompleted(recovered)。File over Database。disposition: 已落地(历史)"
+    files: []
+  R-768:
+    desc: "会议 #118: 08-沙箱 §8.1a 增加 stdin EOF 守护 goroutine——父进程死亡→stdin pipe 关闭→子进程自杀。Plugin SDK MUST。J4 孤儿清理保留为双层防护。disposition: 已落地(历史)"
+    files: []
+  R-769:
+    desc: "会议 #119: 05-架构 §3 增加术语速查表。Week 0 增加术语一致性扫描任务。不重命名 GraphNode.type。disposition: 已落地(历史)"
+    files: []
+  R-770:
+    desc: "会议 #119: Validate() 最终统一——EventBus.Publish() 自动调用。清理模块显式调用旧文本。disposition: 已落地(历史)"
+    files: []
+  R-771:
+    desc: "会议 #119: 新 Session 重做封装在 PipelineRunner 内部——GoalRunner 只看到 CONTINUE/ESCALATE。ErrorTemporary→内部重试 1 次→成功 CONTINUE 失败 ESCALATE。disposition: 已落地(历史)"
+    files: []
+  R-772:
+    desc: "会议 #119: R-741 骨架→完整定义——可重做失败白名单（仅 ErrorTemporary）、Checkpoint 恢复、SessionID 事件模型、Governance 重审规则、触发者、Token 预算 UI 合并显示。disposition: 已落地(历史)"
+    files: []
+  R-773:
+    desc: "会议 #119: 版本运行时检查+TokenBudgetAdjusted 事件（AUDIT-007/008）。disposition: 已落地(历史)"
+    files: []
+  R-774:
+    desc: "会议 #119: AUDIT-004 SafeMap/Fan-Out 灰色地带与 AUDIT-006 Flow Hard vs LLM——维持现有设计（E3 降级机制已覆盖）。disposition: 已落地(历史)"
+    files: []
+  R-775:
+    desc: "会议 #120: scanner.Err() 检查——EOF 即 crash（Plugin 静默死亡盲区）。disposition: 已落地(历史)"
+    files: []
+  R-776:
+    desc: "会议 #120: StateStore.Append Invariant——seq 同 goroutine 串行。disposition: 已落地(历史)"
+    files: []
+  R-777:
+    desc: "会议 #120: Cmd.Env 白名单——Plugin 不继承 Daemon 环境（环境变量污染 P0）。disposition: 已落地(历史)"
+    files: []
+  R-778:
+    desc: "会议 #120: ActionFailed→清理.tmp。完整 Session GC 推迟 v0.3.0。disposition: 已落地(历史)"
+    files: []
+  R-779:
+    desc: "会议 #120: 08-沙箱 signal.Notify 守护——Plugin 双守护（R-768+R-779）。disposition: 已落地(历史)"
+    files: []
+  R-780:
+    desc: "会议 #121: G顾问v11审计决议段（R-780~R-785，6 条）——MissionNode 隔离 CI、Wait 重入测试、幂等测试、竞态测试。个体条目失考: 会议纪要 #121 章节缺失，唯一证据为开发日志会议系列表。disposition: 已落地(历史)"
+    files: []
+  #   R-781~R-784: 空号——会议 #121 G顾问v11审计决议段 R-780~R-785 中间 4 条个体条目失考（会议纪要 #121 章节缺失，开发日志仅存汇总行）。4 个预留号未使用
+  R-785:
+    desc: "会议 #121: G顾问v11审计决议段末条——个体条目失考（同 R-780 段级 desc）。disposition: 已落地(历史)"
+    files: []
+  R-786:
+    desc: "会议 #122: OTE 认知模型→三原语调度模型映射表——Observer 采集快照→Check 裁决。05-架构 §3 增加映射表。disposition: 已落地(历史)"
+    files: []
+  R-787:
+    desc: "会议 #122: Mission Engine 拆分——AgentRunner（Plugin 调用网关，纯壳）+MissionGraphManager（状态管理）。disposition: 已落地(历史)"
+    files: []
+  R-788:
+    desc: "会议 #122: Goal:Mission 1:N 版本链——mission_version 递增，重新 Plan→新 Mission 版本。disposition: 已落地(历史)"
+    files: []
+  R-789:
+    desc: "会议 #122: Goal Normalization 停止条件工程化——删除信息增益，必填字段 100% 非空 OR 3 轮硬上限。Schema 校验替代 LLM 自我判断。disposition: 已落地(历史)"
+    files: []
+  R-790:
+    desc: "会议 #122: FailureContext 4 字段结构体——新 Session 只读输入，不传旧对话历史→避免 Semantic Drift。disposition: 已落地(历史)"
+    files: []
+  R-791:
+    desc: "会议 #122: FlowRecommender 不静默降级——FlowGenerationRequested→用户确认。诚实反馈。disposition: 已落地(历史)"
+    files: []
+  R-792:
+    desc: "会议 #122: 用户可见状态诚实——Draft→⏳准备中、Aligning→🧠理解中、Analyzing→🔍分析中、Failed→具体 failHint。拆分子状态。disposition: 已落地(历史)"
+    files: []
+  R-793:
+    desc: "会议 #122: Persona 不碰契约核心——CompletionContract 核心字段硬编码渲染，Persona 仅外围文本。disposition: 已落地(历史)"
+    files: []
+  R-794:
+    desc: "会议 #122: CLI --wait 审批超时暂停——订阅 ActionPendingApproval、超时暂停、approve/reject 异步决策。disposition: 已落地(历史)"
+    files: []
+  R-795:
+    desc: "会议 #122: Token TTL 硬上限 MaxTokenTTL=24h。disposition: 已落地(历史)"
+    files: []
+  R-796:
+    desc: "会议 #122: session_token 熵——crypto/rand 32B。contract_test 验证 1000 次零碰撞。disposition: 已落地(历史)"
+    files: []
+  R-797:
+    desc: "会议 #122: EventBus 背压隔离——核心层/副作用层独立 channel。select+default 非阻塞写入。disposition: 已落地(历史)"
+    files: []
+  R-798:
+    desc: "会议 #123: Approach/ModelContext/VerificationResult struct 补充（附录 A）。disposition: 已落地(历史)"
+    files: []
+  R-799:
+    desc: "会议 #123: 删除 TokenBudgetAdjusted.auto_resume。disposition: 已落地(历史)"
+    files: []
+  R-800:
+    desc: "会议 #123: HumanInterventionRequested 增加 resume_options（Wait 超时死胡同修复）。disposition: 已落地(历史)"
+    files: []
+  R-801:
+    desc: "会议 #123: 08-沙箱 §2.2 更新+§10 改名（Fan-Out vs 旧 Plugin 加载）。disposition: 已落地(历史)"
+    files: []
+  R-802:
+    desc: "会议 #123: yaml tag circuit_breaker→budget_tracker。disposition: 已落地(历史)"
+    files: []
+  R-803:
+    desc: "会议 #123: 版本范围声明+v1.5 里程碑标记。disposition: 已落地(历史)"
+    files: []
+  R-804:
+    desc: "会议 #123: macOS sandbox_darwin.go 规范。disposition: 已落地(历史)"
+    files: []
+  R-805:
+    desc: "会议 #123: partial_artifacts+OptionalActionFailed。disposition: 已落地(历史)"
+    files: []
+  R-806:
+    desc: "会议 #123: P1-5/6/7/9/10 文档补充。disposition: 已落地(历史)"
+    files: []
+  R-807:
+    desc: "会议 #123: P2 全部接受。disposition: 已落地(历史)"
+    files: []
+  R-808:
+    desc: "会议 #125: 全文档最终交叉验证 4 冲突修正——Validatable 调用者→EventBus.Publish、ActionFailed.recoverable/retry_count 残留删除、04-CLI decide_paths 仅 CONTINUE/ESCALATE。disposition: 已落地(历史)"
+    files: []
+  R-809:
+    desc: "会议 #128: Week 1 审计——S1-S4 实现验收（M1-M8 23/23 GREEN+S1-S4 15/15 GREEN，v0.2.0 安全契约）。个体条目失考: 会议纪要 #128 章节缺失，证据为开发日志。disposition: 已落地(历史)"
+    files: []
+  R-810:
+    desc: "会议 #128: Week 1 审计——开发日志补全。disposition: 已落地(历史)"
+    files: []
+  R-811:
+    desc: "会议 #135: macOS L2 代码约定 vs OS 强制——platform_security.go 诚实标注。disposition: 已落地(历史)"
+    files: []
+  R-812:
+    desc: "会议 #135: session_token crypto/rand——GenerateSessionToken() 显式 rand.Read。disposition: 已落地(历史)"
+    files: []
+  R-813:
+    desc: "会议 #135: BudgetTracker globalBudget 包级变量→实例字段。disposition: 已落地(历史)"
+    files: []
+  R-814:
+    desc: "会议 #135: actionError Suggestion/Error 混用——msg/suggestion 分离。disposition: 已落地(历史)"
+    files: []
+  R-815:
+    desc: "会议 #136: PipelineRunner 统一——删除线性版，统一为状态机版 StateMachineRun()，接入 GoalRunner.Execute()。disposition: 已落地(历史)"
+    files: []
+  R-816:
+    desc: "会议 #136: Typed Event 16/16——全部 16 个 typed payload 实现 EventPayload 接口（EventType+Validate），编译期 var _ kernel.EventPayload 验证。disposition: 已落地(历史)"
+    files: []
+  R-817:
+    desc: "会议 #136: 删除 stub 回退——子进程失败→发布 ActionFailed→Decide 原语决定下一步。disposition: 已落地(历史)"
+    files: []
+  R-818:
+    desc: "会议 #137: StateMachineRun Wait 重构——Async 执行后立即返回 PipelineWaiting，由 GoalRunner 接管外部事件唤醒（删除内部 wakeupCh 阻塞）。disposition: 已落地(历史)"
+    files: []
+  R-819:
+    desc: "会议 #137: 测试诚实性原则——所有 test helper 的 Verify() 不得返回 PASS，必须返回 WARN（标注 test stub）或实现真实验证。disposition: 已落地(历史)"
+    files: []
+  R-820:
+    desc: "会议 #137: PluginRunner stub 回退确认——代码审查确认不存在实际 stub 回退路径，注释误导已修正，R-817 标记完成。disposition: 已落地(历史)"
+    files: []
+  R-821:
+    desc: "会议 #137: 过期注释消除——constraints.go 三处 Week X 注释更新为当前状态。disposition: 已落地(历史)"
+    files: []
+  R-822:
+    desc: "会议 #138: Typed Event Payload 接入生产路径——核心 5 事件 Publish 调用从 map[string]interface{} 迁移到 typed payload+Validate()。disposition: 已落地(历史)"
+    files: []
+  R-823:
+    desc: "会议 #138: CI check-error-swallow 优化——Shell 脚本保留，增加已知安全模式白名单；go/analysis 精确检测推迟至 go.mod 依赖就绪后。disposition: 已落地(历史)"
+    files: []
+  R-824:
+    desc: "会议 #139: Typed Payload 全面接入。disposition: 已落地(历史)"
+    files: []
+  R-825:
+    desc: "会议 #141: v0.2.2 Week 5-8 开发计划批准。disposition: 已落地(历史)"
+    files: []
+  R-826:
+    desc: "会议 #142: A 类 P2 全部消除——A 类 stub 追踪清单从 53 项减至 48 项。disposition: 已落地(历史)"
+    files: []
+  R-827:
+    desc: "会议 #143: B 类 UX 可用性完成——Dashboard 可交互提交 Goal，API 返回预估时间。disposition: 已落地(历史)"
+    files: []
+  R-828:
+    desc: "会议 #146: v0.2.3 将 typed payload 从 internal/scheduler/ 迁移到 pkg/events/payload.go（R-499 早已规划但未执行）。disposition: 已落地(历史)"
+    files: []
+  R-829:
+    desc: "会议 #146: macOS/Linux/Windows 统一标注——Linux L2（基础系统隔离+子进程自声明 seccomp）、macOS L2（无系统调用过滤，v0.3.0 App Sandbox）、Windows L1。disposition: 已落地(历史)"
+    files: []
+  R-830:
+    desc: "会议 #146: SemanticMetaVerify→ResolveDivergent 重构——删除 NeedsMeta 标记；failCount>passCount→FAIL，其他→WARN。disposition: 已落地(历史)"
+    files: []
+  R-831:
+    desc: "会议 #146: MatchFlow 按名称匹配度排序——精确>前缀>兜底 generic-v1。disposition: 已落地(历史)"
+    files: []
+  R-832:
+    desc: "会议 #147: B11 CLI 命令补全——goalos events（格式化事件链）、adjust --budget（调整 Token 预算）、cache rebuild。disposition: 已落地(历史)"
+    files: []
+  R-833:
+    desc: "会议 #147: B18 Dashboard 子步骤进度——ActionScheduled/ActionCompleted/ActionFailed 事件处理+当前 Action 显示+最近 5 个 Action 状态。disposition: 已落地(历史)"
+    files: []
+  #   R-834~R-838: 空号——会议 #147（R-832/R-833）与 #150（R-839）间（#148/#149 无章节）无对应决议内容留存。5 个预留号未使用
+  R-839:
+    desc: "会议 #150: 采纳 Carmack 方案——scheduling 标志修复 Scheduler 单节点调度 Bug（handleGoalCompleted map cleanup 竞态）+MultiLLM 配置灵活性核查。最小侵入。disposition: 已落地(历史)"
+    files: []
+  #   R-840: 空号——会议 #150 与 #152 间无对应决议内容留存。1 个预留号未使用
+  R-841:
+    desc: "会议 #152: MultiLLM 裁决 FAIL 但 Goal 显示已完成修复——decide() FAIL→ESCALATE（触发 REPLAN）+GoalCompleted 附带 multi_llm_verdict。disposition: 已落地(历史)"
+    files: []
+  R-842:
+    desc: "会议 #153: Plan 返回无效 JSON→GoalRunner 空跑→虚假完成修复——Plan 失败→直接 GoalFailed+失败原因明确展示+模型切回 glm-5.2。disposition: 已落地(历史)"
+    files: []
+  #   R-843: 空号——会议 #153 与 #154 间无对应决议内容留存。1 个预留号未使用
+  R-844:
+    desc: "会议 #154: 投票制替代加权评分——全票一致取该票；多数 FAIL(>50%)→FAIL；FAIL+其他分歧→WARN；全部 WARN→WARN；全部 PASS→PASS。disposition: 已落地(历史)"
+    files: []
+  R-845:
+    desc: "会议 #155: MultiLLM FAIL 用户决策流程——审查报告持久化、Dashboard 可折叠审查面板+三操作按钮、CLI goalos review 命令、用户决策链路 retry(带反馈)/accept(覆盖)/refine(改需求)。disposition: 已落地(历史)"
+    files: []
+  R-846:
+    desc: "会议 #156: ReviewReport 数据模型与持久化。disposition: 已落地(历史)"
+    files: []
+  R-847:
+    desc: "会议 #156: MultiLLM 验证进度可见性（SSE 事件+CLI 状态）。disposition: 已落地(历史)"
+    files: []
+  R-848:
+    desc: "会议 #156: Dashboard 可折叠审查面板。disposition: 已落地(历史)"
+    files: []
+  R-849:
+    desc: "会议 #156: CLI goalos review 命令。disposition: 已落地(历史)"
+    files: []
+  R-850:
+    desc: "会议 #156: 用户决策链路（retry/accept/refine）完整行为定义。disposition: 已落地(历史)"
+    files: []
+  R-851:
+    desc: "会议 #156: GoalCompleted 附带 multi_llm_verdict 摘要。disposition: 已落地(历史)"
+    files: []
+  R-852:
+    desc: "会议 #156: failHints 新增 MultiLLM 场景（FAIL/WARN/DIVERGENCE）。disposition: 已落地(历史)"
+    files: []
+  R-853:
+    desc: "会议 #156: ReviewReport 安全约束（API Key 删除+权限 0600）。disposition: 已落地(历史)"
+    files: []
+  #   R-854~R-857: 空号——会议 #156（R-846~R-853）与 #158（R-858~R-861）间无对应决议内容留存。4 个预留号未使用
+  R-858:
+    desc: "会议 #158: Cold Validation（冷验证）模式——验证子进程零 Goal 上下文。后由 R-863 撤销（不在架构层做数据隔离）。disposition: 撤销(见 R-863)"
+    files: []
+  R-859:
+    desc: "会议 #158: Plan Hash 防篡改——SHA256(MissionGraph) 全链路比对。disposition: 已落地(历史)"
+    files: []
+  R-860:
+    desc: "会议 #158: MultiLLM 辩论轮次——Round 1 分歧时 Round 2 交叉审视（含 Round 1 全部 reasoning）。multi_llm.debate_round 开关（默认 false）。disposition: 已落地(历史)"
+    files: []
+  R-861:
+    desc: "会议 #158: Provider 故障自动重试与替代策略——HTTP 400/429 检测+启动健康检查+自动 fallback。disposition: 已落地(历史)"
+    files: []
+  R-862:
+    desc: "会议 #161: MultiLLM 审查 prompt 升级——独立性声明（另一个 AI 模型生成）+置信度+结构化输出格式+严重性分层+优先级指导。disposition: 已落地(历史)"
+    files: []
+
 
   # ═══════════════════════════════════════════════════════════════
   # 会议 #170 (2026-08-01): 历史补录 + 编号冲突修复 + 路线重定向
@@ -1530,6 +1921,7 @@ resolutions:
   R-965:
     desc: "mount namespace 语义定稿: bind-mount 白名单+pivot_root(否决 chroot——需拷贝动态库/非安全边界/与声明式 profile 语义不匹配);挂载序列 7 步/写穿审计点/子进程锁死(seccomp deny CLONE_NEWNS)/4.19 降级 seccomp-only——08 §18"
     files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+  #   R-966~R-972: 空号——会议 #172（R-965 止）与 #173（R-973 起）间无对应决议内容留存。7 个预留号未使用
 
   # ═══════════════════════════════════════════════════════════════
   # 会议 #173 (2026-08-01): 顾问反馈 v0.3.0-2 审议 (G/Q/C)
@@ -2011,3 +2403,135 @@ resolutions:
       - must_exist: "5.10"
         in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
         reason: "计划必须含离线验证策略任务"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #190 (2026-08-13): 决议传播链断裂系统性修复
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1049:
+    desc: "check-resolution-propagation.sh 三缺陷修复+扫描范围修正(会议 #190——C-CI-04 系统性修复): ①valid 集合锚定提取 grep -oE '^  R-[0-9]+:'(YAML 两空格缩进+冒号)替代全文 grep——desc 交叉引用不再污染已注册集合(消除 R-771/772/777/794/858/862 漏检) ②删除 7 处无条件 file_not_found echo(函数尾部循环残留陈旧 $f 假警告) ③幽灵计数公式修正——输出'注册条目: N / 幽灵: M'删除 valid-ghost 减法(负数根源) ④find 排除 *.bak.md ⑤输出契约不变(每行 ❌ R-xxx+引用文件)。disposition: 生效"
+    files: [会议纪要.md, check-resolution-propagation.sh]
+    verify:
+      - must_exist: "grep -oE '\^  R-\[0-9\]\+:'"
+        in_file: check-resolution-propagation.sh
+        reason: "脚本必须锚定注册条目行提取 valid 集合（匹配 valid_resolutions 提取行）"
+
+  R-1050:
+    desc: "幽灵决议全量考古补录(会议 #190——C-CI-01 系统性修复): 100 项=检测 94+污染漏检 6(R-771/772/777/794/858/862)全部从会议纪要 #106~#163 考古提取真实 desc; 政策同 R-910 补录——files:[](传播已发生证据以会议纪要为准)+disposition 标注; 考古判定规则——有实质决议内容→注册, 预留/合并/拒绝占位号→空号注释(R-543 ③); 执行顺序 ①R-815~R-833(19 项) ②R-724~R-814 ③R-834~R-862; 不设豁免清单。disposition: 生效"
+    files: [会议纪要.md]
+
+  R-1051:
+    desc: "层1 15 项+层2 1 项+会议纪要记录修复(会议 #190——C-CI-02/03 系统性修复): 层1 逐项判定哪侧错——测试规范 7(R-451/397/564/573/574/591/594)+stub 4(R-580/642/656/661)+开发规范 1(R-630)+04-CLI 1(R-673)+08-沙箱 2(R-703/704); 层2 R-416→05-架构 must_exist 补正文; 附带修复会议纪要修改记录缺 #175~#189 条目+头部版本字段。验收=rerun exit 0。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+
+  R-1052:
+    desc: "决议传播检查纳入 CI 硬闸口(会议 #190): check-resolution-propagation.sh 加入 make ci(第 7 检查脚本, 6 脚本之后)+GitHub Actions docker-publish.yml 同步; 接入前置条件=本检查 exit 0(R-1049~R-1051 完成后); 生效语义——自 2026-08-13 起任何新决议未注册/未传播→CI 失败(机制>仪式 R-1047 精神适用于决议治理自身)。disposition: 生效"
+    files: [会议纪要.md, 架构会议规范.md]
+    verify:
+      - must_exist: "check-resolution-propagation"
+        in_file: 架构会议规范.md
+        reason: "会议规范必须记录该检查为 CI 硬闸口"
+
+  R-1053:
+    desc: "stub C-CI-01~04 闭环登记(会议 #190): R-1049~R-1052 执行完毕且 rerun exit 0 后, stub 追踪清单 C-CI-01~04 标记 ✅ 消除, 消除依据=R-1049~R-1052; 执行记录写入开发日志。disposition: 生效"
+    files: [会议纪要.md, stub追踪清单.md]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #191 (2026-08-13): 顾问反馈 v0.3.0-4 剩余未讨论条目终审（闭环会议）
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1054:
+    desc: "审批超时配置热更新快照语义(会议 #191——Q 需求层 1 采纳): 超时值在审批请求创建时刻固化为快照——进行中的审批始终使用创建时刻快照值, 配置热更新(/api/system/reload 或 SIGHUP)仅对新发起的审批请求生效。代码修复三处: ①载荷 timeout_seconds 不再硬编码 300(且 int→float64, 下游类型断言不再取 0)——取引擎当前值快照, 与计时器同源同值 ②pendingApproval.timeoutSec 不再读入站事件载荷(可缺失→0 静默传播), 取引擎快照 ③两条热重载路径补 gov.SetApprovalTimeout 接线(HTTP+SIGHUP); SetApprovalTimeout 与审批创建路径共用 pendingMu 防竞态。契约测试先行(R-571): TestGovernance_TimeoutSnapshot*三断言——进行中不受热更新影响/新审批用新值/载荷==引擎值非硬编码——先红后绿实测。边界: 自动放行路径 token TTL 仍读事件载荷, 不在本决议范围(诚实标注)。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+    修订: "会议 #191 修正(R-1058/R-1059): ③实现方式由 R-1058 取代——两条热重载路径不再 main 直调 SetApprovalTimeout, 改发布 TypeConfigReloaded 事件由 governance 订阅应用; 载荷键 timeout_seconds 按 R-1059 改名 approval_timeout_seconds。快照语义本体(创建时刻固化/热更新仅对新审批生效)不变。"
+    verify:
+      - must_exist: "快照语义"
+        in_file: 06安全模型文档.md
+        reason: "06 审批超时段必须声明超时快照语义"
+
+  R-1055:
+    desc: "对账幂等约束显式化(会议 #191——G BP-5 部分采纳): Reconcile() 以 R-1035 崩溃恢复双对账为等价机制承载(期望状态=checkpoint+事件流——显式来源不依赖隐式状态, 满足 BP5-003; 差异应用=补发 ActionCompleted/ActionFailed)——不新增 Reconcile API(重复造轮子); 但幂等性原文档未显式声明→05 §3.1 补对账幂等约束: 差异应用按目标态收敛(非增量累积), 重复执行不产生二次效果, 中断重试安全(BP5-002)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    修订: "会议 #191 修正(R-1062): 表述升级为 K8s level-based reconciliation 术语——对账=按期望态收敛+幂等应用, 并补 TestStatefs_Reconcile_Idempotent 契约测试(计划任务 1.24)。约束内容不变。"
+    verify:
+      - must_exist: "对账幂等约束"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 必须含对账幂等显式约束"
+
+  R-1056:
+    desc: "W1 启动执行清单逐项裁决(会议 #191——Q 清单 5 项终审): ①Contract 状态变更原子性规范全员过堂+存储负责人签字→部分采纳——计划签字条件补第 24 项(存储负责人 Russ+Meyer 过堂签字, W1 启动会逐项确认; 23→24 项, R-1021/R-1026 已覆盖其余) ②SyncWrite 原语+信创真机压测→已覆盖(任务 3.16: 原语+W1 信创真机压测产出基线) ③P0 错误码注册+go generate→已覆盖(任务 1.20 P0 码+3.16 五码+check-error-codes.sh CI 绿) ④X-GoalOS-Degradation Header 断言→已覆盖(任务 7.12 TestAPI_DegradationHeaderPresent) ⑤优先级队列调度策略评审+W2 混沌测试→已解决(替代——R-1039 组提交替代优先级队列, 会议 #183 重审; 混沌测试并入 3.16 storage doctor/tail scrub 验证体系)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    修订: "会议 #191 修正(R-1063 ①): 第 24 项签字机制补行业依据——Launch Readiness Review 原则 Gates, not vibes(每道闸门具名负责人+证据式 sign-off)。24 项判定内容不变。"
+    verify:
+      - must_exist: "24 项"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划签字条件必须更新为 24 项"
+
+  R-1057:
+    desc: "C 附录A 待确认事项 4 条裁决登记(会议 #191): ①SandboxProfile 字段覆盖→已覆盖(R-1008 CompiledProfile 类型定义, 计划任务 1.9 实现) ②compiledProfile 本地缓存→不采纳附证据(R-1036 on-demand 编译, 过度设计倾向; 高频场景先实测编译耗时, 实测超阈值再启用——设计种子登记复活路径) ③TargetPlatform 枚举→不采纳附证据(属类型消除方案 SendTask API 形状, 方案整体不采纳 R-1029; 平台标识实际由构建标签 executor_darwin/linux+后端选择算法 R-945+平台能力矩阵 R-984 承载) ④同包审计→已覆盖(R-1036 check-compiledprofile-construction.sh CI 静态检查)。disposition: 生效"
+    files: [会议纪要.md]
+    修订: "会议 #191 修正(R-1063 ②): ③补平台标识词表权威来源——os+architecture 二元组, 规范取值=Go 官方 GOOS/GOARCH 文档(OCI image-spec canonical value list 同构)。不采纳 TargetPlatform 枚举的结论不变。"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #191 修正 (2026-08-13): 深层缺陷讨论 + 五路最佳实践对照
+  # （nginx 热重载代际模型 / AWS STS 会话语义 / K8s level-based 对账 /
+  #   OCI image-spec 平台标识 / Launch Readiness Review 签字机制）
+  # 触发：PM 质疑——新决议是否逐条先查最佳实践再对比后定制。
+  # 自查结论：原 #191 违反 #183 修正/#188 硬流程（未做可信信源搜索），
+  # 按 #183 修正模式重开。挖出 D-1~D-9 九项深层缺陷，注册 R-1058~R-1063，
+  # 并给 R-1054~R-1057 补修订注。
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1058:
+    desc: "配置热重载改事件总线分发(会议 #191 修正——nginx 代际模型对照): 新增 TypeConfigReloaded 事件, daemon 在 HTTP reload 与 SIGHUP 两条路径发布(载荷 approval_timeout_seconds/token_ttl_seconds/autonomy_level), governance 与 scheduler 自行订阅应用——取代 R-1054 的 main 逐一直调 gov.SetApprovalTimeout(修订 R-1054 ③)。修复 D-1(每加一个热更新参数=一处手工接线遗漏点)+D-10(autonomyLevel 无锁写 vs 决策路径无锁读竞态——governance 统一 pendingMu、scheduler 统一 mu)。代际语义: 进行中审批/执行照旧按快照运行(旧代 drain), 新决策用新值(新代接管)——nginx worker 模型同构。fail-closed: 非法值保持旧值(上游 R-1060 已拒绝, 此处纵深防御)。契约测试: TestGovernance_TokenTTL_ConfigReloadedAffectsNewIssuance。disposition: 生效"
+    files: [会议纪要.md, 07事件注册表.md]
+    verify:
+      - must_exist: "TypeConfigReloaded"
+        in_file: 07事件注册表.md
+        reason: "事件注册表必须登记新事件类型(发布者 daemon / 订阅者 governance+scheduler)"
+
+  R-1059:
+    desc: "超时语义三值分离(会议 #191 修正——D-2 多义词根除): 审批超时(policy.approval_timeout)/执行超时(scheduler execTimeoutSec)/行动令牌 TTL(policy.token_ttl 新增, 默认 300s)三值独立。令牌 TTL 唯一来源=governance 引擎字段 tokenTTL+SetTokenTTL, 三条签发路径统一: auto 路径不再读载荷(此前 ttl=载荷 timeout_seconds×2=执行超时30s→偶然60s), 用户批准路径不再硬编码 60s, 热重载后新签发读新值。载荷键拆分: ActionPendingApproval 的 timeout_seconds→approval_timeout_seconds(与执行超时解耦); 批准透传执行超时原值 pendingApproval.execTimeoutSec(此前误透传审批快照300s)。scheduler 裸魔法数 30→命名常量 execTimeoutSec。config 模板+daemon.yaml 增 token_ttl: 300。契约测试 3 项全绿。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "token_ttl"
+        in_file: 06安全模型文档.md
+        reason: "06 令牌章节必须声明 token_ttl 独立配置与三条签发路径统一"
+
+  R-1060:
+    desc: "配置校验三路强制+负值拒绝(会议 #191 修正——AWS STS MaxSessionDuration 语义对照: 非法值在签发时刻失败, 而非运行时): Load 与 Reload 均强制调用 Validate()(修复 D-8 Validate 曾是死代码——Load/Reload 均不调用; D-7 Reload 不过校验——非法配置可静默换入运行中 daemon); approval_timeout/token_ttl ≤0 显式拒绝(D-3 负值穿透=time.AfterFunc(负值)立即触发=审批全线秒拒的拒绝服务, 且 STS 语义=请求时校验)。修复 D-9 合并结构缺陷: Policy merge 段曾整段嵌在 LLM.PlanTimeout 的 if 块内——PlanTimeout 未显式配置时整个 Policy 静默丢弃(含负值不生效的假象)。契约测试 5 项(Load 拒绝/Reload 拒绝/两负值拒绝/默认值)先红后绿全过含 race。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "签发时刻"
+        in_file: 06安全模型文档.md
+        reason: "06 配置校验章节必须声明 STS 签发时刻语义"
+
+  R-1061:
+    desc: "空壳测试重写+CI 盲区登记(会议 #191 修正——D-4): TestGovernance_ApprovalTimeout 旧版为 select 空 case+default 恒通过、零断言(超时机制任何回归都不会变红), 重写为真断言——SetApprovalTimeout(50ms)→①必须发布 ActionPendingApproval(action_id 匹配)②必须发布 ActionRejected(reject_reason=approval_timeout, action_id 匹配)。根因: check-anti-cheat.sh L144 为文件级检查(文件内其他测试有断言即盲区), 登记为 CI 盲区——测试规范补约束: 每个测试函数必须含至少一个可失败断言(t.Fatal/t.Fatalf/t.Error/t.Errorf 或等价的必须触达分支)。disposition: 生效"
+    files: [会议纪要.md, 测试规范.md]
+    verify:
+      - must_exist: "每个测试函数"
+        in_file: 测试规范.md
+        reason: "测试规范必须补每函数可失败断言约束(反空壳测试)"
+
+  R-1062:
+    desc: "K8s level-based reconciliation 术语采纳(会议 #191 修正——G BP-5 深化): 05 §3.1 对账幂等约束升级为 level-based 表述——对账=按期望态收敛(期望态=checkpoint+事件流), 差异应用幂等(同一差异应用两次=一次效果, 中断重试安全), 工作队列持键非事件(边沿触发=反模式); 计划任务 1.24 补契约测试 TestStatefs_Reconcile_Idempotent(同一差异应用两次→状态与一次应用完全一致)。修订 R-1055 表述。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "level-based"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 对账约束必须升级为 level-based 术语"
+      - must_exist: "TestStatefs_Reconcile_Idempotent"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划任务 1.24 必须补对账幂等契约测试"
+
+  R-1063:
+    desc: "签字机制与平台词表两证落地(会议 #191 修正——Launch Readiness Review + OCI image-spec 对照): ①第 24 项签字机制补行业依据——Launch Readiness Review 原则 Gates not vibes(每道闸门具名负责人+证据式 sign-off), 计划签字表 24 项每项均需过堂证据, 不得以'感觉没问题'签字 ②平台标识词表规范——修订 R-1057 ③: 平台标识=os+architecture 二元组, 规范取值列表=Go 官方 GOOS/GOARCH 文档(OCI image-spec canonical value list 同构), 承载方式仍为构建标签+能力矩阵(不改 R-1057 不采纳 TargetPlatform 枚举的结论, 只补词表权威来源)。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "GOOS"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 平台标识章节必须引用 GOOS/GOARCH 权威词表"
+      - must_exist: "Gates, not vibes"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划签字条件必须补证据式签字机制依据"
