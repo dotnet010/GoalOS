@@ -2655,3 +2655,78 @@ resolutions:
       - must_exist: "实现对照定稿结论"
         in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
         reason: "计划任务 5.2 必须改为实现核对语义"
+
+  R-1077:
+    desc: "威胁模型升级登记(会议 #193——P0, Linus): LLM 使开源项目每行代码可被海量安全测试覆盖——攻击带宽从'人年'降为'秒'; 模型本身为实现目标会系统性尝试突破边界。白名单/规则防的是'已知未知', 对手带宽无限时清单必然滞后——白名单降级为基础层, 五支柱模型安全体系(物理隔离升级/金丝雀数据面/Guard LLM 前置审查/目标偏离检测/LLM 红队常态化)作为体系层入 v0.3.0; 后续安全决议在五支柱坐标系内落位。落地: 06 §9.7 五支柱模型安全体系+GLOSSARY 词条+计划第七版 16 新任务。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "五支柱模型安全体系"
+        in_file: 06安全模型文档.md
+        reason: "06 必须落五支柱体系章节(R-1077 登记)"
+
+  R-1078:
+    desc: "L4-L5 隔离层级扩展(会议 #193——P1, Linus): seccomp+namespace 之上仍共享同一内核, 攻击面=内核 attack surface 全集——隔离强度上限由'与宿主共享多少代码'决定。L4=gVisor 后端(Sentry 用户态内核+Gofer 9P; Linux/信创: KVM 探测优先、无 KVM 自动 systrap——systrap 用 SECCOMP_RET_TRAP 无需硬件虚拟化, 信创 4.19 内核同样可跑 L4; 不兼容 syscall 一律 seccomp 兜底 fail-closed, 不用'放宽'补齐)+Windows Sandbox .wsb(Pro/Enterprise, air-gap 模式, 不可用诚实标注降级); L5=一次性执行环境; macOS 诚实标注维持 Seatbelt(无等价物, App Sandbox 增强维持 v1.5+ 排期); 能力探测+自动降级链 L5→L4→L3→L2, 每级降级=审计事件+诚实标注。落地: 06 §5 层级表+08 §19.4+计划任务 1.26/3.19/3.20。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "gVisor"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.4 必须落 gVisor 后端规范"
+      - must_exist: "Windows Sandbox"
+        in_file: 06安全模型文档.md
+        reason: "06 §5 层级表必须落 Windows Sandbox L4 后端"
+
+  R-1079:
+    desc: "L5 一次性执行环境(会议 #193——P1, Pike): 每次执行全新环境、用完即销毁、无持久状态——对抗'残留探测+跨执行侦察'; 生命周期三态机 create→run→destroy(最小状态机, 复杂集中到 detector 单一组件); 快照/复用优化一律不做(简单>性能, 与 Firecracker/Lambda MicroVM 8h 一次性会话实证一致)。落地: 计划任务 3.20+契约测试 TestSandbox_OneShotEnv_Lifecycle_DestroyedAfterRun。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "一次性执行环境"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落 L5 一次性执行环境任务+契约测试"
+
+  R-1080:
+    desc: "金丝雀三层机制(会议 #193——P2, Kees): 攻破沙箱若有真实高价值数据攻击者动机无限——'无利可图'是第一性威慑, 让第一次越界即触发警报。①workspace 外金丝雀=逃逸检测(文件路径+内容双层哨兵, 正常流程永不触碰→零误报硬契约) ②workspace 内金丝雀=超宽 profile 检测 ③假凭据本地解析陷阱(假 API key 指向本地解析地址, 解析动作即触发 ~0.01s, 避开 TruffleHog 静态绕过——真凭据法 2-3min 延迟且可被静态扫描发现)。触发=审计事件+审批升级+用户通知, 只升级不自动阻断; 金丝雀不参与任何正常流程; 季度轮换+触发即失效重建。落地: 06 §9.7+计划任务 1.27/3.21+TestCanary_TouchTriggersAudit/TestCanary_NoFalseTrigger_NormalFlow。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "金丝雀"
+        in_file: 06安全模型文档.md
+        reason: "06 §9.7 必须落金丝雀三层机制"
+
+  R-1081:
+    desc: "Guard LLM 前置审查(会议 #193——P3, Carmack): 单一模型自证=不可验证; OWASP LLM01 提示注入第一攻击面, 模式检测对新颖语义攻击仅 9.09%(中文 CTF 实测)——架构护栏>内容护栏。三层验证: ①静态确定性层(CommandSpec/TOML profile/参数白名单, 零延迟) ②Guard LLM(第二模型跨 Provider 部署 OpenAI↔Ollama 交叉; 不可信输入以数据非指令呈现+显式分隔符; 结构化 verdict=ALLOW/DENY/ESCALATE) ③人类终审。DENY=fail-closed; ALLOW 仍需行为测试复核(不自证); guard 不可用→自动升级至最高审批级(fail-closed 不是拒绝服务, 是升级)。多 agent 复核实证 52.49→71.90% 零误报+121ms。落地: 05 §3.17+计划任务 1.28/5.12+TestGuardLLM_InjectionResistant/TestGuardLLM_FailClosed。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "Guard LLM"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.17 必须落 Guard LLM 前置审查规范"
+
+  R-1082:
+    desc: "目标偏离检测(会议 #193——P4, Carmack): 攻击行为第一表征=偏离目标声明, 而 MissionGraph 与工具调用流从未对齐测量——无法测量的攻击不可防御。两层检测: ①确定性层零误报硬契约(工具调用集 vs 目标声明集偏离+循环检测+预算异常+金丝雀信号复用) ②语义层统计遥测(ESN+CUSUM 模式检测, ~200μs/步, 无需第二 LLM, 实证 71% @5%FP; 确定性层贡献 +60% 且零误报)。信号→不自动阻断: 暂停+审批升级+通知+人类裁决; 闭环=drift 确认→statefs rollback(R-1035)→重跑(实证修复率 52→73%)。确定性层误报=契约测试 FAIL。落地: 05 §3.18+计划任务 1.29/5.13+TestDriftDetector_DeterministicLayer_ZeroFalsePositive/TestDriftDetector_EscalatesNotBlocks。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "目标偏离检测"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.18 必须落目标偏离检测两层架构"
+
+  R-1083:
+    desc: "LLM 红队常态化(会议 #193——P5, Kees): 防御弱点清单需要同样无限带宽的攻击面维持——一次性红队=过期防御。红队 CI: nightly 生成攻击→人工/行为测试确认(非自证——IEEE 实证扫描器存在可靠性缺陷)→入对抗契约库→PR/发布闸口运行; OWASP LLM Top 10 2025/Agentic Top 10 2026 作为 eval gate 基线; 红队三件套(生成器/提示库/对抗契约库)与生产数据隔离, 滥用即金丝雀触发(与 R-1080 联动); 工具链 PyRIT(Microsoft, findings 转 CI 可重复测试)/Rampart/Foundry。落地: 计划任务 1.30/7.15+TestRedTeam_CI_AdversarialRegression。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "红队常态化"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落红队 CI 任务 7.15"
+
+  R-1084:
+    desc: "fd 卫生+标准最小运行时挂载集(会议 #193——规格缺口修复, Linus): 前轮核查发现执行环境的 shell/解释器/共享库如何进入 namespace 未显式定义(R-965 示例 read=['/workspace'] 不含工具链)——规格缺口。①全 fd CLOEXEC 卫生契约: spawn 前关闭至 0/1/2, TestSandbox_Spawn_AllFdsCloexec 机检(防 fd 泄漏通道) ②标准最小运行时挂载集(08 §18.4): /bin、/usr/bin、/usr/lib、/etc/ld.so.cache 等工具链路径只读 bind, 条目封闭白名单化, TestSandbox_MinimalRuntimeMountSet 断言未列路径在 namespace 内不存在。落地: 08 §18.4+计划任务 1.31/7.16。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "标准最小运行时挂载集"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §18.4 必须落标准最小运行时挂载集定义"
+
+  R-1085:
+    desc: "STRIDE 扩充+FSR 范围扩展(会议 #193——P0 配套, Lipner): 安全功能本身是攻击面——五支柱组件必须入威胁模型。STRIDE 六场景(R-916)扩至十一场景: ⑦guard LLM 注入面(Guard 是提示注入第二靶点——输入路径/分隔符协议/verdict 结构入威胁模型) ⑧金丝雀误触发(哨兵被发现→攻击者利用制造虚假告警) ⑨红队组件滥用(生成器/提示库/对抗契约库被当攻击武器) ⑩gVisor 逃逸(Sentry 用户态内核自身漏洞——供应链审查同 agentbox 标准) ⑪漂移观测器投毒(遥测流被污染→检测失效或反向诱导)。FSR 终审(R-1073)范围扩展: 五支柱组件入终审清单。落地: 06 §1.2 STRIDE 矩阵+计划任务 7.16+全量验收 26→30 项。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "五支柱组件"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.2 STRIDE 必须落五支柱组件威胁场景"
