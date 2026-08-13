@@ -3093,3 +3093,123 @@ resolutions:
       - must_exist: "软件入口（R-1123）"
         in_file: GLOSSARY.md
         reason: "GLOSSARY 必须落软件入口词条"
+  R-1124:
+    desc: "--wait 审批超时语义修正(会议 #197, G-3 采纳): 审批倒计时唯一由 daemon 维护(approval_timeout 默认 300s); --wait=客户端挂起等待结果展示(UX 语义非权威转移); 超时→CLI 忠实接收 ActionRejected(reason=approval_timeout) 并退出; CLI 无计时器干预通道——04 §2 R-794 '暂停'语义废除(R-1096 传播收口)。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md]
+    verify:
+      - must_exist: "审批倒计时由 daemon 维护"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §2 必须落 daemon 计时器权威（--wait 不干预倒计时）"
+  R-1125:
+    desc: "Watcher 概念废弃(会议 #197, D-2 采纳): 审批交互唯一呈现=CLI(goalos approve/reject <id>+--wait 终端提示); 01:148 定义改写/04:151 降级头归 CLI/05:1688+2777 归 CLI/07:380 归 CLI 文案/GLOSSARY Watcher 词条替换为审批交互词条; check-deprecated.sh 注册 Watcher 扫描模式(机制性防回归——R-1123 传播收口)。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 04命令行界面设计规范.md, 05软件架构文档.md, 06安全模型文档.md, 07事件注册表.md, 09错误码知识库规范.md, GLOSSARY.md, stub追踪清单.md]
+    verify:
+      - must_exist: "审批交互（R-1125）"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 审批交互定义必须归 CLI（弹窗范式废弃）"
+      - must_exist: "审批交互唯一呈现（R-1125）"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 审批交互必须落 goalos approve/reject 状态定义"
+      - must_exist: "审批呈现经 CLI（R-1125）"
+        in_file: 05软件架构文档.md
+        reason: "05 ApprovalPending 呈现表述必须归 CLI"
+      - must_exist: "审批交互唯一呈现，R-1125"
+        in_file: 07事件注册表.md
+        reason: "07 用户通知表述必须归 CLI 文案"
+      - must_exist: "审批交互（R-1125）"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 必须落审批交互词条（替代废弃弹窗词条）"
+  R-1126:
+    desc: "CLI 职责边界裁定(会议 #197, D-6 采纳): goalos CLI=无状态 HTTP 客户端+事件渲染器; 全部业务逻辑(--wait 等待/超时/重试/审批状态机/降级判定)由 daemon 决定并经 HTTP API/SSE 推送; CLI 本地状态仅限渲染会话(终端输出缓冲)无业务状态机; --wait 机制=SSE 长连接订阅(05 通道层 SSE 节同步明确); X-GoalOS-Degradation 解析=渲染行为(判定权在 daemon——R-1042 语义保留归渲染层); CLI 包禁 import 内核包(静态检查)。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "无状态 HTTP 客户端"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §1 必须落 CLI 职责边界条款（事件渲染器）"
+      - must_exist: "事件推送通道（R-1126）"
+        in_file: 05软件架构文档.md
+        reason: "05 SSE 节必须明确 CLI --wait/--watch 订阅通道"
+  R-1127:
+    desc: "重试语义归一(会议 #197, G-2 采纳): 内核唯一恢复原语=新 Session 重做(自动/用户触发同语义不同触发方); '立即重新执行相同 Action'作为独立语义废弃; 带反馈重试=新 Session 重做+feedback 注入(R-850 保留统一到重做); 新增 goalos retry <id> [--feedback](失败域命令, 对应 failHints 重试按钮); 01 §17.9 表扩展 CLI 命令+Kernel 状态流转两列(单一维护侧=01, 07 引用); 完整映射表覆盖全部 failHints 错误类型。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 04命令行界面设计规范.md, 07事件注册表.md]
+    verify:
+      - must_exist: "Kernel 状态流转"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §17.9 必须落 CLI 命令+Kernel 状态流转两列映射表"
+      - must_exist: "重试=新 Session 重做（与自动恢复同语义——R-1127）"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 按钮行为定义必须归一重试语义"
+      - must_exist: "goalos retry <id>"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 命令表必须新增 goalos retry（失败域命令）"
+      - must_exist: "用户触发与自动恢复同语义（R-1127）"
+        in_file: 07事件注册表.md
+        reason: "07 review retry 状态流转注释必须标注语义归一"
+  R-1128:
+    desc: "状态机实现规范(会议 #197, D-3 采纳): 合法性由构造保证——状态=StateStore 投影(StateSnapshot, R-1116)驱动的枚举; 每个 core 层事件 handler 声明合法源状态集合; EventBus 同步分发→handler 校验源状态→非法事件(Running 收到 GoalCreated)返回 StateMachineViolation 分类错误, 事件不落盘不投影(未发生); 实现形态=按状态组织的 handler 注册表(每状态一组方法)非 if-else 穷举; 矩阵穷举正确性由 TestStateMatrix_IllegalTransitionRejected(任务 1.33)负责——测试查非法, 代码防非法。disposition: 生效"
+    files: [会议纪要.md, 模块实现指南.md]
+    verify:
+      - must_exist: "事件驱动状态机实现规范"
+        in_file: 模块实现指南.md
+        reason: "模块实现指南必须落状态机实现章节（防非法而非查非法）"
+  R-1129:
+    desc: "Verifier 执行主体归一(会议 #197, D-1 采纳): PluginRunner=执行引擎(auto_tests/behavioral_tests=只读沙箱 Action——测试代码与用户代码同沙箱隔离); Scheduler=路由验收请求+收集 VerificationResult+判定 PASS/FAIL(不运行测试不调 LLM, 05:1515 保留); QualityGate(Context Engine)=Check 原语的 Gate 实现——消费 VerificationResult 做声明式裁决不执行(05:981 改写); VerificationResult 唯一来源=PluginRunner(07 Publisher 唯一性=契约测试+check-plugin-protocol 扩展)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 07事件注册表.md]
+    verify:
+      - must_exist: "消费 VerificationResult——不执行测试"
+        in_file: 05软件架构文档.md
+        reason: "05 QualityGate 表述必须改写为裁决方不执行"
+      - must_exist: "Publisher=PluginRunner 唯一（R-1129）"
+        in_file: 07事件注册表.md
+        reason: "07 VerificationResult 发布方唯一性必须落 PluginRunner"
+  R-1130:
+    desc: "Flow 约束 vs CompletionContract 冲突仲裁(会议 #197, G-1 子问题采纳): FlowTemplate 约束=Agent.Plan 的初始 DAG 拓扑约束; 契约含模板外约束→契约优先/模板让位/动态规划补足; 不拒绝执行(拒绝=违背目标导向产品原则); 模板本体不变(声明式静态资产)——改写的是 Plan 实例(Plan=模板+契约合成产物); Meyer 代数化: Plan 约束集=FlowConstraints∪DynamicConstraints, 目标约束(Criteria)优先于模板约束(Flow)。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "契约优先于模板（R-1130）"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §17.1 措辞必须落契约优先仲裁"
+      - must_exist: "契约优先（R-1130）"
+        in_file: 05软件架构文档.md
+        reason: "05 Flow 小节必须显式化冲突仲裁规则"
+  R-1131:
+    desc: "插件协议版本协商(会议 #197, D-4 采纳): InitMessage 增 protocol_version 字段(daemon 支持的最大协议版本, 当前 '1.1'); 插件 manifest 增 protocol_versions 声明(08 §8.1a 构建指南); PluginRegistered 事件 payload 增 graceful_cancel:bool(manifest 声明支持 v1.1→true); graceful_cancel:false 插件取消→SIGTERM 直送(R-1107 现状)+Audit 告警事件(静默降级可见化)。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 07事件注册表.md]
+    verify:
+      - must_exist: "protocol_version 字段（R-1131）"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 InitMessage 必须落版本协商字段"
+      - must_exist: "graceful_cancel"
+        in_file: 07事件注册表.md
+        reason: "07 PluginRegistered 必须落取消能力标注"
+  R-1132:
+    desc: "FD3 大 payload 判定语义(会议 #197, G-4 残余采纳): payload>4KB 必须 data_ref(编码期约束); 接收方解析到内联 >4KB=协议违规→IPC 错误分类(fail-closed, 与 R-1106 零值非法化同精神); 08 §3.4 补 ExecuteMessage 带 data_ref 入参示例; 契约测试 TestIpc_OversizeInlinePayload_Rejected。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "内联超阈值=协议违规"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §3.3 必须落超阈值判定语义"
+  R-1133:
+    desc: "01 §9 二进制元数据例外传播(会议 #197, G-5 采纳+改造): 无隐藏 sidecar 原则保留+例外=二进制类产出物(图片/编译产物/PDF/视频)同目录 .summary 纯文本(显式非隐藏, 05:2887/GLOSSARY:282 已定义); 不采纳 events.jsonl 注册表方案(违背产品原则 3 '数据是文件。用户拥有'——元数据放文件侧); 01 §9 补例外条款+GLOSSARY 交叉引用。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md]
+    verify:
+      - must_exist: "同目录 .summary 纯文本（R-1133）"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §9 必须落二进制元数据例外条款"
+  R-1134:
+    desc: "NFR 双闸口机制细化(会议 #197, D-5 采纳+细化): CI 回归闸口=相对 baseline 回归对比(±5% 容差, 同 runner 环境抵消波动; baseline=仓库内 baseline.json 历史 median 随发布更新); 发布闸口=自控基准机完整 benchstat 协议(绝对阈值+P95+count≥10+p<0.05); 任务 7.18 分两模式; 01 §14 gate 要素细化成文; 不采纳 CI 完全不跑性能(回归检测有价值)。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "CI 回归闸口=相对 baseline 回归对比（±5% 容差）"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §14 gate 要素必须落双闸口机制"
+      - must_exist: "CI 回归对比±5%"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "开发计划任务 7.18 必须落两模式区分"
+  R-1135:
+    desc: "不采纳登记(会议 #197, 双条): G-1 主体'Flow 与 Agent.Plan 互斥'判断不成立——现行 05 已定义管线模型(FlowRecommender=确定性匹配引擎→Agent.Plan 约束, 05:1730/575/183), 现行模型优于'硬路由 vs 回退'二选一框架; G-4 主体'FD3 握手协议完全没有定义'不属实——08 §3.3 已定义(data_ref 指针/4KB 阈值/原子写入/GC 契约, R-1105)。两条残余子问题已分别立 R-1130/R-1132; 回告顾问附现行文档定位(诚实反馈原则适用于对外部顾问团)。disposition: 生效(记录性)"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1135"
+        in_file: 会议纪要.md
+        reason: "不采纳登记必须在会议纪要中可追溯"

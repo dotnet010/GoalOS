@@ -74,6 +74,9 @@ readonly DEPRECATED_PATTERNS=(
 # ─── L 命名族废弃模式（R-1114：独立 L0-L5 记号——前后均为非词字符或行首/行尾）───
 readonly L_PATTERN='(^|[^[:alnum:]_])L[0-5]([^[:alnum:]_]|$)'
 
+# ─── Watcher 废弃模式（R-1125：审批交互唯一呈现=CLI，弹窗范式已废弃）───
+readonly WATCHER_PATTERN='(^|[^[:alnum:]_])Watcher([^[:alnum:]_]|$)'
+
 # 颜色（仅终端输出；CI 重定向时自动禁用）
 if [ -t 1 ]; then
     readonly RED='\033[0;31m'; readonly GREEN='\033[0;32m'
@@ -93,6 +96,8 @@ GoalOS 废弃语义残留检测 — CI 自动化（Semantic Freeze 机检）
   [MUST] 活动规范文档正文中不得出现废弃模式（登记表见脚本头部）
   [MUST] 活动规范文档正文中不得出现独立 L0-L5 记号（R-1114 命名族废弃——
          风险→R0-R5/隔离→I0-I5；边界条件防误伤 LLM/CLI/TLS1.2 等长词）
+  [MUST] 活动规范文档正文中不得出现独立 Watcher 记号（R-1125 弹窗范式废弃——
+         审批交互唯一呈现=CLI）
   [MUST] 仅扫描正文——跳过 frontmatter+修改记录区域
   [MUST] 排除 会议纪要.md（历史记录）/ *.bak.md / 开发计划 / 待审议规范
   [MUST] repo-only 模式 → 显式降级跳过 exit 0
@@ -142,7 +147,7 @@ done < <(
 FAILED=0
 CHECKED=0
 
-echo "── ${BOLD}废弃语义残留检测${NC}（Semantic Freeze ${#DEPRECATED_PATTERNS[@]} 模式 + L 命名族 R-1114）──"
+echo "── ${BOLD}废弃语义残留检测${NC}（Semantic Freeze ${#DEPRECATED_PATTERNS[@]} 模式 + L 命名族 R-1114 + Watcher R-1125）──"
 
 for fp in "${DOC_FILES[@]}"; do
     [ -f "$fp" ] || continue
@@ -152,8 +157,9 @@ for fp in "${DOC_FILES[@]}"; do
     # 正文中命中废弃模式 → FAIL（修改记录区域已跳过）
     hits=$(tail -n +"$start" "$fp" | grep -nE "$PATTERN" 2>/dev/null || true)
     lhits=$(tail -n +"$start" "$fp" | grep -nE "$L_PATTERN" 2>/dev/null || true)
+    whits=$(tail -n +"$start" "$fp" | grep -nE "$WATCHER_PATTERN" 2>/dev/null || true)
 
-    if [ -n "$hits" ] || [ -n "$lhits" ]; then
+    if [ -n "$hits" ] || [ -n "$lhits" ] || [ -n "$whits" ]; then
         FAILED=$((FAILED + 1))
         echo -e "  ${RED}[FAIL]${NC} $rel 正文残留废弃语义:"
         # 注意: <<< "" 会喂入一个空行给 while read（幻影命中），必须用 [ -n ] 守卫
@@ -170,6 +176,13 @@ for fp in "${DOC_FILES[@]}"; do
                 abs=$((start + lineno - 1))
                 echo -e "    ${RED}$rel:$abs${NC} [L 命名族 R-1114]: ${line#*:}"
             done <<< "$lhits"
+        fi
+        if [ -n "$whits" ]; then
+            while IFS= read -r line; do
+                lineno="${line%%:*}"
+                abs=$((start + lineno - 1))
+                echo -e "    ${RED}$rel:$abs${NC} [Watcher 废弃 R-1125]: ${line#*:}"
+            done <<< "$whits"
         fi
     else
         CHECKED=$((CHECKED + 1))
