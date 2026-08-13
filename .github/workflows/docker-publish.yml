@@ -69,6 +69,10 @@ jobs:
           # 编号连续性(R-543)+YAML 格式硬闸口，层1/层2/幽灵显式 SKIP（输出可见）。
           # 完整两层验证由本地 make ci 强制执行（工作区布局全量模式）。
           bash scripts/check-resolution-propagation.sh
+          # 会议 #195 R-1099: 文档一致性双闸口（第 8/9 硬闸口）。
+          # 同样 repo-only 自动降级跳过；全量检查由本地 make ci 强制执行。
+          bash scripts/check-doc-version.sh
+          bash scripts/check-deprecated.sh
 
   release:
     needs: test

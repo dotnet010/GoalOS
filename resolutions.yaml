@@ -2770,3 +2770,212 @@ resolutions:
       - must_exist: "Compile 期冻结"
         in_file: 08沙箱隔离与进程通信规范.md
         reason: "08 §18.4 必须落 Compile 期冻结机制链"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #195: 四顾问反馈 v0.3.0-5 逐条审议 —— 唯一权威/Truth 模型/状态机语义/可执行性契约/产品定位
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1091:
+    desc: "CompletionContract 第一性原则(会议 #195——C-17/G-5/D-2, Carmack): CompletionContract 是'mission 完成'的判定却被定义为执行产物之一——判定者与被判定者同源(LLM 生成的测试测 LLM 生成的代码=自己批改作业)。第一性原则裁决: mission 完成 ⇔ CompletionContract 验证通过且作为系统状态记录(与事件/文件同等持久化), 不是执行副产物; auto_tests 在 MissionGraph 预览阶段由 FlowComposer 固化(治理审批通过后冻结), 测试意图经人类审查(审批流一部分, 不可跳过); 执行在沙箱内(E2B 模式, 工业实践 ~150-200ms 启动), 结果结构化回报。落地: 05 §3.19+TestCompletionContract_RecordedAsSystemState/TestAutoTests_FrozenAtPreview_HumanReviewed。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "CompletionContract 第一性原则"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19 必须落 CompletionContract 第一性原则"
+
+  R-1092:
+    desc: "Logical/Physical Truth 与 Commit Point(会议 #195——C P0-2/D-1, Linus): statefs 与 events.jsonl 恢复顺序未定义=恢复死锁点; 两个真相源无主从——崩溃后不知道信谁。events.jsonl=Logical Truth(唯一权威); statefs=Physical Truth(加速投影, 可丢弃、可从事件重放重建); Commit Point = Event Commit ∩ StateFS Commit(两者落盘才对外可见); Action Commit = Logical+Physical+Audit 三合一; 恢复顺序唯一: 先 Event 恢复(权威), 再 statefs reconcile(投影对齐); statefs 损坏/落后→丢弃重建(快照从不是权威); Audit 是 append-only 证据链不在 reconcile 范围。落地: 05 §4 一致性模型节+TestRecovery_EventAuthority_StateFSReconcile/TestCommitPoint_EventAndStateFSAtomic。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "Logical Truth"
+        in_file: 05软件架构文档.md
+        reason: "05 §4 必须落 Logical Truth 唯一权威定义"
+
+  R-1093:
+    desc: "定期增量 Checkpoint(会议 #195——G-3, Pike): 只靠优雅关闭写 snapshot→崩溃后重放 50 万事件 O(N), 冷启动 O(1) 承诺破灭。业界标准(Axon @Snapshotting(afterEvents=100)/Pekko snapshotEvery(100)/actor-ts everyNEvents(N))=every-N-events 快照+bounded replay: 每 Action 边界+每 1000 事件强制快照, 重放上界 O(1000); 快照原子写入(临时文件+rename); 损坏快照=校验失败丢弃回退上一快照(快照从不是权威, 业界一致)。落地: 05 §4+TestCheckpoint_Every1000Events_BoundedReplay/TestCheckpoint_CorruptSnapshot_FallbackReplay。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "定期增量 Checkpoint"
+        in_file: 05软件架构文档.md
+        reason: "05 §4 必须落定期增量 Checkpoint 策略"
+
+  R-1094:
+    desc: "重做前置回滚幂等(会议 #195——G-6, Linus): 新 Session 重做前置=statefs 局部回滚, 未定义幂等性——回滚已回滚必须=no-op; 重做前置流程: 回滚目标 Action 之后的 statefs 投影→从回滚点事件重放重建; 幂等契约: 重复执行回滚=状态不变+审计记录 no-op。落地: 05 §4+重做前置回滚契约测试。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "重做前置回滚"
+        in_file: 05软件架构文档.md
+        reason: "05 §4 必须落重做前置回滚幂等契约"
+
+  R-1095:
+    desc: "状态代数矩阵与 Stopped 终态(会议 #195——C P0-3/P0-4, Carmack): 事实核查属实——05:1215 Paused|GoalStopRequested|Failed+05:4017 GoalStopRequested→Failed(user_stopped) 而 API 返回 {status:stopped}——用户主动停止被伪装为失败, 审计数据被污染, 恢复逻辑无法区分'不该重试的失败'与'可恢复的异常'。状态代数矩阵 GoalState×ActionState×PipelineState×ApprovalState 单一权威定义(每维独立终态集合+合法迁移表); Stop/Cancel/Fail 语义分离: Stopped(user_stopped)=用户主动停止终态(不伪装 Failed), Cancelled=治理层撤销, Failed=异常终止; 迁移表穷尽+契约测试断言每条非法迁移被拒绝。落地: 05 §5 状态机节+TestStateMatrix_StoppedTerminal_NotFailed/TestStateMatrix_IllegalTransitionRejected。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "状态代数矩阵"
+        in_file: 05软件架构文档.md
+        reason: "05 §5 必须落状态代数矩阵唯一权威定义"
+      - must_not_exist: "GoalStopRequested → GoalState=Failed"
+        in_file: 05软件架构文档.md
+        reason: "stop→Failed 伪装迁移必须清除, 改为 Stopped(user_stopped) 终态"
+
+  R-1096:
+    desc: "Approval Authority 归一与客户端剥离(会议 #195——C P0-5/P0-10, Lipner): --wait/--non-interactive 定义在客户端却影响业务状态机=审批权威分裂。terraform 先例: -auto-approve 只跳过交互确认、不改变 apply 语义, saved plan 文件执行无需确认——plan 即审批工件。Approval Authority 唯一=daemon/Governance: timeout/pending 语义/重试全部 daemon 决定(MissionGraph 审批即 GoalOS 的 plan 工件); --wait 仅决定客户端是否挂起等待显示, --non-interactive 仅决定是否跳过交互输入; 剥离决策权不剥离知情权——审批超时用户可见反馈保留(事件推送/轮询)。落地: 04 审批节+05+TestApproval_TimeoutOwnedByDaemon。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "审批权威"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 必须落审批权威 daemon 化条款"
+
+  R-1097:
+    desc: "refine 物理故障逃逸(会议 #195——D-5, Carmack): refine 循环无物理上限——drift 修复循环卡死=物理故障无限循环。逃逸机制: max_iterations+watchdog 超时→Failed(physical_guard)+升级审批, 不无限循环; 逃逸触发=审计事件+人类裁决。落地: 05 §3.18 扩展+TestRefine_MaxIterations_Escapes。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "refine 物理故障逃逸"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.18 必须落 refine 物理故障逃逸机制"
+
+  R-1098:
+    desc: "RiskLevel/IsolationLevel 命名分离(会议 #195——C P0-6, Kees): 风险(威胁评估)与隔离(执行后端)是正交维度——低风险高价值数据同样需要强隔离, 共用 R0-R5 命名不可表达。分离: RiskLevel R0-R5(威胁评估)与 IsolationLevel I0-I5(执行后端层级)两个命名空间, 06 单一权威矩阵; risk→minimum isolation 映射由治理策略决定而非硬编码; 分离不是解耦——最低隔离约束仍由 Risk 决定。落地: 06 §2 风险模型节。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "IsolationLevel"
+        in_file: 06安全模型文档.md
+        reason: "06 必须落 RiskLevel/IsolationLevel 命名分离"
+
+  R-1099:
+    desc: "唯一 Contract Authority+Semantic Freeze(会议 #195——C P0-1/C-11/C-16, Lipner): 事实核查属实——01 头部 v6.1 vs 修改记录 v6.4 版本头滞后+05软件架构文档.bak.md 备份文件混入目录+05:1112 活动正文'物理文件不撤销'旧语义残留。契约权威分散=文档复述而非引用+版本头手工维护必然漂移+旧语义靠人脑记忆淘汰必然残留。方案: ①唯一 Contract Authority——每个契约指定唯一权威文档+权威章节, 其余文档引用权威条款而非复述定义 ②版本头一致性 CI 机检(check-doc-version.sh: 头部版本必须等于修改记录最新版本) ③Semantic Freeze——废弃语义 [DEPRECATED] 标注+check-deprecated.sh 残留引用检测 ④删除 .bak 文件。落地: GLOSSARY 词条+CI 脚本 2 项+05 旧语义清除。disposition: 生效"
+    files: [会议纪要.md, GLOSSARY.md, 05软件架构文档.md, 01-prd产品需求文档.md]
+    verify:
+      - must_exist: "Semantic Freeze"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 必须落 Semantic Freeze 词条"
+      - must_not_exist: "物理文件不撤销"
+        in_file: 05软件架构文档.md
+        reason: "C-11 旧语义残留必须清除, 禁止复活"
+
+  R-1100:
+    desc: "RTM v2 全链路(会议 #195——C P0-8, Lipner): 需求追溯矩阵需升级为全链路——R→产品行为→架构→契约→事件→API/CLI→测试→验收→发布闸口, 五支柱安全体系入映射; 任何产品行为可沿链路双向追溯(任一测试可回到 R, 任一 R 可走到发布闸口)。落地: 01 §13 需求映射节升级+check-resolution-propagation 联动。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md]
+    verify:
+      - must_exist: "RTM v2"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §13 必须落 RTM v2 全链路映射"
+
+  R-1101:
+    desc: "Guard/Drift/Canary 状态映射与决策序列(会议 #195——C-12/D-4, Carmack): Guard ALLOW 后执行中 DriftDetector 触发时谁裁决未定义=逻辑黑洞; 三个产品状态映射散落、信号间优先级未定义。方案: 信号→唯一产品状态映射(Guard=执行前、Drift=执行中、Canary=任意时刻); 冲突决策序列(确定性算法): 执行中信号(Drift/Canary 触发)优先于执行前裁决(Guard ALLOW)——已放行的执行若漂移, 暂停+升级, Guard ALLOW 不豁免执行中触发; 决策序列是确定性算法不是 LLM 裁决(可契约测试)。落地: 05 §3.18 扩展+TestGuardDriftDecisionSequence_Deterministic。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "Guard ALLOW 不豁免"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.18 必须落冲突决策序列"
+
+  R-1102:
+    desc: "auto_tests 可执行协议(会议 #195——G-5/D-2, Carmack): auto_tests 自产自评=自己批改作业, 可执行性虚。协议: ①MissionGraph 预览阶段由 FlowComposer 固化测试集(治理审批通过后冻结, 执行期不可改) ②测试意图经人类审查(审批流一部分, 不可跳过不可自动化豁免) ③执行在沙箱内(E2B 模式: Firecracker microVM 工业实践), 结果结构化回报(stdout/stderr/退出码/断言结果) ④测试失败=CompletionContract 未验证=mission 未完成(与 R-1091 联动)。落地: 05 §3.19。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "人类审查测试意图"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19 必须落 auto_tests 可执行协议"
+
+  R-1103:
+    desc: "NFR 测量协议+EventBus 指标分层(会议 #195——C-13/C-14, Pike): NFR 无测量协议→'P95<10ms'不可证伪; EventBus 三个指标混在同一个数字里。协议五要素: fixture(固定数据集+预生成负载)/hardware(基准机型号+负载条件声明)/workload(并发模型+时长)/统计方法(benchstat 协议: median+CI、Mann-Whitney U-test、p<0.05、count≥10、禁止重试至显著=p-hacking、交错运行+go test -c 预编译)/gate(CI 回归闸口 vs 发布闸口); EventBus 指标分层: Pure Handler P95<1ms/Durable Commit P95<10ms/Publish-to-consumer P95<Xms(X 由基准机标定后冻结入 07); 写进 01 的 NFR 必须能按协议测量, 测不了的删掉。落地: 01 NFR 节+07 指标分层+TestEventBus_LayeredMetrics_StatsProtocol。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 07事件注册表.md]
+    verify:
+      - must_exist: "NFR 测量协议"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 NFR 节必须落测量协议五要素"
+      - must_exist: "EventBus 指标分层"
+        in_file: 07事件注册表.md
+        reason: "07 必须落 EventBus 指标分层定义"
+
+  R-1104:
+    desc: "Crash Recovery 唯一算法(会议 #195——C P0-7/C-15, Pike): 两套恢复思想并存(优雅关闭写 snapshot vs 崩溃全量重放)=条件未定义。唯一算法: 恢复优先级 Event(权威) > StateFS(投影) > Artifact(产物) > Audit(证据, 只读不回滚); reconcile 唯一步骤: 加载最新有效快照→重放 tail 事件(上界 O(1000), R-1093)→与 statefs 对账→不一致丢弃 statefs 重建; 删除两套思想并存表述。落地: 05 §4。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "Crash Recovery 唯一算法"
+        in_file: 05软件架构文档.md
+        reason: "05 §4 必须落 Crash Recovery 唯一算法"
+
+  R-1105:
+    desc: "IPC 密钥 fd 继承+payload GC 契约(会议 #195——G-4/K-C2, Kees): env 密钥泄漏实证——/proc/<pid>/environ 同 UID 可读+子孙进程默认继承+core dump+ps eww, ForgeDock 实证子进程经 /proc/$PPID/environ 读走父进程 ANTHROPIC_API_KEY。方案: HMAC 密钥经 FD3 前导消息传递(fd 继承非环境变量——不出现于 environ/ps/core dump, 不默认继承; Windows 经 HANDLE_LIST 专用 handle, 与 R-1086 同一原语); secret 注入责任方=PluginRunner 唯一; 大 payload GC 契约: IPC 消息读毕即弃+arena 复用, 防 daemon 内存驻留膨胀。落地: 08 §6 IPC 节+TestSecret_NotInEnviron_FdOnly。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "FD3 前导消息"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 IPC 节必须落密钥 fd 继承传递"
+      - must_exist: "大 payload GC 契约"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 IPC 节必须落大 payload GC 契约"
+
+  R-1106:
+    desc: "CompiledProfile 零值非法化(会议 #195——K-C1/D-6, Kees): 事实核查属实——05:4329 '零值合法 = Level 0(无沙箱限制的显式形态)'——零值=编译未完成却被定义为放行语义。方案: 零值非法化——CompiledProfile 构造后置 initialized bool 或指针语义, Execute 入口零值→Fatal fail-closed(零值=编译未完成, 不存在合法 Level 0); 编译产物必须经 Compile 流程产出。落地: 08 §9+05:4329 修订+TestProfile_ZeroValue_FailClosed。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "零值非法化"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §9 必须落 CompiledProfile 零值非法化"
+      - must_not_exist: "零值合法"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "零值=放行的旧语义必须清除"
+
+  R-1107:
+    desc: "Plugin 优雅取消协议(会议 #195——D-3, Kees): 取消语义只有 kill 一条路——插件无全双工控制权, 强杀=workspace 中间态+资源泄漏。协议: FD3 CancelMessage+响应窗口(插件收到取消消息后限时清理响应)→超时 SIGTERM→2s 宽限→SIGKILL; 插件协议 v1.1 扩展, 旧插件不实现 CancelMessage 响应→直接 SIGTERM 路径(兼容与安全并存)。落地: 08 §6+TestPluginCancel_Escalation_SIGTERM_SIGKILL。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "优雅取消协议"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §6 必须落插件优雅取消协议"
+
+  R-1108:
+    desc: "平台策略裁定+gVisor 集成接口(会议 #195——G-1/K-B8, Lipner): 01 平台优先声明与 06/08 安全基建 Linux 专属矛盾——平台优先(产品市场)与安全层级(技术)两个决策维度被写在一起。裁定: 平台优先级=产品市场决策(维持 01 既定顺序不动); 安全层级=独立技术维度, 平台×层级可达矩阵诚实标注(各平台标注各自可达最高层级); 不可达=拒绝执行而非静默降级(复用 R-1078 降级链); gVisor 集成接口入 08 §19.10(接口定义非实现绑定: 启动/销毁/能力探测/降级事件)。落地: 08 §19.10+06 平台×层级可达矩阵。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "gVisor 集成接口"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.10 必须落 gVisor 集成接口"
+      - must_exist: "平台×层级可达矩阵"
+        in_file: 06安全模型文档.md
+        reason: "06 必须落平台×层级可达矩阵诚实标注"
+
+  R-1109:
+    desc: "statefs 选型钉死(会议 #195——G-2, Pike): statefs 是名词不是选型——无实现钉死=技术幻觉。选型=bbolt(纯 Go 单文件 MVCC KV: 事务原子提交、快照=ReadTx 视图、无 cgo 依赖信创交叉编译友好); 崩溃一致性=事务提交+meta 双写; 损坏快照=启动校验失败→丢弃回退(R-1093); 全量快照=ReadTx 迭代导出临时文件+rename 原子替换。落地: 05 §4 一致性模型节。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "bbolt"
+        in_file: 05软件架构文档.md
+        reason: "05 §4 必须钉死 statefs 选型为 bbolt"
+
+  R-1110:
+    desc: "v0.3.0 定位裁定(会议 #195——C P0-9, Jobs 裁定): 产品版与安全基础设施版目标混写=范围漂移。裁定: v0.3.0=产品版——五支柱安全基建是产品发布前置闸口(不发布不安全的产品)而非发布目标本身; Telegram 渠道=产品可达性组成部分保留但降权——发布验收以核心循环(goal→plan→approve→execute→verify)全绿为准, Telegram 项可延后 v0.3.1; 可执行含义=验收项排序: 核心循环验收项必须全绿。落地: 01 头部定位声明+计划签字条件。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "v0.3.0 定位"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 必须落 v0.3.0 定位裁定"
+      - must_exist: "v0.3.0=产品版"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划签字条件必须落定位裁定"
+
+  R-1111:
+    desc: "组件边界与持久化语义(会议 #195——K-A1/A2/A3/A7, Linus): Sandbox/PluginRunner 边界、StateStore-EventBus 嵌套方向、PipelineState 持久化位置未显式定义——05 有层次图但职责边界未写成契约。方案: Sandbox=执行环境构造(namespace/profile/挂载)与 PluginRunner=插件生命周期管理(spawn/IPC/状态)职责表; StateStore→EventBus 嵌套方向唯一(事件=StateStore 写入物, EventBus=内存分发, 不反向); PipelineState 持久化=statefs 投影(R-1092)恢复自事件重放。落地: 05 组件职责表+模块实现指南同步。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "StateStore→EventBus"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落组件边界与持久化语义契约"
+
+  R-1112:
+    desc: "ResumePrimitive+session-mission_id(会议 #195——K-A5/A6, Linus): ResumePrimitive 语义与 session-mission_id 关联未定义——恢复路径无幂等原语保障。方案: ResumePrimitive=幂等重放原语(重放已存在事件=no-op, 事件 ID 幂等去重); session-mission_id 关联在事件头持久化(恢复时按 mission 聚合事件流, 跨 session 连续)。落地: 05 事件存储节。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "ResumePrimitive"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落 ResumePrimitive 幂等重放原语"
+
+  R-1113:
+    desc: "CLI 业务语义呈现(会议 #195——K-B1/B2/B3, Carmack): Token 熔断状态/FAIL vs WARN/超时 vs restart 呈现未定义。方案: Token 熔断状态=daemon 推事件+CLI 呈现(决策权在 daemon, CLI 只呈现); FAIL vs WARN 分层呈现(FAIL=mission/action 异常终止, WARN=降级但继续); 超时(Approval timeout 事件)与 restart(新 Action)是不同 UI 语义与不同命令。落地: 04 CLI 呈现节。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md]
+    verify:
+      - must_exist: "Token 熔断"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 必须落 Token 熔断状态呈现条款"

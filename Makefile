@@ -30,6 +30,8 @@ ci: lint build
 	@bash scripts/check-plugin-protocol.sh . || exit 1
 	@bash scripts/check-dead-code.sh . || exit 1
 	@bash scripts/check-resolution-propagation.sh || exit 1
+	@bash scripts/check-doc-version.sh || exit 1
+	@bash scripts/check-deprecated.sh || exit 1
 	@echo "=== Running full race tests ==="
 	@go test -count=1 -timeout 180s -race ./...
 	@echo "=== CI ALL GREEN ==="

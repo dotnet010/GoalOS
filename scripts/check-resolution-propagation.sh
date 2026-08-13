@@ -45,7 +45,10 @@
 # 最后更新: 2026-08-13（会议 #190 R-1049——valid 集合锚定提取/删除 7 处噪音 echo/幽灵计数修正/排除 *.bak.md/脚本自路径 resolve 修复；
 #                       会议 #190 R-1052——路径自适应(工作区/仓库/历史CWD 三布局)/编号连续性闸口(R-543 ③)/
 #                         repo-only 显式降级/显式前缀路径解析(GoalOS·开发文档)/空号豁免精确提取(仅声明部分)/
-#                         补 R-566~567,R-569,R-966~972 空号注释——make ci 第 7 硬闸口全绿）
+#                         补 R-566~567,R-569,R-966~972 空号注释——make ci 第 7 硬闸口全绿；
+#                       会议 #195——归档 SKIP：文档移入 废弃文档回收站/ 后其决议追溯=历史记录
+#                         可合法保留旧状态（与 check-doc-version.sh ARCHIVE_PATTERNS 同原则），
+#                         层1/层2 对归档文件显式 ⏭️ SKIP 不追溯修订——02低保真原型/03高保真交互原型已归档）
 # =============================================================================
 
 set -euo pipefail
@@ -275,6 +278,13 @@ check_layer1() {
                 fp=$(resolve_path "$f")
 
                 if [ -z "$fp" ] || [ ! -f "$fp" ]; then
+                    # 归档处理（R-1099 范畴——与 check-doc-version.sh ARCHIVE_PATTERNS 同原则）：
+                    # 文档移入 废弃文档回收站/ 后，其决议追溯=历史记录，可合法保留旧状态——SKIP 不追溯修订
+                    if [ -n "$DOC_DIR" ] && [ -f "$DOC_DIR/../废弃文档回收站/$f" ]; then
+                        log_info "  ⏭️ $current_r → $f — 已归档（废弃文档回收站），历史记录不追溯修订"
+                        CHECKS_TOTAL=$((CHECKS_TOTAL + 1))
+                        continue
+                    fi
                     log_error "$current_r → $f — ${RED}文件不存在${NC}（路径: $fp）"
                     FAILED=$((FAILED + 1))
                     LAYER1_FAIL=$((LAYER1_FAIL + 1))
@@ -402,6 +412,11 @@ check_layer2() {
                 # 验证目标文件
                 if [ -z "$fp" ] || [ ! -f "$fp" ]; then
                     CHECKS_TOTAL=$((CHECKS_TOTAL + 1))
+                    # 归档处理（与层1同原则）——文档在 废弃文档回收站/ 中=历史记录，SKIP 不追溯修订
+                    if [ -n "$DOC_DIR" ] && [ -f "$DOC_DIR/../废弃文档回收站/${inf:-$first_file}" ]; then
+                        log_info "  ⏭️ $rid → ${inf:-$first_file} — 已归档（废弃文档回收站），历史记录不追溯修订"
+                        continue
+                    fi
                     log_error "$rid → ${inf:-$first_file} — ${RED}文件不存在${NC}"
                     FAILED=$((FAILED + 1))
                     LAYER2_FAIL=$((LAYER2_FAIL + 1))
