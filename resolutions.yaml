@@ -2979,3 +2979,76 @@ resolutions:
       - must_exist: "Token 熔断"
         in_file: 04命令行界面设计规范.md
         reason: "04 必须落 Token 熔断状态呈现条款"
+
+  R-1114:
+    desc: "L 命名族全量传播(会议 #196——PM 六点指令概念层深度自检, 全员四视角): R-1098 裁定 R0-R5/I0-I5 命名分离后 L 残留遍布正文——风险/隔离/完整性防线/测试层级四家族共用 L 前缀(GROSSARY:565 一段内两义混用最坏样本)。方案: 风险→R0-R5; 隔离→I0-I5; 完整性防线→中文序数防线一(CRC32)/二(seq 单调性)/三(hash chain)(弃字母前缀——D=错误码域码/T=Windows 约束层/W=周号均已占用); 测试层级→显式金字塔第 N 层; wire 字符串值同步改 R0-R5(v0.3.0 未发布, 现在改成本最低); 修改记录历史行不追溯(归档原则)。落地: 01/04/05/06/07/08/GLOSSARY/模块实现指南/开发计划正文全量 sweep。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 04命令行界面设计规范.md, 05软件架构文档.md, 06安全模型文档.md, 07事件注册表.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md, 模块实现指南.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "R0–R5"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 必须落 R0–R5 风险等级词条（L0–L5 词条更名）"
+      - must_exist: "I0–I5"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 必须落 I0–I5 隔离等级词条"
+
+  R-1115:
+    desc: "Level 尺度归一(会议 #196): 三个 Level 混用——CompiledProfile.Level()(隔离, R-1078 之前旧尺度 0-3)/SandboxLevel(平台支持三级 R-924)/Persona Level(语气授权档 0-3)。方案: CompiledProfile 尺度=I0-I5, getter Level()→IsolationLevel()(v0.3.0 未发布无兼容负担, go/ast 检查脚本同步); SandboxLevel→PlatformTier(1/2/3=R-924 三级——1=编译通过/2=测试通过/3=沙箱强制生效); Persona Level 禁裸用(必须完整前缀 Persona Level N); GLOSSARY 增三 Level 对照词条。落地: 05 §X.1a/结果结构+GLOSSARY。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, GLOSSARY.md]
+    verify:
+      - must_exist: "IsolationLevel"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.1a 必须落 CompiledProfile IsolationLevel() getter（I0-I5 尺度）"
+      - must_exist: "PlatformTier"
+        in_file: 05软件架构文档.md
+        reason: "05 结果结构必须落 PlatformTier（R-924 平台支持三级 1/2/3）"
+
+  R-1116:
+    desc: "快照术语归一(会议 #196): 快照/Snapshot 五义混用——StateStore 投影快照(R-545)/statefs 文件快照(R-1035/R-1065)/Observer 环境快照(05:706/712)/Checkpoint(R-772/R-1093)/bbolt ReadTx(R-1109)。方案: 五义五名——StateSnapshot(投影)/FileSnapshot(statefs 文件版本, 方法名 Snapshot() 保留)/环境快照 EnvSnapshot(Observer 采集)/Checkpoint 保留唯一义(状态快照子集+token 撤销锚点+定期增量边界)/MVCC 读视图(bbolt, 禁称快照); GLOSSARY 增快照族对照表; §3.19.3 内部混用改写。落地: 05+GLOSSARY 正文 sweep。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 07事件注册表.md, GLOSSARY.md]
+    verify:
+      - must_exist: "StateSnapshot"
+        in_file: 05软件架构文档.md
+        reason: "05 StateStore 投影快照必须更名 StateSnapshot"
+      - must_exist: "MVCC 读视图"
+        in_file: 05软件架构文档.md
+        reason: "05 bbolt ReadTx 必须表述为 MVCC 读视图（禁称快照）"
+
+  R-1117:
+    desc: "07 注册 GoalStopped 终态事件(会议 #196): R-1095 裁定 Stopped(user_stopped) 终态但 07 未注册事件(全文 0 处 stopped; 核心层列表仅 GoalCompleted/GoalFailed)——传播缺口, 实现面临要么造未注册事件要么伪装 Failed 的死结。方案: 注册 GoalStopped 终态事件——publisher=GoalRunner; precondition=GoalStopRequested 已发布+全部执行中 Action 经取消协议(R-1107)收敛完毕; payload: goal_id/reason=user_stopped/seq/stopped_at; 核心层列表补入; 与 GoalFailed 互斥(R-1095 不伪装 Failed)。GoalStopRequested(§X.9, R-996)保留为请求事件——请求/终态成对。disposition: 生效"
+    files: [会议纪要.md, 07事件注册表.md]
+    verify:
+      - must_exist: "GoalStopped"
+        in_file: 07事件注册表.md
+        reason: "07 必须注册 GoalStopped 终态事件（R-1095 传播收口）"
+
+  R-1118:
+    desc: "error_type 权威分层(会议 #196): 09:153 宣称枚举已并入四段式不另设枚举体系 vs 07:411/803/955/1087 仍定义独立枚举——双权威互斥, 测试断言无锚点。方案: 09 四段式=分类唯一权威; 07 枚举字段=wire format 稳定字段(保留, 事件协议兼容), 语义=四段式投影子集; 09:153 修订为不另设独立枚举体系——事件字段枚举=四段式(域+严重级)投影; 07 枚举值逐条补映射注释; 09 新增「事件字段映射表」(单一维护侧); CI 双向比对(09 映射表↔07 枚举值)。落地: 09+07。disposition: 生效"
+    files: [会议纪要.md, 09错误码知识库规范.md, 07事件注册表.md]
+    verify:
+      - must_exist: "事件字段映射表"
+        in_file: 09错误码知识库规范.md
+        reason: "09 必须落事件字段映射表（07 枚举↔四段式投影）"
+
+  R-1119:
+    desc: "Run 模式幽灵概念标注(会议 #196): GLOSSARY:136 Sandbox 词条把 Run 模式形态写成现行能力且缺推迟标注(全文档其余 Run 模式出现点均已有标注——01:82/130/156/444/446, 05:4347/4353/4355, GLOSSARY:169/491-497 已核实)。方案: GLOSSARY:136 补 Run 模式形态推迟 v0.5.0(R-921/R-925)标注与 01:130/GLOSSARY:169 对齐; 全文档 Run 模式出现点标注齐全登记为锚点。disposition: 生效"
+    files: [会议纪要.md, GLOSSARY.md]
+    verify:
+      - must_exist: "Run 模式形态推迟 v0.5.0"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY Sandbox 词条必须落 Run 模式形态推迟标注"
+
+  R-1120:
+    desc: "五支柱命名统一(会议 #196): 同一概念三变体——五支柱模型安全体系(06 §9.7/GLOSSARY:555 词条名) vs 01:72 五支柱安全基建 vs 01:290 五支柱安全体系——同一验收对象三个名字。方案: 概念名唯一=五支柱模型安全体系(R-1077); 01:72/290 改体系名引用(闸口语境=五支柱模型安全体系=发布前置闸口——语境修饰非概念变体); 五支柱组件=体系内构件表述, 词条注明。落地: 01+GLOSSARY。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, GLOSSARY.md]
+    verify:
+      - must_exist: "五支柱模型安全体系"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 必须统一引用五支柱模型安全体系词条名"
+
+  R-1121:
+    desc: "冲突仲裁规则法典化(会议 #196——PM 指令第 2 点入规范): 文档层级=愿景→01(产品实现)→05(软件设计实现)→06/07/08(指导性细化); 01 vs 05 冲突=软件架构设计问题→团队讨论至共识(不默认一方自动胜出); GLOSSARY=概念源头(术语唯一权威), 概念变更→引用方核对清单(sweep→逐处修订→锚点登记→修改记录引用); 归档文档不追溯修订(ARCHIVE_PATTERNS 先例)。落地: 架构会议规范新增「文档层级与冲突仲裁」节。disposition: 生效"
+    files: [会议纪要.md, 架构会议规范.md]
+    verify:
+      - must_exist: "文档层级与冲突仲裁"
+        in_file: 架构会议规范.md
+        reason: "架构会议规范必须落文档层级与冲突仲裁规则（PM 指令第 2 点）"
