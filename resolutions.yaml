@@ -3052,3 +3052,44 @@ resolutions:
       - must_exist: "文档层级与冲突仲裁"
         in_file: 架构会议规范.md
         reason: "架构会议规范必须落文档层级与冲突仲裁规则（PM 指令第 2 点）"
+  R-1122:
+    desc: "原型文档废弃(PM 裁定 2026-08-13——软件使用逻辑发生变化): 02低保真原型/03高保真交互原型已废弃, 归档于 workspace 废弃文档回收站/, 不再作为开发依据; v0.5.0 开发后重新开发原型, 届时再评估多入口形态。落地: 01 §2 路线图+§3 交互方式/架构会议规范文档索引表+七检查第7条/开发就绪检查清单 5.3/stub追踪清单 D-UI-01~04 推迟/GLOSSARY 词条。disposition: 生效"
+    files: [01-prd产品需求文档.md, 架构会议规范.md, 开发就绪检查清单.md, stub追踪清单.md, GLOSSARY.md]
+    verify:
+      - must_exist: "02/03 原型文档已废弃"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 必须落原型文档废弃标注（PM 裁定——v0.5.0 后重新开发）"
+      - must_exist: "已废弃（R-1122）"
+        in_file: 架构会议规范.md
+        reason: "架构会议规范文档索引表必须标注 02/03 已废弃"
+      - must_exist: "原型文档废弃期间不适用"
+        in_file: 开发就绪检查清单.md
+        reason: "开发就绪检查清单 5.3 必须标注原型废弃期间不适用"
+      - must_exist: "推迟 v0.5.0 原型重开发期"
+        in_file: stub追踪清单.md
+        reason: "stub D-UI-01~04 必须推迟至 v0.5.0 原型重开发期"
+      - must_exist: "原型文档（02/03）已废弃"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 必须落原型文档废弃词条"
+  R-1123:
+    desc: "命令行唯一软件入口(PM 裁定 2026-08-13): 新软件原型交付前, goalos CLI(04 规范)为唯一软件入口; daemon HTTP API(localhost:18920)=CLI 后端接口, 非用户直接入口; Web UI/Dashboard 客户端形态随 v0.5.0 原型重开发后再评估。落地: 01 §3 交互方式/04 定位/05 通道层+全文档 Dashboard 表述归 CLI/07 Publisher 表述/08 启动横幅/GLOSSARY 词条。disposition: 生效"
+    files: [01-prd产品需求文档.md, 04命令行界面设计规范.md, 05软件架构文档.md, 07事件注册表.md, 08沙箱隔离与进程通信规范.md, GLOSSARY.md]
+    verify:
+      - must_exist: "命令行是唯一软件入口"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 必须落 CLI 唯一软件入口（PM 裁定）"
+      - must_exist: "唯一软件入口"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 必须落 CLI 唯一软件入口定位"
+      - must_exist: "唯一软件入口（R-1123）"
+        in_file: 05软件架构文档.md
+        reason: "05 通道层必须落 CLI 唯一入口（daemon HTTP=后端接口）"
+      - must_exist: "唯一软件入口——R-1123"
+        in_file: 07事件注册表.md
+        reason: "07 Publisher 表述必须对齐 CLI 唯一入口"
+      - must_exist: "唯一软件入口"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 启动横幅表述必须对齐 CLI 唯一入口"
+      - must_exist: "软件入口（R-1123）"
+        in_file: GLOSSARY.md
+        reason: "GLOSSARY 必须落软件入口词条"
