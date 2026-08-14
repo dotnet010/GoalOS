@@ -2,6 +2,12 @@
 # =============================================================================
 # GoalOS Schema Consistency Checker — 借鉴 gh-aw 策略框架
 #
+# 废弃登记（2026-08-13, S'-24⑥ R-1267 裁决）: 本脚本已废弃, 不再接入 CI。
+#   废弃原因: 数据源不存在（GoalOS/glossary.yaml 与 .goalos-ci/schema-cache.json
+#   均从未落地），三向比对功能被 check-resolution-propagation.sh（层2 正文
+#   一致性）+ check-error-codes.sh（error-codes-source.yaml↔07 内联枚举）
+#   完全覆盖。新检查一律走已接线脚本, 勿复活本脚本。
+#
 # 三向交叉验证:
 #   GLOSSARY(YAML) ←→ 05-架构(Schema定义) ←→ 07-事件(Payload字段)
 #
@@ -144,7 +150,7 @@ if grep -q "每个模块在发布事件前调用" 06安全模型文档.md 2>/dev
     FAIL=$((FAIL + 1))
 fi
 # 开发规范 should say "PipelineRunner 自动调用"
-if grep -q "调用方（模块第一接触点）在发布事件前调用" ../GoalOS/开发规范.md 2>/dev/null; then
+if grep -q "调用方（模块第一接触点）在发布事件前调用" ../开发文档/11安全开发流程规范.md 2>/dev/null; then
     echo -e "    ${R}❌ 开发规范 §4.3 Validate() 调用者未统一为 PipelineRunner${N}"
     FAIL=$((FAIL + 1))
 fi
