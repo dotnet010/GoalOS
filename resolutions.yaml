@@ -5678,3 +5678,27 @@ resolutions:
       - must_exist: "五类不可替代语义"
         in_file: 05软件架构文档.md
         reason: "05 §0 必须落五类语义对照表（会议 #208/R-1433）"
+
+  R-1434:
+    desc: "资源生命周期契约(会议 #209, PM 指令对标 Effect Resource/Scope): 05 §3.19.8 三 MUST——归属唯一(资源表登记唯一释放点)/全路径释放(成功/错误/取消/崩溃恢复四路径, 崩溃恢复=事件重放推导+孤儿清理 R-555)/可测(泄漏检测测试族 TestResource_*: Scope 关闭→资源归零+稳态收敛=资源计数不随 Action 数线性增长, R-1105 方法论推广)。实现挂接既有任务(spawn 原语/取消协议/backend/IPC GC), 不新增任务。disposition: 生效"
+    files: [05软件架构文档.md, 10模块实现指南.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "资源生命周期契约"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.8 必须落资源生命周期契约（会议 #209/R-1434）"
+
+  R-1435:
+    desc: "结构化并发契约(会议 #209, PM 指令对标 Effect Fiber): 05 §3.19.8 三 MUST——Fork/Join(执行单元生命周期受父 Scope 约束, 父关闭前 join 全部子单元, 孤儿禁止, 崩溃恢复孤儿由事件重放判定收敛)/取消传播通用化(父取消→子取消, 3s/2s 升级链逐级传播)/监督策略表(错误类型→分支处置四规则收敛: Temporary=新 Session 重做 1 次/分支失败独立/物理逃逸=physical_guard/回滚=取消 pending)。实现=R-1426 执行器任务内(v0.3.5); v0.3.0 串行执行器=退化情形天然满足零改动; 测试族 TestConcurrency_* 锚登记。disposition: 生效"
+    files: [05软件架构文档.md, 10模块实现指南.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "结构化并发契约"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.8 必须落结构化并发契约（会议 #209/R-1435）"
+
+  R-1436:
+    desc: "Effect 学习边界登记(会议 #209): 吸收 Effect Resource/Scope 契约语义与 Fiber 结构化并发模型, 不引入 effect-ts 运行时(Go 两级执行单元: goroutine 轻量级+插件子进程进程级); typed error 与 CategorizedError 四分类互认; 与 R-1433 学习边界表并列。排程: 契约本会定稿零代码, 实现=既有任务挂接+R-1426 执行器(v0.3.5), 测试族具名 v0.3.x/v0.3.5 计划定名, v0.3.0 零扩围。disposition: 生效"
+    files: [05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "Effect 学习边界"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.8 必须落 Effect 学习边界注记（会议 #209/R-1436）"
