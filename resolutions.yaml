@@ -5490,3 +5490,143 @@ resolutions:
       - must_exist: "不设任何草稿区"
         in_file: 架构会议规范.md
         reason: "规范阶段 5 必须落禁草稿规则（PM 裁定）"
+
+  R-1413:
+    desc: "实例化判定句(会议 #206, D-1-1 部分采纳): 05 §2.1 头部补一句锚定既有定义——用户一次对话=创建一个 Goal→GoalCreated→Scheduler 启动独立 Session; Mission=Goal 时间维度规划版本链(1:N); 停止=GoalStopped 终态(会话销毁/产出物保留)。不新增概念。disposition: 生效"
+    files: [05软件架构文档.md, 00统一术语表.md]
+    verify:
+      - must_exist: "实例化判定"
+        in_file: 05软件架构文档.md
+        reason: "05 §2.1 必须落实例化判定句（D-1-1/R-1413）"
+
+  R-1414:
+    desc: "CompletionContract 代码级形态(会议 #206, D-1-2 成立 P0): Go struct(pkg/events, EventPayload+Validatable)+字段全集{goal_id,mission_id,success_definition,acceptance_criteria,behavioral_tests,human_anchor,frozen_at,version}+Validate MUST 五条+事件 CompletionContractRecorded(layer=core,Publisher=MissionEngine,全量覆盖语义)+投影 bbolt goals/{goal_id}/projections+契约测试 TestCompletionContract_PayloadValidation(先红 1.40/转绿 3.26)。disposition: 生效"
+    files: [07事件注册表.md, 05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "CompletionContractRecorded"
+        in_file: 07事件注册表.md
+        reason: "07 必须注册 CompletionContractRecorded 条目（D-1-2/R-1414）"
+      - must_exist: "TestCompletionContract_PayloadValidation"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须登记 payload 校验契约测试（D-1-2/R-1414）"
+
+  R-1415:
+    desc: "Workspace 保留原则 MUST(会议 #206, D-1-3 部分成立): 05 §3.19.7 新小节——workspace 目录=用户资产, 系统任何状态(失败/取消/完成/停止)永不自动删除; 仅 ActionFailed 时 PluginRunner 清理该 Action 临时文件(08:380 既有); GoalFailed 保留 partial_artifacts(05:197 既有); 删除权唯一归用户。契约测试 TestWorkspace_ArtifactsPreservedOnGoalFailed(先红 1.40/转绿 3.26)。disposition: 生效"
+    files: [05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "永不自动删除 workspace"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.7 必须落 Workspace 保留 MUST（D-1-3/R-1415）"
+      - must_exist: "TestWorkspace_ArtifactsPreservedOnGoalFailed"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须登记 workspace 保留契约测试（D-1-3/R-1415）"
+
+  R-1416:
+    desc: "重放无副作用 MUST(会议 #206, D-2-1 部分成立): 05 §3.19.2 补 MUST——WAL 重放=纯投影重建, 不得触发任何外部副作用; 副作用唯一触发点=Exec 原语执行时发生一次; 下游事件投递恰好一次由 applied_global_seq 水位保证(R-1251/R-1253)。不新增测试(既有三测试断言覆盖)。disposition: 生效"
+    files: [05软件架构文档.md]
+    verify:
+      - must_exist: "重放不得触发任何外部副作用"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.2 必须落重放无副作用 MUST（D-2-1/R-1416）"
+
+  R-1417:
+    desc: "不采纳登记(会议 #206, D-2-2 不成立): Checkpoint 体外循环论——快照+重放上界是事件溯源标准工程实践(Axon/Pekko, 会议 #195 五路信源); 05 §3.19.3 既有 StateSnapshot 只是加速恢复的缓存不是正确性依赖; 快照失效路径有契约测试实证。不采纳全量重放主张(恢复时间无界违背启动体验 SLA)。disposition: 不采纳(附证据)"
+    files: [会议纪要.md]
+
+  R-1418:
+    desc: "恢复基准三维判定段(会议 #206, D-2-3 不成立/部分采纳形态): 05 §3.19.2 增子段——状态判定唯一权威=events.jsonl WAL 重放; bbolt 投影对齐/损坏丢弃重建(R-1397); workspace 物理产物=校验对象不参与状态判定, 物理副作用不可回滚, 恢复校验失败=fail-closed 停服保留现场(R-1040)。裁决维持 R-1397/R-1201, 仅收敛表述。disposition: 生效"
+    files: [05软件架构文档.md]
+    verify:
+      - must_exist: "恢复基准三维判定"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.2 必须落三维判定段（D-2-3/R-1418）"
+
+  R-1419:
+    desc: "审批链路归属总览句(会议 #206, D-3-1 部分成立+事实回告): 05 §3.1 审批计时器节头部补总览句——审批链路唯一权威=Governance 审批计时器(到期仲裁/人裁决/竞速先到者胜 R-1210); ActionApproved/ActionRejected 唯一发布者=Governance(R-1207); 超时=Rejected(approval_timeout) 单一结局; CLI 仅 UI 呈现。回告纠正事实: BudgetTracker 归属调度层(05 §3.12, R-550/R-996)非 Governance。disposition: 生效"
+    files: [05软件架构文档.md]
+    verify:
+      - must_exist: "审批链路唯一权威=Governance 审批计时器"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 审批计时器节必须落总览句（D-3-1/R-1419）"
+
+  R-1420:
+    desc: "内核词汇边界 MUST(会议 #206, D-3-2 不成立主体/采纳边界原则): 05 §3.3 头部补 MUST——Kernel 四组件只理解 Primitive 层词汇(Check/Exec/Decide 原语/verdict 四值/错误四分类/信封 13 字段); 禁止 import 业务模块内部类型, 禁止按业务事件类型分支; 业务语义由 MissionEngine/Persona 等插件化模块消费; MultiLLM 合成函数 S-20=通用 verdict 合成(唯一, R-1250), 测试运行唯一=PluginRunner(R-1129)。不采纳登记: MultiLLM 迁移 MissionEngine 建议。11安全开发流程规范 §15.5 补 R7 检查行。disposition: 生效"
+    files: [05软件架构文档.md, 11安全开发流程规范.md]
+    verify:
+      - must_exist: "内核词汇边界"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.3 必须落内核词汇边界 MUST（D-3-2/R-1420）"
+      - must_exist: "内核组件无业务事件类型分支"
+        in_file: 11安全开发流程规范.md
+        reason: "11安全开发流程规范 §15.5 必须落 R7 检查行（D-3-2/R-1420）"
+
+  R-1421:
+    desc: "三操作原子语义表(会议 #206, D 行动建议 2 采纳形态): 05 §3.19.7 增三操作原子语义表——rollback/resume/stop 各列{事件日志/投影/workspace}三维度最小操作单元, 指针化引用既有裁决(R-1094/R-1112/R-1095/R-1366/R-1394/R-1398), 不新增语义。disposition: 生效"
+    files: [05软件架构文档.md]
+    verify:
+      - must_exist: "三操作原子语义表"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.7 必须落三操作原子语义表（D-S-2②/R-1421）"
+
+  R-1422:
+    desc: "Flow 模板开放用户配置(会议 #207, PM 裁定 1): 废止 05:584 用户不配置表述; 四源加载(显式 --flow > 项目级 > 用户级 > 系统内置兜底自动匹配); 模板=声明式 YAML GateSpec 集经 FlowComposer 校验(非法拒绝不降级); 契约优先 R-1130 不变。契约测试 TestFlowTemplate_UserConfig_ValidatedAndShared(先红归 3.11 族)。disposition: 生效"
+    files: [05软件架构文档.md, 00统一术语表.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "四源加载"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.11 必须落 Flow 模板四源加载（会议 #207/R-1422）"
+      - must_exist: "TestFlowTemplate_UserConfig_ValidatedAndShared"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须登记 Flow 用户模板契约测试（会议 #207/R-1422）"
+
+  R-1423:
+    desc: "两类 Agent 语义(会议 #207, PM 裁定 2): 交互型 Agent=用户可交互+提示词 AGENTS.md 用户可配置(风格/做事标准/任务颗粒度); 子 Agent=主 Agent 系统生成(单任务/当前任务上下文/结果回传/无用户交互/用户无感知/生命周期事件 SubAgentSpawned+SubAgentCompleted 只入 WAL 审计链不进用户可见投影/判定权=主 Agent 验证管线)。术语表新增 子 Agent 词条+Session 两级扩展(Goal 级交互 Session 唯一活跃/任务级子 Session 结束即归档日志)。契约测试 TestSubAgent_SessionLoggedOnly_NoUserInteraction。disposition: 生效"
+    files: [05软件架构文档.md, 00统一术语表.md, 07事件注册表.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "SubAgentSpawned"
+        in_file: 07事件注册表.md
+        reason: "07 必须注册子 Agent 生命周期事件（会议 #207/R-1423）"
+      - must_exist: "子 Agent"
+        in_file: 00统一术语表.md
+        reason: "术语表必须落 子 Agent 词条（会议 #207/R-1423）"
+      - must_exist: "TestSubAgent_SessionLoggedOnly_NoUserInteraction"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须登记子 Agent 契约测试（会议 #207/R-1423）"
+
+  R-1424:
+    desc: "模型配置粒度扩展(会议 #207, PM 裁定 3): daemon.yaml 增 model_override(全局/阶段/Flow/Agent 四级, 后者覆盖前者, provider+model 显式指定); ModelRouter 路由顺序=显式覆盖 > 档位匹配 > 默认档位; 非法覆盖→配置校验拒绝(R-1276 链)。契约测试 TestModelConfig_ExplicitProviderOverride。disposition: 生效"
+    files: [05软件架构文档.md, daemon.yaml.example, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "model_override"
+        in_file: daemon.yaml.example
+        reason: "配置样例必须落 model_override 键（会议 #207/R-1424）"
+      - must_exist: "TestModelConfig_ExplicitProviderOverride"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须登记模型覆盖契约测试（会议 #207/R-1424）"
+
+  R-1425:
+    desc: "旧版本标记清理+排程约束(会议 #207, PM 裁定 4): 01:346/457、05:2443/2704 四处旧 v1.5 预留标记改注——多 Agent 规范 v0.3.x 起生效, 实现排程见开发计划(不晚于 v0.4.0; v0.3.0 零扩围——AgentRegistry 预留接口已存在); 实现落位(v0.3.1 特性版 或 v0.4.0 并行线)=计划重排时裁定(PM/Ken)。disposition: 生效"
+    files: [01-prd产品需求文档.md, 05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "v0.3.x 起生效"
+        in_file: 05软件架构文档.md
+        reason: "05 旧 v1.5 标记必须改注（会议 #207/R-1425）"
+
+  R-1426:
+    desc: "并行执行模型定稿(会议 #207, PM 裁定 5): 执行并发≠写入并发(R-1398 单写者循环不变); PipelineRunner 改 DAG 并发执行器(就绪节点并发调度, 依赖经 Wait 中间状态, 并行度受 BudgetTracker R-344 预授权, 不足→诚实降级串行); 状态代数扩展(多 Action 同时 Executing 合法, R-1407 交叉约束表增补并行分支规则, 05:1078 分支回滚语义转正 MUST); 内核词汇边界 R-1420 不变。契约测试 TestParallelBranches_IndependentProgress。disposition: 生效"
+    files: [05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "DAG 并发执行器"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落并行执行模型（会议 #207/R-1426）"
+      - must_exist: "TestParallelBranches_IndependentProgress"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须登记并行分支契约测试（会议 #207/R-1426）"
+
+  R-1427:
+    desc: "session_id 概念边界钉死(PM 裁定, 2026-08-15): Session/session_id=GoalOS 自有运行时标识(生成者=Scheduler 交互 Session/Agent Runner 子 Agent 任务级 Session), 非模型 API 会话 id; 模型 API 交互=无状态请求每次调用自带完整上下文(上下文由 ContextEngine 组装), 文档体系内不存在模型 API 会话概念。术语表新增 session_id 词条+Session 词条边界句; 05 定义句+幂等性规则节注记; 07 SessionCreated payload 注记。disposition: 生效"
+    files: [00统一术语表.md, 05软件架构文档.md, 07事件注册表.md]
+    verify:
+      - must_exist: "非模型 API 会话 id"
+        in_file: 00统一术语表.md
+        reason: "术语表 session_id 词条必须钉概念边界（PM 裁定 R-1427）"
