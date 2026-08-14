@@ -5702,3 +5702,78 @@ resolutions:
       - must_exist: "Effect 学习边界"
         in_file: 05软件架构文档.md
         reason: "05 §3.19.8 必须落 Effect 学习边界注记（会议 #209/R-1436）"
+
+  R-1437:
+    desc: "失败策略契约化(会议 #210 裁决点1, 两轮深化): CompletionContract/Flow 声明 fail-fast|isolate|best-effort 三值; 默认=isolate(用户资产保留>快速失败); 策略冻结入 frozen_at 后不可改(改=StateMachineViolation); 非法值→契约校验拒绝 fail-closed; best-effort=失败收敛后按瑕疵产物判定(独立语义不与兄弟分支处置混写)。disposition: 生效"
+    files: [05软件架构文档.md, 00统一术语表.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "默认=isolate"
+        in_file: 05软件架构文档.md
+        reason: "05 监督策略表必须落默认 isolate（R-1437）"
+
+  R-1438:
+    desc: "取消链因果序+取消幂等 MUST(会议 #210 裁决点2): 父终态事件 seq 严格大于全部子终态事件 seq; 重复取消=no-op+审计记录; 恢复重放=取消链重放幂等。disposition: 生效"
+    files: [05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "父终态事件 seq 严格大于全部子终态事件 seq"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.8 必须落取消链因果序 MUST（R-1438）"
+
+  R-1439:
+    desc: "执行树注册表权威+污染防治四层收窄(会议 #210 裁决点3, 四轮深化定稿): ①权威=事件投影不新增持久化; ②resource_table 按资源实例登记; ③污染防治四层收窄 MUST——写路径类型收窄(包私有+仅事件处理器可写=非法写入编译不通过)/读路径分层(决策路径禁读缓存纯函数结果, 呈现路径读缓存但值由投影纯函数类型 ProjectedValue[T] 承载来源标记, 恢复路径读 WAL 不经缓存)/语言逃逸面 CI 拦截(核心包 unsafe 与 reflect.Set 零命中——工程强制诚实标注非语言保证)/跨进程面归位(消息认证+能力绑定保证, 投影机制范畴=daemon 进程内); ④R-1093 1000 事件上界归位为性能参数不承担正确性责任; 边界比对降级为冗余校验。disposition: 生效"
+    files: [05软件架构文档.md, 10模块实现指南.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "污染防治四层收窄"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.8 必须落污染防治四层收窄（R-1439 四轮深化）"
+
+  R-1440:
+    desc: "Action 执行契约+ActionResult 总表(会议 #210 裁决点4+6合并): 三要素映射(Output=ActionCompleted+产物/Failure=两层终态 Rejected 授权层与 Failed 执行层/Requirements=可预检判定); Requirements 判据两规则——①可预检=必要条件(不满足→PolicyDenied) ②事件流/环境机制可提供者=环境能力不进入 Requirements(Logger 例); 07 注册 ActionResult 总表(Outcome 枚举封闭七值+Category+Reason 组合索引指针化四层权威); 封闭性机检=S-43 回填+生成器穷举; CompileProject 模板入 10指南 §6; 类型定义随 3.26 任务内零新任务。disposition: 生效"
+    files: [05软件架构文档.md, 07事件注册表.md, 10模块实现指南.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "ActionResult 总表"
+        in_file: 07事件注册表.md
+        reason: "07 必须落 ActionResult 总表（R-1440）"
+      - must_exist: "Action 执行契约"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 必须落 Action 执行契约（R-1440）"
+
+  R-1441:
+    desc: "生命周期注册表契约(会议 #210 裁决点5): 模块声明{依赖,Activate,Deactivate}接口最小化两方法; 启动=拓扑推导机检化(替代 14 步手工接线); 关闭=逆拓扑=资源 LIFO; Override 仅测试 Scope 生产禁行; 层级释放纪律合一(静态模块图与动态执行树共享拓扑序+逆序释放); Scope 层级 User/Goal(Session)/Execution(分支)/Sandbox 与执行树合一; 实现排 v0.3.x。disposition: 生效"
+    files: [05软件架构文档.md, 10模块实现指南.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "生命周期注册表"
+        in_file: 05软件架构文档.md
+        reason: "05 §2.2 必须落生命周期注册表注记（R-1441）"
+
+  R-1442:
+    desc: "SandboxProvider 命名+接入原则句(会议 #210 裁决点7): 定名 SandboxProvider(承接 sandbox.Execute 语义 R-926); 原则句=新隔离技术一律 Provider 接入不改进 Core; 接入前置=Conformance 八类全过(Kees 硬闸)。并入 R-1430 修订注记。disposition: 生效"
+    files: [08沙箱隔离与进程通信规范.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "SandboxProvider"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.10a 必须落命名与接入原则句（R-1442）"
+
+  R-1443:
+    desc: "排程纪律总表(会议 #210 裁决点8): 契约=文档侧定稿当日; 实现挂接四档——3.26 任务内(R-1429/R-1440 类型)/既有任务内(资源契约随 spawn/取消/backend 任务)/v0.3.x(R-1441 生命周期注册表)/v0.3.5(R-1426 执行器+R-1438/R-1439 随行)/v0.5.0(Artifact/OTel/外部 Provider 既有登记); v0.3.0 零扩围。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "排程纪律总表"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落排程纪律总表（R-1443）"
+
+  R-1444:
+    desc: "发现侧对称性(会议 #210 裁决点9): 07 注册 PluginUnregistered(layer=core Publisher=PluginRunner; 三触发=显式卸载/签名失效/崩溃收敛); Fan-Out 缓存失效路径; 失效判定先行于任何新授权(Kees 时序硬闸——时序由单写者循环保证 R-1398); 卸载/失效入 WAL 审计。disposition: 生效"
+    files: [07事件注册表.md, 05软件架构文档.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "PluginUnregistered"
+        in_file: 07事件注册表.md
+        reason: "07 必须注册 PluginUnregistered（R-1444）"
+
+  R-1445:
+    desc: "三型插件依赖契约(会议 #210 裁决点10): 能力依赖(不绑定生命周期, 依赖方消失→后续授权拒绝 fail-closed, 执行中消费方不中断除非数据依赖)/数据依赖(绑定执行实例, 依赖未满足→不启动或取消 pending)/父子依赖(绑定生命周期, Fork/Join 收敛 R-1423); skill requires 补运行期失效 MUST; 一律 fail-closed 禁止宽容降级。disposition: 生效"
+    files: [05软件架构文档.md, 00统一术语表.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "三型插件依赖契约"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.8 必须落三型依赖契约（R-1445）"
