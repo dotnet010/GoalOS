@@ -5638,3 +5638,43 @@ resolutions:
       - must_exist: "暂定 v0.3.5"
         in_file: 05软件架构文档.md
         reason: "05 多 Agent 标记必须落暂定 v0.3.5 排程（PM 裁定 R-1428）"
+
+  R-1429:
+    desc: "Decision 字段增补(会议 #208, C 报告 §6.2 部分采纳): decision 桶投影 schema 补两字段——policy_version(来源=config 版本 R-1325)+request_hash(SHA-256 请求载荷); 实现归 3.26 decision 桶任务内(不新增任务); 契约断言归既有 decision 契约测试族。不引入独立 Decision Contract 命名。disposition: 生效"
+    files: [05软件架构文档.md, 07事件注册表.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "request_hash"
+        in_file: 05软件架构文档.md
+        reason: "05 decision 桶 schema 必须补 request_hash（会议 #208/R-1429）"
+
+  R-1430:
+    desc: "SandboxProvider SPI 形式化(会议 #208, C 报告 §7 采纳): 08 新增 Provider SPI 节(承接 §19.10 gVisor 集成接口)——六方法语义映射(Prepare=profile 编译/Create=backend 实例化/Execute/Interrupt=取消协议/Inspect=SandboxObservation/Dispose=清理); backend 四平台=SPI 首批实现; Provider Conformance 八类清单(Lifecycle/Security/Failure/Replay/Idempotency/Provenance/Telemetry/Versioning)登记为契约测试族锚(具名测试 v0.3.x 计划定名); Sandbox0/Firecracker/外部后端=登记 v0.5.0 候选(与 R-1034 同期); v0.3.0 实现不动(文档侧定稿零代码)。disposition: 生效"
+    files: [08沙箱隔离与进程通信规范.md, 05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "Provider SPI"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 必须落 Provider SPI 节（会议 #208/R-1430）"
+
+  R-1431:
+    desc: "Artifact struct 细化登记(会议 #208, C 报告 §8 采纳): R-1034 候选范围补 Artifact struct 六字段(id/digest/media_type/size/created_by_action/parent_artifacts/schema_version); 与 R-1415(workspace 永不删除)/R-1418 三维判定③(产物=校验对象)一致性声明; 实现排程=v0.5.0(随 R-1034)。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "Artifact struct"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.1 必须落 Artifact struct 候选注记（会议 #208/R-1431）"
+
+  R-1432:
+    desc: "OTel 观测面统一登记(会议 #208, C 报告 §9 采纳): OTel 登记 v0.5.0 候选——外部观测投影层统一标准; 事实源唯一=WAL(不可变); 字段映射草案=信封 13 字段+指标分层三层(R-1103); v0.3.0 维持 Prometheus/SSE 不换。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "OTel"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落 OTel 候选登记（会议 #208/R-1432）"
+
+  R-1433:
+    desc: "五类语义框架+不采纳登记(会议 #208, C 报告 §10/§11/§12/§16): 05 §0 原则区补五类不可替代语义对照表(GOAL/EXECUTE/DECIDE/PROVE/OBSERVE→映射五条产品原则+五支柱 R-1120+Kernel 四组件 R-996+审计链)——纯框架表述不新增概念; 不采纳登记三项: ①Inversify 式外部 DI 框架(依赖方向 go/analysis CI 已强制)②PipelineRunner 拆分 Durable Runtime(WAL+单写者=可恢复执行刻意设计 R-1397/R-1398)③第二套 Contract 命名(R-1116 命名纪律, 语义映射入既有结构); Scope 层级术语注记(→Goal/Session/Action/workspace 生命周期映射)。disposition: 生效"
+    files: [05软件架构文档.md]
+    verify:
+      - must_exist: "五类不可替代语义"
+        in_file: 05软件架构文档.md
+        reason: "05 §0 必须落五类语义对照表（会议 #208/R-1433）"
