@@ -55,3 +55,6 @@ upload-release.sh
 /plugins/capability/*/plugin-shell
 /plugins/capability/*/plugin-websearch
 daemon.test.yaml
+
+# ─── 信创交叉编译产物 ───
+/goalos-daemon-xinchuang

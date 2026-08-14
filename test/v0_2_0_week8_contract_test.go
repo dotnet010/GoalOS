@@ -127,7 +127,7 @@ func TestFT2_ArtifactValidation(t *testing.T) {
 
 func TestJobs15_Acceptance(t *testing.T) {
 	checks := map[string]func() bool{
-		"Dashboard输入框_validatable校验": func() bool {
+		"Goal输入框_validatable校验": func() bool { // R-1372: 原"Dashboard输入框"改名——Dashboard 已拆除 R-1372
 			return scheduler.EstimateGoalDuration("test").NextStatus != ""
 		},
 		"诚实状态映射_Draft不等于Aligning": func() bool {

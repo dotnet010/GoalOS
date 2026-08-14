@@ -24,11 +24,12 @@ type ReviewReport struct {
 const HonestDisclosureText = "AI 审查是概率性判断，不替代确定性验证。多个 AI 模型的一致意见提高了置信度，但不能消除共享盲区。最终裁决：自动化测试 + 行为测试。"
 
 // VoteDist 是投票分布摘要（R-844）。
+// R-1331/F-21：Abstain 字段已删除——S-20 投票值枚举无弃权位，
+// 超时在采集层记 FAIL(reason=llm_timeout)，不存在 ABSTAIN 值。
 type VoteDist struct {
-	Pass    int `json:"pass"`
-	Warn    int `json:"warn"`
-	Fail    int `json:"fail"`
-	Abstain int `json:"abstain"`
+	Pass int `json:"pass"`
+	Warn int `json:"warn"`
+	Fail int `json:"fail"`
 }
 
 // ProviderOpinion 是单个 AI Provider 的审查意见。

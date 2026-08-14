@@ -65,12 +65,17 @@ func (s *Store) SetSnapshotCallback(fn func(goalID string)) { s.snapshotFn = fn 
 
 // Append 向 Goal 的 events.jsonl 追加一个事件。
 // 调用 fsync 保证持久性。O_APPEND 保证 POSIX 原子写入。
+//
+// R-1384 (P-7 实测): 快照回调必须在 s.mu 临界区之外执行——daemon 注册的回调
+// （main.go R-383 接线）会重入 SaveSnapshot（再次 s.mu.Lock()），而 Go sync.Mutex
+// 不可重入：锁内调用回调即自锁死锁。因此锁内只完成事件文件追加并记录"是否需要
+// 快照"标志，锁释放后再调用 snapshotFn。触发条件数值不变（每 N=100 事件）。
 func (s *Store) Append(goalID string, evt events.Event) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	dir := filepath.Join(s.baseDir, goalID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("statestore: 创建目录失败: %w", err)
 	}
 
@@ -80,25 +85,40 @@ func (s *Store) Append(goalID string, evt events.Event) error {
 		0600,
 	)
 	if err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("statestore: 打开 events.jsonl 失败: %w", err)
 	}
-	defer f.Close()
 
 	data, err := json.Marshal(evt)
 	if err != nil {
+		f.Close()
+		s.mu.Unlock()
 		return fmt.Errorf("statestore: JSON 编码事件失败: %w", err)
 	}
 	data = append(data, '\n')
-	s.eventCount++
-	// v0.1.0 R-372: 每 N=100 事件触发快照
-	if s.eventCount%100 == 0 && s.snapshotFn != nil {
-		s.snapshotFn(goalID)
-	}
 
 	if _, err := f.Write(data); err != nil {
+		f.Close()
+		s.mu.Unlock()
 		return fmt.Errorf("statestore: 写入事件失败: %w", err)
 	}
-	return f.Sync()
+	if err := f.Sync(); err != nil {
+		f.Close()
+		s.mu.Unlock()
+		return fmt.Errorf("statestore: fsync 失败: %w", err)
+	}
+	f.Close()
+
+	s.eventCount++
+	// v0.1.0 R-372: 每 N=100 事件触发快照（阈值不变）。
+	needsSnapshot := s.eventCount%SnapshotInterval == 0 && s.snapshotFn != nil
+	s.mu.Unlock()
+
+	// R-1384: 回调移至锁外——允许回调重入 Store（SaveSnapshot/Append）。
+	if needsSnapshot {
+		s.snapshotFn(goalID)
+	}
+	return nil
 }
 
 // Replay 从 events.jsonl 回放事件。

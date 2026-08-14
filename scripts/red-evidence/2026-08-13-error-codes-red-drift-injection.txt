@@ -1,0 +1,14 @@
+=== 错误码单一数据源验证（R-1022/R-1118/R-1267/R-1300）===
+
+── 1. yaml ↔ 09 §2.5 表双向 ──
+  [0;31m❌[0m 09 §2.5 表有, yaml 无: profile_invalid|error_type|SBX|F（表由脚本生成——回填 yaml）
+── 2. yaml ↔ 07 内联枚举 ──
+  [0;31m❌[0m error_type: 07 内联枚举有, yaml 无: profile_invalid 
+── 3. 跨字段一致性（同名值 domain/severity 一致）──
+── 4. pkg/errors/codes.go 常量比对 ──
+  [1;33m⚠️[0m 显式 SKIP（R-1159 §3.2——错误码常量随实现阶段落地后接线; 当前为文档/CI 阶段）
+
+──────────────────────────────
+  失败合计: 2
+
+[0;31m❌ 2 项错误码漂移。R-1300: error-codes-source.yaml 为唯一维护侧, 变更顺序=yaml→09 §2.5→07。[0m

@@ -1,15 +1,15 @@
 #!/bin/bash
-# 从 GLOSSARY.md 表格提取术语→生成 glossary.yaml（机器可读）
+# 从 00统一术语表.md 表格提取术语→生成 glossary.yaml（机器可读）
 # 用法: bash scripts/export-glossary-yaml.sh > GoalOS/glossary.yaml
 set -euo pipefail
 
-GLOSSARY="${1:-开发文档/GLOSSARY.md}"
+00统一术语表="${1:-开发文档/00统一术语表.md}"
 OUTPUT="${2:-/dev/stdout}"
 
 {
-echo "# GoalOS GLOSSARY — 机器可读 YAML（从 $GLOSSARY 自动生成）"
+echo "# GoalOS 00统一术语表 — 机器可读 YAML（从 $00统一术语表 自动生成）"
 echo "# 生成时间: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-echo "# 真相来源: $GLOSSARY — 本文件是其派生文件。不一致时以 Markdown 为准。"
+echo "# 真相来源: $00统一术语表 — 本文件是其派生文件。不一致时以 Markdown 为准。"
 echo ""
 echo "terms:"
 
@@ -57,7 +57,7 @@ while IFS= read -r line; do
         echo "    has_schema: $has_schema"
         echo "    defined_in: '05软件架构文档.md'"
     fi
-done < "$GLOSSARY"
+done < "$00统一术语表"
 } > "$OUTPUT"
 
 [ "$OUTPUT" != "/dev/stdout" ] && echo "Exported $(grep -c 'name:' "$OUTPUT") terms to $OUTPUT" >&2

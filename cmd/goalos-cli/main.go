@@ -283,10 +283,10 @@ func handleReview(c *client.Client, args []string) {
 	for _, r := range reviews {
 		icon := verdictIcon(r["verdict"].(string))
 		dist := r["vote_distribution"].(map[string]interface{})
-		fmt.Printf("%-12s %s %-8s %dF/%dW/%dP/%dA %s\n",
+		fmt.Printf("%-12s %s %-8s %dF/%dW/%dP %s\n",
 			r["action_id"], icon, r["verdict"],
 			int(dist["fail"].(float64)), int(dist["warn"].(float64)),
-			int(dist["pass"].(float64)), int(dist["abstain"].(float64)),
+			int(dist["pass"].(float64)),
 			r["created_at"])
 	}
 }
@@ -302,10 +302,10 @@ func printReviewDetail(report map[string]interface{}) {
 	fmt.Printf("MultiLLM 审查报告\n")
 	fmt.Printf("Goal:   %s\n", goalID)
 	fmt.Printf("Action: %s\n", actionID)
-	fmt.Printf("裁决:   %s %s (%d FAIL / %d WARN / %d PASS / %d ABSTAIN)\n",
+	fmt.Printf("裁决:   %s %s (%d FAIL / %d WARN / %d PASS)\n",
 		verdict, verdictIcon(verdict),
 		int(dist["fail"].(float64)), int(dist["warn"].(float64)),
-		int(dist["pass"].(float64)), int(dist["abstain"].(float64)))
+		int(dist["pass"].(float64)))
 	fmt.Println(strings.Repeat("─", 60))
 
 	opinions, ok := report["provider_opinions"].([]interface{})

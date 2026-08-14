@@ -23,7 +23,7 @@ func TestContract_ReviewReport_SerializeAndDeserialize_RoundTrip(t *testing.T) {
 		ActionID: "act-001",
 		Verdict:  "FAIL",
 		VoteDistribution: VoteDist{
-			Fail: 2, Warn: 1, Pass: 0, Abstain: 0,
+			Fail: 2, Warn: 1, Pass: 0,
 		},
 		ProviderOpinions: []ProviderOpinion{
 			{
@@ -195,7 +195,7 @@ func TestContract_ReviewReport_JSONSchemaCompleteness(t *testing.T) {
 		ActionID: "a-1",
 		Verdict:  "PASS",
 		VoteDistribution: VoteDist{
-			Pass: 3, Warn: 0, Fail: 0, Abstain: 0,
+			Pass: 3, Warn: 0, Fail: 0,
 		},
 		ProviderOpinions: []ProviderOpinion{
 			{Provider: "ollama", Model: "llama3.1", Vote: "PASS", Reasoning: "ok", DurationMs: 500},
@@ -244,6 +244,7 @@ func TestContract_ReviewReport_JSONSchemaCompleteness(t *testing.T) {
 func TestContract_VoteDist_CountAccuracy(t *testing.T) {
 	// TC-MLR-004: 验证投票分布统计准确性
 	// 对应: R-844 [MUST] VoteDist 各计数之和 = 总投票数
+	// R-1331: ABSTAIN 值已废除——投票仅 PASS/WARN/FAIL，无弃权桶。
 
 	tests := []struct {
 		name  string
@@ -255,21 +256,14 @@ func TestContract_VoteDist_CountAccuracy(t *testing.T) {
 			votes: []ProviderOpinion{
 				{Vote: "PASS"}, {Vote: "PASS"}, {Vote: "PASS"},
 			},
-			want: VoteDist{Pass: 3, Warn: 0, Fail: 0, Abstain: 0},
+			want: VoteDist{Pass: 3, Warn: 0, Fail: 0},
 		},
 		{
 			name: "mixed FAIL+WARN",
 			votes: []ProviderOpinion{
 				{Vote: "FAIL"}, {Vote: "FAIL"}, {Vote: "WARN"},
 			},
-			want: VoteDist{Pass: 0, Warn: 1, Fail: 2, Abstain: 0},
-		},
-		{
-			name: "with ABSTAIN",
-			votes: []ProviderOpinion{
-				{Vote: "PASS"}, {Vote: "ABSTAIN"}, {Vote: "PASS"},
-			},
-			want: VoteDist{Pass: 2, Warn: 0, Fail: 0, Abstain: 1},
+			want: VoteDist{Pass: 0, Warn: 1, Fail: 2},
 		},
 	}
 
@@ -284,15 +278,13 @@ func TestContract_VoteDist_CountAccuracy(t *testing.T) {
 					dist.Warn++
 				case "FAIL":
 					dist.Fail++
-				default:
-					dist.Abstain++
 				}
 			}
 			if dist != tt.want {
 				t.Errorf("TC-MLR-004 FAIL: got %+v, want %+v", dist, tt.want)
 			}
 			// [MUST] 总数一致性
-			total := dist.Pass + dist.Warn + dist.Fail + dist.Abstain
+			total := dist.Pass + dist.Warn + dist.Fail
 			if total != len(tt.votes) {
 				t.Errorf("TC-MLR-004: total mismatch: %d != %d", total, len(tt.votes))
 			}
@@ -450,7 +442,7 @@ func TestContract_ReviewReport_CLIOutputFormat(t *testing.T) {
 		ActionID: "act-cli-001",
 		Verdict:  "FAIL",
 		VoteDistribution: VoteDist{
-			Fail: 2, Warn: 1, Pass: 0, Abstain: 0,
+			Fail: 2, Warn: 1, Pass: 0,
 		},
 		ProviderOpinions: []ProviderOpinion{
 			{Provider: "anthropic", Model: "claude-sonnet-4-6", Vote: "FAIL",

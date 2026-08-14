@@ -106,6 +106,8 @@ func main() {
 	// TC-GL-006: GoalRunner per-Goal 执行控制。v0.1.1 fix: per-Goal PipelineRunner 避免跨 Goal 状态污染
 	bus.Subscribe(events.TypeGoalCreated, func(evt events.Event) error {
 		pr := scheduler.NewPipelineRunner(bus, store)
+		// R-1384/R-1343: Wait 超时单一计时权威——注入 policy.approval_timeout（与 Governance 同源）
+		pr.SetApprovalTimeout(time.Duration(cfg.Policy.ApprovalTimeout) * time.Second)
 		if cfg.MultiLLM.Enabled && len(cfg.MultiLLM.Providers) > 0 {
 			log.Printf("[Daemon] MultiLLM: enabled with %d providers", len(cfg.MultiLLM.Providers))
 			// R-861: Provider 健康检查——启动时过滤不可用 Provider
@@ -113,7 +115,9 @@ func main() {
 			var providers []scheduler.ProviderClient
 			for _, p := range cfg.MultiLLM.Providers {
 				maxTokens := p.MaxTokens
-				if maxTokens == 0 { maxTokens = 16384 }
+				if maxTokens == 0 {
+					maxTokens = 16384
+				}
 				pc := scheduler.ProviderConfig{Name: p.Name, Model: p.Model, Endpoint: p.BaseURL}
 				status := scheduler.CheckProviderHealth(pc, p.APIKey)
 				if status.Healthy {
@@ -249,7 +253,9 @@ func main() {
 	if len(cfg.MultiLLM.Providers) > 1 {
 		p := cfg.MultiLLM.Providers[1]
 		mt := p.MaxTokens
-		if mt == 0 { mt = 16384 }
+		if mt == 0 {
+			mt = 16384
+		}
 		fallbackClient := missionengine.NewCloudLLMClient(p.BaseURL, p.APIKey, p.Model, mt)
 		missionEng.SetFallbackAgent(missionengine.NewGoalAgentWithBus(fallbackClient, bus))
 		log.Printf("[Daemon] B13: fallback provider set: %s/%s", p.Name, p.Model)
@@ -279,9 +285,9 @@ func main() {
 					Source: "telegram-bot",
 					GoalID: msg.SenderID, // 用 SenderID 关联用户
 					Payload: map[string]interface{}{
-						"channel":  msg.Channel,
-						"sender":   msg.SenderID,
-						"content":  msg.Content,
+						"channel": msg.Channel,
+						"sender":  msg.SenderID,
+						"content": msg.Content,
 					},
 				})
 				return nil
@@ -410,13 +416,13 @@ func main() {
 		if actionID, ok := evt.Payload["action_id"].(string); ok && actionID != "" {
 			api.UpdateActionStatus(evt.GoalID, actionID, "", "completed")
 		}
-	// R-828 final: flat payload——status 不再嵌套在 result 内
-	api.TrackResult(evt.GoalID, evt.Payload)
-	if status, _ := evt.Payload["status"].(string); status == "success" {
-		api.UpdateGoalStatus(evt.GoalID, "已完成")
-	}
-	sse.Push("ActionCompleted", evt.Payload)
-	return nil
+		// R-828 final: flat payload——status 不再嵌套在 result 内
+		api.TrackResult(evt.GoalID, evt.Payload)
+		if status, _ := evt.Payload["status"].(string); status == "success" {
+			api.UpdateGoalStatus(evt.GoalID, "已完成")
+		}
+		sse.Push("ActionCompleted", evt.Payload)
+		return nil
 	})
 	bus.Subscribe(events.TypeActionApproved, func(evt events.Event) error {
 		api.RemovePendingApproval(fmt.Sprint(evt.Payload["action_id"]))
@@ -427,8 +433,62 @@ func main() {
 		return nil
 	})
 
+	mux := buildHTTPMux(api, sse, cfg, bus, missionEng, home)
+	server := &http.Server{Addr: fmt.Sprintf("localhost:%d", cfg.Daemon.Port), Handler: mux}
+	go func() {
+		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13: HTTP on localhost:%d"}`, time.Now().Format(time.RFC3339), cfg.Daemon.Port)
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatalf("HTTP: %v", err)
+		}
+	}()
+
+	bus.Publish(events.Event{Type: events.TypeSystemStarted, Source: "daemon", Seq: 0,
+		Payload: map[string]interface{}{"pid": os.Getpid(), "port": cfg.Daemon.Port}})
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted"}`, time.Now().Format(time.RFC3339))
+	// SIGHUP 热加载配置（v0.1.0 UX1）
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGHUP)
+		for range sigCh {
+			configPath := home + "/.goalos/config/daemon.yaml"
+			if err := cfg.Reload(configPath); err != nil {
+				log.Printf("[Daemon] SIGHUP reload failed: %v", err)
+			} else {
+				// R-1058: 热重载参数经事件总线分发（与 HTTP reload 同路径）。
+				bus.Publish(events.Event{
+					Type:   events.TypeConfigReloaded,
+					Source: "daemon",
+					Payload: map[string]interface{}{
+						"approval_timeout_seconds": float64(cfg.Policy.ApprovalTimeout),
+						"token_ttl_seconds":        float64(cfg.Policy.TokenTTL),
+						"autonomy_level":           cfg.Daemon.AutonomyLevel,
+					},
+				})
+				log.Printf("[Daemon] SIGHUP reloaded: model=%s", cfg.LLM.Model)
+			}
+		}
+	}()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Shutting down..."}`, time.Now().Format(time.RFC3339))
+	gov.Stop() // H18: 停止 auditFlushLoop + revokedTokensCleanup
+	bus.Shutdown()
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"EventBus stopped."}`, time.Now().Format(time.RFC3339))
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Daemon.ShutdownTimeout)
+	defer cancel()
+	api.SetShutdownHook(func() { cancel() })
+	server.Shutdown(shutdownCtx)
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"GoalOS stopped."}`, time.Now().Format(time.RFC3339))
+}
+
+// buildHTTPMux 组装 HTTP 路由表。
+// R-1372（C-UI-01）: Dashboard 已拆除 R-1372——"/" 路由不再注册页面处理器，
+// CLI 是唯一软件入口（R-1123），未匹配路径由 ServeMux 返回 404。
+// 抽取为独立函数：契约测试直测真实路由表（R-1372）。
+func buildHTTPMux(api *daemon.Handler, sse *daemon.SSEManager, cfg *config.Config,
+	bus *eventbus.EventBus, missionEng *missionengine.Engine, home string) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", daemon.HandleDashboard)
 	mux.HandleFunc("/api/events", sse.HandleSSE)
 	mux.HandleFunc("/api/health", api.HandleHealth)
 	mux.HandleFunc("/api/goals", func(w http.ResponseWriter, r *http.Request) {
@@ -495,7 +555,9 @@ func main() {
 	// R-840: MultiLLM 运行时配置——用户可随时开关
 	mux.HandleFunc("/api/system/multi-llm", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			var body struct{ Enabled bool `json:"enabled"` }
+			var body struct {
+				Enabled bool `json:"enabled"`
+			}
 			json.NewDecoder(r.Body).Decode(&body)
 			cfg.MultiLLM.Enabled = body.Enabled
 			w.Header().Set("Content-Type", "application/json")
@@ -538,75 +600,36 @@ func main() {
 		if maxTokens == 0 {
 			maxTokens = 16384
 		}
-	// B19: 跨 Provider 热加载——与 startup 逻辑一致
-	var newAgent missionengine.Agent
-	model := cfg.LLM.Model
-	if m := os.Getenv("GOALOS_LLM_MODEL"); m != "" { model = m }
-	switch {
-	case cfg.LLM.Provider == "ollama" || os.Getenv("OLLAMA_MODEL") != "":
-		if m := os.Getenv("OLLAMA_MODEL"); m != "" { model = m }
-		baseURL := cfg.LLM.BaseURL
-		if baseURL == "" { baseURL = "http://localhost:11434" }
-		ollamaClient := missionengine.NewOllamaClient(model, baseURL, maxTokens)
-		newAgent = missionengine.NewGoalAgentWithBus(ollamaClient, bus)
-	default:
-		cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, model, maxTokens)
-		newAgent = missionengine.NewGoalAgentWithBus(cloudClient, bus)
-	}
-	if ga, ok := newAgent.(*missionengine.GoalAgent); ok {
-		ga.SetPlanTimeout(cfg.LLM.PlanTimeout)
-	}
-	missionEng.SetAgent(newAgent)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `","provider":"` + cfg.LLM.Provider + `"}`))
-	log.Printf("[Daemon] hot-reloaded: provider=%s model=%s, agent swapped", cfg.LLM.Provider, cfg.LLM.Model)
-	})
-	server := &http.Server{Addr: fmt.Sprintf("localhost:%d", cfg.Daemon.Port), Handler: mux}
-	go func() {
-		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13: HTTP on localhost:%d"}`, time.Now().Format(time.RFC3339), cfg.Daemon.Port)
-		if err := server.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf("HTTP: %v", err)
+		// B19: 跨 Provider 热加载——与 startup 逻辑一致
+		var newAgent missionengine.Agent
+		model := cfg.LLM.Model
+		if m := os.Getenv("GOALOS_LLM_MODEL"); m != "" {
+			model = m
 		}
-	}()
-
-	bus.Publish(events.Event{Type: events.TypeSystemStarted, Source: "daemon", Seq: 0,
-		Payload: map[string]interface{}{"pid": os.Getpid(), "port": cfg.Daemon.Port}})
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted"}`, time.Now().Format(time.RFC3339))
-	// SIGHUP 热加载配置（v0.1.0 UX1）
-	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGHUP)
-		for range sigCh {
-			configPath := home + "/.goalos/config/daemon.yaml"
-			if err := cfg.Reload(configPath); err != nil {
-				log.Printf("[Daemon] SIGHUP reload failed: %v", err)
-			} else {
-				// R-1058: 热重载参数经事件总线分发（与 HTTP reload 同路径）。
-				bus.Publish(events.Event{
-					Type:   events.TypeConfigReloaded,
-					Source: "daemon",
-					Payload: map[string]interface{}{
-						"approval_timeout_seconds": float64(cfg.Policy.ApprovalTimeout),
-						"token_ttl_seconds":        float64(cfg.Policy.TokenTTL),
-						"autonomy_level":           cfg.Daemon.AutonomyLevel,
-					},
-				})
-				log.Printf("[Daemon] SIGHUP reloaded: model=%s", cfg.LLM.Model)
+		switch {
+		case cfg.LLM.Provider == "ollama" || os.Getenv("OLLAMA_MODEL") != "":
+			if m := os.Getenv("OLLAMA_MODEL"); m != "" {
+				model = m
 			}
+			baseURL := cfg.LLM.BaseURL
+			if baseURL == "" {
+				baseURL = "http://localhost:11434"
+			}
+			ollamaClient := missionengine.NewOllamaClient(model, baseURL, maxTokens)
+			newAgent = missionengine.NewGoalAgentWithBus(ollamaClient, bus)
+		default:
+			cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, model, maxTokens)
+			newAgent = missionengine.NewGoalAgentWithBus(cloudClient, bus)
 		}
-	}()
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	<-ctx.Done()
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Shutting down..."}`, time.Now().Format(time.RFC3339))
-	gov.Stop() // H18: 停止 auditFlushLoop + revokedTokensCleanup
-	bus.Shutdown()
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"EventBus stopped."}`, time.Now().Format(time.RFC3339))
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Daemon.ShutdownTimeout)
-	defer cancel()
-	api.SetShutdownHook(func() { cancel() })
-	server.Shutdown(shutdownCtx)
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"GoalOS stopped."}`, time.Now().Format(time.RFC3339))
+		if ga, ok := newAgent.(*missionengine.GoalAgent); ok {
+			ga.SetPlanTimeout(cfg.LLM.PlanTimeout)
+		}
+		missionEng.SetAgent(newAgent)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `","provider":"` + cfg.LLM.Provider + `"}`))
+		log.Printf("[Daemon] hot-reloaded: provider=%s model=%s, agent swapped", cfg.LLM.Provider, cfg.LLM.Model)
+	})
+	return mux
 }
 
 func acquirePIDLock(path string) (*os.File, error) {

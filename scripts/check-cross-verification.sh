@@ -2,6 +2,12 @@
 # =============================================================================
 # GoalOS 四层面交叉验证 — CI 自动化
 #
+# 废弃登记（2026-08-13, S'-24⑥ R-1267 裁决）: 本脚本已废弃, 不再接入 CI。
+#   废弃原因: 引用已归档工件（03高保真交互原型/v0.2.0 计划/stub追踪清单），
+#   功能范围（数据结构/失败路径/Error Contract/事件注册/生命周期/UI 验收）
+#   被 check-doc-completeness.sh（A-H 七类扫描）+ check-resolution-propagation.sh
+#   （层2 正文一致性）完全覆盖。新检查一律走已接线脚本, 勿复活本脚本。
+#
 # 四个角色独立扫描，同发现问题取最严格标准。Ken 最终审核。
 #   Brad:   实现层面——数据结构字段/协议失败路径/Error Contract
 #   Russ:   集成层面——术语追溯/事件注册/数值一致/生命周期
@@ -16,7 +22,7 @@ R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; N='\033[0m'
 FAIL=0
 D="开发文档"
 A="$D/05软件架构文档.md"; P="$D/01-prd产品需求文档.md"
-E="$D/07事件注册表.md"; G="$D/GLOSSARY.md"
+E="$D/07事件注册表.md"; G="$D/00统一术语表.md"
 HF="$D/03高保真交互原型.md"; DP="$D/开发计划/v0.2.0/v0.2.0-6-开发计划.md"
 STUB="$D/stub追踪清单.md"
 
@@ -108,7 +114,7 @@ done
 # 数值一致性
 af5=$(grep -o '最多.*[0-9].*次\|AUTO_FIX.*[0-9]' "$A" 2>/dev/null | grep -o '[0-9]' | head -1 || echo "?")
 afG=$(grep -o 'AUTO_FIX.*最多.*[0-9]' "$G" 2>/dev/null | grep -o '[0-9]' | head -1 || echo "?")
-[ "$af5" = "$afG" ] && echo -e "  ${G}✅${N} AUTO_FIX一致($af5)" || { echo -e "  ${R}❌${N} AUTO_FIX漂移:05=$af5,GLOSSARY=$afG"; R_FAIL=$((R_FAIL+1)); }
+[ "$af5" = "$afG" ] && echo -e "  ${G}✅${N} AUTO_FIX一致($af5)" || { echo -e "  ${R}❌${N} AUTO_FIX漂移:05=$af5,00统一术语表=$afG"; R_FAIL=$((R_FAIL+1)); }
 
 # BudgetTracker命名
 bt=$(grep -c "CircuitBreakerConfig\|circuit_breaker" "$A" 2>/dev/null || echo 0)
@@ -157,7 +163,7 @@ if grep -q "CompletionContract\|成功标准.*验收条件\|必须产出物.*约
 # HumanIntervention 选项一致性
 hi_g=$(grep -c "继续等待\|简化方案\|更换模型\|取消目标" "$G" 2>/dev/null || echo 0)
 hi_ui=$(grep -c "继续等待\|简化方案\|更换模型\|取消目标" "$HF" 2>/dev/null || echo 0)
-[ "$hi_g" -gt 0 ] && [ "$hi_ui" -eq 0 ] && { echo -e "  ${R}❌${N} HumanIntervention: GLOSSARY有选项,UI无"; J_FAIL=$((J_FAIL+1)); }
+[ "$hi_g" -gt 0 ] && [ "$hi_ui" -eq 0 ] && { echo -e "  ${R}❌${N} HumanIntervention: 00统一术语表有选项,UI无"; J_FAIL=$((J_FAIL+1)); }
 [ "$hi_g" -gt 0 ] && [ "$hi_ui" -gt 0 ] && echo -e "  ${G}✅${N} HumanIntervention选项一致"
 
 # failHints 枚举完整性
@@ -178,7 +184,7 @@ overlap=0
 for c in "RecoveryStrategy" "VerificationPrecedence" "FlowSelectionPolicy"; do
   b_found=$(tail -n +"$A_BODY_START" "$A" 2>/dev/null | grep -c "$c" || echo 0)
   r_found=$(tail -n +"$G_BODY_START" "$G" 2>/dev/null | grep -c "$c" || echo 0)
-  [ "$b_found" -gt 0 ] && [ "$r_found" -gt 0 ] && { echo -e "  ${Y}⚠️${N} $c: Brad(实现层)+Russ(GLOSSARY可追溯)→重叠发现。Brad层已验证字段完整性。"; overlap=$((overlap+1)); }
+  [ "$b_found" -gt 0 ] && [ "$r_found" -gt 0 ] && { echo -e "  ${Y}⚠️${N} $c: Brad(实现层)+Russ(00统一术语表可追溯)→重叠发现。Brad层已验证字段完整性。"; overlap=$((overlap+1)); }
 done
 [ "$overlap" -eq 0 ] && echo -e "  ${G}✅${N} 无重叠发现——四人发现独立互补"
 

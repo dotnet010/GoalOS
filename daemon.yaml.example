@@ -6,15 +6,19 @@
 daemon:
   port: 18920
   autonomy_level: autonomous     # observe|suggest|approve|autonomous
+  idle_timeout: 5m               # 空闲超时后退出。默认 5m（config.go 同步键）
+  shutdown_timeout: 5s           # 优雅关闭超时。默认 5s（config.go 同步键）
 
 llm:
   provider: openai               # openai|anthropic|ollama
   model: glm-5.1                 # 模型名。OpenRouter 格式: openai/gpt-4o
+  api_key_env: ANTHROPIC_API_KEY # API Key 环境变量名。默认 ANTHROPIC_API_KEY（config.go 同步键）
   api_key: ""                    # 填写 API Key。也支持环境变量 GOALOS_LLM_API_KEY
   base_url: ""                   # API 地址。空=默认端点
   max_tokens: 4096
   temperature: 0.3
   timeout: 300s
+  plan_timeout: 600s             # Plan 阶段超时。默认 600s（config.go 同步键）
 
 # 多模型验证（可选。用于代码审查时并行调用多个 LLM）
 # multi_llm:
@@ -39,5 +43,11 @@ policy:
   flow_degrade_threshold: 3     # Flow 降级触发次数
   goal_anchor_interval: 20      # GoalAnchor 间隔
   recovery_retry_max: 3         # Recovery 重试最大次数
+  token_ttl: 300                # Capability Token TTL 秒（R-1359/R-1361——config.go 同步键）
+  # 预留键（R-1386：随模块实现接线，05 B.8 为权威定义；落地前为文档预留键）
+  # approval_max_extensions: 3  # wait_more 上限（R-1323）
+  # guard.*: 见 05 B.8（R-1340：provider/model/timeout_ms/budget_tokens/scan_budget_bytes_per_session）
+  # proxy.*: 见 05 B.8（R-1349 九键字面清单）
+  # ipc.* / events.*: 见 05 B.8（R-1349/R-1389）
 
 persona: concise                 # concise|warm|minimal

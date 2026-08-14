@@ -60,8 +60,8 @@ const (
 	TypeMissionGenerated = "MissionGenerated" // Agent 产出 MissionGraph。Publisher: Mission Engine
 	TypeUserConfirmed    = "UserConfirmed"    // 用户确认 MissionGraph。Publisher: Channel Adapter
 	TypeUserRejected     = "UserRejected"     // 用户拒绝 MissionGraph。Publisher: Channel Adapter
-	TypeGoalCompleted    = "GoalCompleted"
-	TypeGoalFailed      = "GoalFailed"    // Goal 完成。Publisher: Scheduler
+	TypeGoalCompleted    = "GoalCompleted"    // Goal 完成。Publisher: GoalRunner（R-1365）
+	TypeGoalFailed       = "GoalFailed"       // Goal 失败。Publisher: GoalRunner
 	TypeGoalPaused       = "GoalPaused"       // Goal 已暂停。Publisher: Scheduler
 	TypeGoalResumed      = "GoalResumed"      // Goal 已恢复。Publisher: Scheduler
 
@@ -108,12 +108,19 @@ const (
 
 	// ── 快照与系统 ──
 	TypeSnapshotCreated      = "SnapshotCreated"      // 快照写入。Publisher: State Store
-	TypeTokenUsage           = "TokenUsage"           // Token 消耗记录。Publisher: Scheduler
+	TypeTokenUsage           = "TokenUsage"           // Token 消耗记录。Publisher: Plugin Runner 汇总（R-1363）
 	TypeSystemStarted        = "SystemStarted"        // Daemon 启动完成。Publisher: daemon
 	TypeMissionGraphRejected = "MissionGraphRejected" // MissionGraph 校验失败。Publisher: Mission Engine
 	// R-1058: 配置热重载完成事件——nginx 代际模型：新配置只影响"新一代"决策，
 	// 进行中审批/执行继续按旧快照运行。Publisher: daemon（HTTP reload + SIGHUP 两条路径）
 	TypeConfigReloaded = "ConfigReloaded"
+
+	// ── 安全与治理（R-1385 注册——会议 #202~#204 批量传播）──
+	// wire 值小写蛇形；payload shape 见 07 事件注册表 §4/X.8（R-1362）。
+	TypeSecurityIncident          = "security_incident"           // 安全事件（密钥泄露/seccomp 违规/Provider 全超时/guard 不可用）。Publisher: 各核心模块。Payload: {severity: CRITICAL|WARN|INFO, module, detail}（07 X.8）
+	TypeRequirementAdded          = "requirement_added"           // 追加需求软入口（不直接改 DAG）。Publisher: Channel Adapter。Payload: {goal_id, requirement_text, source, added_at}（07 §4 R-1362）
+	TypeBudgetAdjustmentRequested = "budget_adjustment_requested" // 预算调整请求。Publisher: Channel Adapter。Payload: {goal_id, requested_delta, reason}（07 §4 R-1362）
+	TypeStateMachineViolation     = "state_machine_violation"     // 非法迁移企图（终态后 wait_more 等）。Publisher: GoalRunner。Payload: {goal_id, event_type, current_state, expected_states, attempted_transition}（07 §4 R-1362）
 
 	// ── 消息 ──
 	TypeMessageReceived = "MessageReceived" // 收到用户消息。Publisher: Channel Adapter

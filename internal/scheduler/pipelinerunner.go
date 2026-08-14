@@ -88,18 +88,23 @@ type PipelineRunner struct {
 	actionCode     map[string]string   // CR-K3: actionID→code for MultiLLM check
 	workspaceDir   string              // R-837: Goal workspace output dir
 	currentGoalID  string              // R-840: 当前 Goal ID
+	// approvalTimeout 是 Wait 状态的最长等待时长（R-1384/R-1343: 单一计时权威）。
+	// 来源：policy.approval_timeout 配置（daemon.yaml），与 Governance 审批超时同源。
+	// Daemon 构造时经 SetApprovalTimeout 注入；缺省 300s。
+	approvalTimeout time.Duration
 }
 
 // NewPipelineRunner 创建 PipelineRunner。
 // R-836: 订阅 ActionCompleted——提取产出代码注入 actionCode 供 MultiLLM Check 验证。
 func NewPipelineRunner(bus *eventbus.EventBus, store *statestore.Store) *PipelineRunner {
 	pr := &PipelineRunner{
-		bus:          bus,
-		store:        store,
-		retryCount:   make(map[string]int),
-		wakeupCh:     make(chan struct{}, 10),
-		pluginCache:  NewPluginCache(),
-		actionCode:   make(map[string]string),
+		bus:             bus,
+		store:           store,
+		approvalTimeout: 300 * time.Second, // R-1384: 缺省 300s（policy.approval_timeout）
+		retryCount:      make(map[string]int),
+		wakeupCh:        make(chan struct{}, 10),
+		pluginCache:     NewPluginCache(),
+		actionCode:      make(map[string]string),
 	}
 	// R-836: 订阅 ActionCompleted——提取代码产出供下一轮 MultiLLM 验证
 	bus.Subscribe(events.TypeActionCompleted, func(evt events.Event) error {
@@ -237,7 +242,9 @@ func logProgress(goalID, stage, detail string) {
 func (pr *PipelineRunner) wait(goalID string, reason string) (*PipelineResult, error) {
 	pr.state.ResumePrimitive = ResumeFromDecide
 	pr.state.WaitReason = reason
-	pr.state.TimeoutAt = time.Now().Add(5 * time.Minute).Format(time.RFC3339)
+	// R-1384/R-1343: 计时单一权威——读 policy.approval_timeout（SetApprovalTimeout 注入），
+	// 不再硬编码 5min。GoalRunner.waitForWakeup 依据 TimeoutAt 计算实际等待时长。
+	pr.state.TimeoutAt = time.Now().Add(pr.approvalTimeout).Format(time.RFC3339)
 
 	pr.bus.Publish(events.Event{
 		Type:   events.TypePipelinePaused,
@@ -473,6 +480,15 @@ func readWorkspaceCode(workspaceDir string) string {
 
 // SetMultiLLM 设置多模型验证器（v0.1.1）。
 func (pr *PipelineRunner) SetMultiLLM(v *MultiLLMVerifier) { pr.multiLLM = v }
+
+// SetApprovalTimeout 设置 Wait 最长等待时长（R-1384/R-1343: 单一计时权威）。
+// 由 Daemon 在构造 PipelineRunner 时注入 cfg.Policy.ApprovalTimeout；
+// 未注入时缺省 300s。与 Governance 审批超时（gov.SetApprovalTimeout）同源。
+func (pr *PipelineRunner) SetApprovalTimeout(d time.Duration) {
+	if d > 0 {
+		pr.approvalTimeout = d
+	}
+}
 
 // ─── Week 0 框架基础设施 F3+F5: CategorizedError 路由 + Validatable 集成 ───
 

@@ -48,7 +48,15 @@
 #                         补 R-566~567,R-569,R-966~972 空号注释——make ci 第 7 硬闸口全绿；
 #                       会议 #195——归档 SKIP：文档移入 废弃文档回收站/ 后其决议追溯=历史记录
 #                         可合法保留旧状态（与 check-doc-version.sh ARCHIVE_PATTERNS 同原则），
-#                         层1/层2 对归档文件显式 ⏭️ SKIP 不追溯修订——02低保真原型/03高保真交互原型已归档）
+#                         层1/层2 对归档文件显式 ⏭️ SKIP 不追溯修订——02低保真原型/03高保真交互原型已归档；
+#                       会议 #199 S-47 R-1242——幽灵检测豁免目录 test/fixtures/
+#                         （注入样本自由文本与 R-[0-9]+ 决议编号空间结构性冲突，find -prune 豁免）；
+#                       会议 #200 S'-22 R-1265——空号豁免 build_exempt_nums 扩展识别「已并入」模式；
+#                       会议 #200 S'-31 R-1274 + 会议 #201 F-16 R-1298——S 决议 token 完备性机检接线：
+#                         desc 字段须含 S-01~S-48 与 S'-01~S'-39 全部 87 token，
+#                         检查锚定 desc 字段（python3+PyYAML 严格解析，整文件 grep 假绿禁止），
+#                         解析失败=exit 2（前置：resolutions.yaml 已修复全部既有非法转义/结构错误）；
+#                       会议 #201 F-17 R-1299——空号声明行删除扩展（已兼容，无新增逻辑））
 # =============================================================================
 
 set -euo pipefail
@@ -137,6 +145,8 @@ GoalOS 决议传播完整性检查 — CI 自动化（两层验证）
 附加检查:
   编号连续性（R-543 ③）: 所有编号必须注册或注释为空号——纯 yaml，任何布局均执行
   幽灵决议检测: 文档引用的 R-xxx 必须在 resolutions.yaml 中存在
+  S 决议 token 完备性（S'-31）: desc 字段必须含 S-01~S-48 与 S'-01~S'-39 全部 87 个 token——
+    锚定 desc 字段（python3+PyYAML 严格解析，F-16），纯 yaml，任何布局均执行
 
 运行模式（路径自动检测）:
   工作区布局（开发文档存在）: 全量——层1+层2+幽灵+连续性
@@ -188,7 +198,7 @@ resolve_path() {
         01-prd产品需求文档.md|02低保真原型.md|03高保真交互原型.md|\
         04命令行界面设计规范.md|05软件架构文档.md|06安全模型文档.md|\
         07事件注册表.md|08沙箱隔离与进程通信规范.md|\
-        GLOSSARY.md|架构会议规范.md|会议纪要.md|\
+        00统一术语表.md|架构会议规范.md|会议纪要.md|\
         stub追踪清单.md|开发就绪检查清单.md)
             echo "$DOC_DIR/$f"
             ;;
@@ -516,6 +526,112 @@ build_exempt_nums() {
 }
 
 # =============================================================================
+# 函数: check_s_token_coverage [resolutions_yaml]
+# 用途: S 决议 token 完备性机检（会议 #200 S'-31 + 会议 #201 F-16 接线）。
+#       resolutions.yaml 的 desc 字段必须含 S-01~S-48 与 S'-01~S'-39 全部 87 个 token 的引用。
+#       检查锚定 desc 字段——用 python3+PyYAML 真正解析 YAML 后仅取各条目 desc 值拼接扫描；
+#       整文件 grep 会假绿（token 可能出现在注释/文件列表等非 desc 位置——F-16 明确禁止）。
+#       解析失败=YAML 格式错误 → exit 2（脚本错误类，与行为契约一致）。
+#       纯 resolutions.yaml 检查——所有运行模式均执行（与编号连续性同列，R-1052 原则）。
+# 输入: $1 — resolutions.yaml 路径
+# 副作用: 更新 FAILED, STOKEN_FAIL
+# =============================================================================
+
+check_s_token_coverage() {
+    local yaml="$1"
+    local STOKEN_FAIL=0
+
+    log_info "── ${BOLD}S 决议 token 完备性机检${NC}（S'-31: desc 字段须含 S-01~S-48 与 S'-01~S'-39 全部 87 token）──"
+    log_info ""
+
+    # 依赖检查：python3 + PyYAML（依赖缺失=脚本错误 → exit 2，行为契约第 3 类）
+    if ! command -v python3 >/dev/null 2>&1; then
+        log_error "缺少依赖: python3（S-token 机检需要——check-plugin-protocol.sh 同依赖）"
+        exit 2
+    fi
+
+    # python 代码经临时文件执行（macOS bash 3.2 解析器缺陷：$() 内带引号 heredoc 遇裸单引号即断，
+    # 顶层 heredoc 两平台均安全——与 check-plugin-protocol.sh 的 python3 依赖同一前提）
+    local pyfile result
+    pyfile=$(mktemp)
+    cat > "$pyfile" <<'PYEOF'
+import sys, re
+import yaml as _yaml
+
+yaml_path = sys.argv[1]
+try:
+    with open(yaml_path, encoding='utf-8') as f:
+        doc = _yaml.safe_load(f)
+except Exception as e:
+    print('PARSE_ERROR:' + str(e))
+    sys.exit(0)
+
+res = doc.get('resolutions')
+if not isinstance(res, dict):
+    print('PARSE_ERROR:resolutions top-level key missing or wrong type')
+    sys.exit(0)
+
+# anchor on desc fields only (F-16) — comments/other fields must not count
+descs = '\n'.join(
+    v.get('desc', '')
+    for v in res.values()
+    if isinstance(v, dict) and isinstance(v.get('desc'), str)
+)
+
+tokens = [f'S-{n:02d}' for n in range(1, 49)] + [f"S'-{n:02d}" for n in range(1, 40)]
+missing = []
+for tok in tokens:
+    # whole-token match: S-01 must not match inside S-010 or S'-01
+    pat = re.compile(rf"(?<![\w'-]){re.escape(tok)}(?![\w])")
+    if not pat.search(descs):
+        missing.append(tok)
+
+print(f'COVERAGE:total={len(tokens)}:missing={len(missing)}')
+for m in missing:
+    print('MISSING:' + m)
+PYEOF
+    result=$(python3 "$pyfile" "$yaml")
+    rm -f "$pyfile"
+
+    if [ -z "$result" ]; then
+        log_error "S-token 机检: python3 无输出（脚本错误）"
+        exit 2
+    fi
+
+    local missing_tokens="" total_tokens="" missing_count=""
+    while IFS= read -r line; do
+        case "$line" in
+            PARSE_ERROR:*)
+                log_error "resolutions.yaml 无法严格解析（F-16 前置）: ${line#PARSE_ERROR:}"
+                log_error "  修复 YAML 语法后重跑——check 锚定 desc 字段依赖严格解析"
+                exit 2
+                ;;
+            COVERAGE:*)
+                total_tokens=$(echo "${line#COVERAGE:}" | sed 's/.*total=\([0-9]*\).*/\1/')
+                missing_count=$(echo "${line#COVERAGE:}" | sed 's/.*missing=\([0-9]*\)$/\1/')
+                ;;
+            MISSING:*)
+                missing_tokens="$missing_tokens ${line#MISSING:}"
+                ;;
+        esac
+    done <<< "$result"
+
+    if [ -z "$total_tokens" ] || [ -z "$missing_count" ]; then
+        log_error "S-token 机检: 输出格式异常"
+        exit 2
+    fi
+
+    if [ "$missing_count" -gt 0 ]; then
+        echo -e "  ${RED}❌${NC} desc 字段缺失 token ($missing_count 个):$missing_tokens"
+        FAILED=$((FAILED + missing_count))
+        STOKEN_FAIL=$((STOKEN_FAIL + missing_count))
+    else
+        echo -e "  ${GREEN}✅${NC} S-token 完备性通过——desc 字段含 S-01~S-48 与 S'-01~S'-39 全部 $total_tokens 个 token"
+    fi
+    echo -e "  ${BOLD}S-token 结果${NC}: ${GREEN}覆盖 $((total_tokens - missing_count))/$total_tokens${NC} / ${RED}缺失: $missing_count${NC}"
+}
+
+# =============================================================================
 # 函数: check_ghost_resolutions [resolutions_yaml]
 # 用途: 检测"幽灵决议"——在文档修改记录中被引用但在 resolutions.yaml 中不存在的 R-xxx 编号。
 #       验证空号区间注释与实际文档引用之间的一致性（R-544）。
@@ -542,9 +658,11 @@ check_ghost_resolutions() {
     build_exempt_nums "$yaml" "$exempt_nums"
 
     # Step 2: 扫描所有文档中的 R-xxx 引用（排除 resolutions.yaml 自身和 check script）
+    # 豁免目录（S-47, R-1242）: test/fixtures/ 注入样本为自由文本，与 R-[0-9]+ 决议编号空间结构性冲突
     local all_refs
     all_refs=$(mktemp)
-    find "$DOC_DIR" "$REPO_DIR" \( -name "*.md" -o -name "*.yaml" \) ! -name "*.bak.md" 2>/dev/null | \
+    find "$DOC_DIR" "$REPO_DIR" \( -path "*/test/fixtures/*" -prune \) -o \
+        \( -name "*.md" -o -name "*.yaml" \) ! -name "*.bak.md" -print 2>/dev/null | \
         grep -v "resolutions.yaml" | \
         grep -v "会议纪要.md" | \
         xargs grep -ohE 'R-[0-9]+' 2>/dev/null | \
@@ -572,7 +690,8 @@ check_ghost_resolutions() {
             ghost_count=$((ghost_count + 1))
             # 找到引用此编号的文档
             local ref_files
-            ref_files=$(find "$DOC_DIR" "$REPO_DIR" -name "*.md" ! -name "*.bak.md" 2>/dev/null | \
+            ref_files=$(find "$DOC_DIR" "$REPO_DIR" \( -path "*/test/fixtures/*" -prune \) -o \
+                \( -name "*.md" ! -name "*.bak.md" -print \) 2>/dev/null | \
                 xargs grep -l "R-$num" 2>/dev/null | head -3 | tr '\n' ' ')
             echo -e "  ${RED}❌ R-$num${NC}: ${RED}幽灵决议${NC}——被文档引用但不在 resolutions.yaml 中"
             echo "     引用文件: $ref_files"
@@ -771,6 +890,9 @@ main() {
 
     # 编号连续性（纯 yaml——所有模式均执行，R-1052）
     check_numbering_continuity "$RESOLUTIONS"
+
+    # S 决议 token 完备性机检（纯 yaml——所有模式均执行；S'-31 增补, F-16 接线）
+    check_s_token_coverage "$RESOLUTIONS"
 
     if [ "$REPO_ONLY" = true ]; then
         # 仓库布局（GitHub Actions）: 开发文档不在仓库（GIT-RULES 规则5）

@@ -1,0 +1,4 @@
+=== 风险表生成式验证（D44 R-1179 / S'-25 R-1268）===
+
+[0;31m❌[0m 数据源缺失: GoalOS/scripts/risk-formula.yaml（S'-25 单一数据源）
+修复: 创建 risk-formula.yaml（formula 权重+阈值 + dimension-matrix 9 命令维度矩阵）

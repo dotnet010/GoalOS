@@ -477,7 +477,7 @@ func isTimeout(err error) bool {
 	return false
 }
 
-// pushProgress 推送 Plan 阶段进度到 EventBus（R-835: Dashboard 实时反馈）。
+// pushProgress 推送 Plan 阶段进度到 EventBus（R-835: 实时反馈——SSE /api/events 事件流，CLI 消费；Dashboard 已拆除 R-1372）。
 func (e *Engine) pushProgress(goalID, stage, detail string) {
 	e.publish(events.Event{
 		Type:    "PlanProgressUpdate",
