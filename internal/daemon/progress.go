@@ -20,6 +20,9 @@ type ProgressDetail struct {
 	Message             string `json:"message,omitempty"`     // 可选消息
 }
 
-// ProgressIntervalTokens — 发送频率配置键（policy.progress_interval_tokens 透传——R-1184）。
+// ProgressIntervalTokens — 发送频率配置读取（policy.progress_interval_tokens 透传——R-1184）。
+// R-1471（发现 32）：配置驱动非常量硬编码——从 PolicyConfig 读取（默认 500）。
 // 契约：每 500 token 或每 5s 取先到（policy.progress_interval_tokens 默认 500）。
-const ProgressIntervalTokens = 500
+func ProgressIntervalTokens(cfg interface{ GetProgressIntervalTokens() int }) int {
+	return cfg.GetProgressIntervalTokens() // 默认 500（PolicyConfig 透传）
+}

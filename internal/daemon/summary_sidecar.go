@@ -14,7 +14,7 @@ type SummarySidecar struct {
 	ActionID       string `yaml:"action_id"`       // Action ID
 	CompletionType string `yaml:"completion_type"` // 完成类型
 	// artifact_metadata（R-1133 非文本产出物元数据）
-	ArtifactMetadata ArtifactMetadata `yaml:"artifact_metadata"` // 产出物元数据
+	Metadata ArtifactMetadata `yaml:"artifact_metadata"` // 产出物元数据（R-1470——字段名同名修正）
 }
 
 // ArtifactMetadata — 非文本产出物元数据（R-1133）。
@@ -25,12 +25,14 @@ type ArtifactMetadata struct {
 }
 
 // ValidateSummary — daemon 侧 schema 校验（R-1185 .summary 强制 Guard）。
-// 契约：schema 非法→拒绝（fail-closed）；artifact_metadata.digest 非空（R-1431）。
+// 契约：schema 非法→拒绝（fail-closed）；三字段全校验（R-1470——函数名承诺范围=
+// 实际检查范围：GoalID/ActionID/Digest/MediaType/Size 全部校验——值携带语义比
+// 实际验证范围更宽=撒谎）。
 func ValidateSummary(s *SummarySidecar) error {
 	if s.GoalID == "" || s.ActionID == "" {
 		return ErrInvalidSummary
 	}
-	if s.ArtifactMetadata.Digest == "" {
+	if s.Metadata.Digest == "" || s.Metadata.MediaType == "" || s.Metadata.Size <= 0 {
 		return ErrInvalidSummary
 	}
 	return nil
