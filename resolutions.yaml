@@ -5879,3 +5879,43 @@ resolutions:
       - must_exist: "四类欠款并列"
         in_file: 架构会议规范.md
         reason: "架构会议规范必须落四类欠款并列（R-1457）"
+
+  R-1458:
+    desc: "发现 17 过渡期最小对齐(会议 #218): classifier.go ErrNotImplemented 改单行 errors.New(与 statefs.go 一致); Skeleton[T] 落地后统一从 Unwrap() 拿到——正确定位=过渡期最小对齐非打磨。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "R-1458"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划修改记录必须引用 R-1458（W4 交叉审查）"
+
+  R-1459:
+    desc: "发现 18+21 合并(会议 #218): Merge() 字段级完整性——结构性方案=per-field 具名合并函数(mergeFunc[T] 泛型——isolationMerge/filesystemMerge/networkMerge 各自独立契约测试); 语义性方案=schema 扩展 MinIsolation 显式字段(project/user 层只能声明下限, 生效值=max——Linux 能力先例: 子层级只能收紧不能放松); Isolation 合并语义=显式带理由裁决记录。disposition: 生效"
+    files: [05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "MinIsolation"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落 MinIsolation 合并语义（R-1459）"
+
+  R-1460:
+    desc: "发现 19 共享工具 CanonicalKey(会议 #218): 长度前缀编码(binary.Write uint32 长度+字节内容——不依赖域假设任意内容无歧义); 四处场景收敛(HMAC/CRC32/prevHash/CacheKey 统一)。disposition: 生效"
+    files: [05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "CanonicalKey"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落 CanonicalKey 注记（R-1460）"
+
+  R-1461:
+    desc: "发现 20 三方案同时进行(会议 #218, PM 指令一次性完成不拖延不计成本): ①riskMap 包私有化(只导出 Risk() 查询函数); ②SafeMap[K,V] 泛型只读包装(共享 map 身份场景补充); ③check-naked-map.sh 迁移 go/analysis(真实赋值/mutation 追踪——纵深防御, 与 R-1449 合并登记 W3-4)。disposition: 生效"
+    files: [05软件架构文档.md, 10模块实现指南.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "SafeMap"
+        in_file: 10模块实现指南.md
+        reason: "10指南必须落 SafeMap 注记（R-1461）"
+
+  R-1462:
+    desc: "W4 交叉审查五发现处置总录(会议 #218): 发现 17(过渡期对齐)/18+21(Merge 字段级完整性+Isolation 语义)/19(CanonicalKey)/20(三方案同时)全部落地; W4 交叉审查阶段完成标记。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "会议 #218"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须含会议 #218 记录（R-1462）"
