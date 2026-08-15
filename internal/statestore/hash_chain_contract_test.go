@@ -12,6 +12,7 @@ package statestore_test
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -60,10 +61,16 @@ func TestWALHashChain_GenesisAndLink(t *testing.T) {
 		return
 	}
 	var parsed []map[string]any
+	var jsonParts [][]byte
 	for _, line := range rawLines {
+		// R-1453 envelope 格式：<json>\t<crc32_hex>\t<format_version>\n
+		// 读取方契约：先按 \t 拆分取 JSON 部分，再 Unmarshal（prev_hash 语义不变）
+		parts := bytes.SplitN(line, []byte{'\t'}, 3)
+		jsonPart := parts[0]
+		jsonParts = append(jsonParts, jsonPart)
 		var m map[string]any
-		if err := json.Unmarshal(line, &m); err != nil {
-			t.Fatalf("前置: WAL 行非 JSON: %v", err)
+		if err := json.Unmarshal(jsonPart, &m); err != nil {
+			t.Fatalf("前置: WAL 行 JSON 部分解析失败: %v", err)
 		}
 		parsed = append(parsed, m)
 	}
@@ -83,7 +90,7 @@ func TestWALHashChain_GenesisAndLink(t *testing.T) {
 			t.Errorf("R-1393 MUST 3 FAIL: 第 %d 行缺 prev_hash 键——哈希链断裂", i+1)
 			continue
 		}
-		sum := sha256.Sum256(rawLines[i-1])
+		sum := sha256.Sum256(jsonParts[i-1])
 		if want := fmt.Sprintf("%x", sum); prev != want {
 			t.Errorf("R-1393 MUST 3 FAIL: 第 %d 行 prev_hash=%v，期望 SHA-256(前一行)=%s", i+1, prev, want)
 		}

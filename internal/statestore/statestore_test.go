@@ -1,6 +1,7 @@
 package statestore_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,6 +10,16 @@ import (
 	"github.com/goalos/goalos/internal/statestore"
 	"github.com/goalos/goalos/pkg/events"
 )
+
+// parseWALLine — R-1453 envelope 格式解析助手：<json>\t<crc32_hex>\t<format_version>\n。
+// 返回 JSON 部分（Unmarshal 用）+完整行（hash chain 用）。
+func parseWALLine(line []byte) (jsonPart []byte, fullLine []byte) {
+	parts := bytes.SplitN(line, []byte{'\t'}, 3)
+	if len(parts) == 3 {
+		return parts[0], line // envelope 格式
+	}
+	return line, line // 旧格式兼容（纯 JSON 行）
+}
 
 func tempDir(t *testing.T) string {
 	t.Helper()
@@ -45,7 +56,8 @@ func TestAppendAndReplay(t *testing.T) {
 		t.Fatalf("expected 3 events, got %d", len(replayed))
 	}
 	var firstEvt events.Event
-	json.Unmarshal(replayed[0], &firstEvt)
+	jsonPart0, _ := parseWALLine(replayed[0])
+	json.Unmarshal(jsonPart0, &firstEvt)
 	if firstEvt.Type != events.TypeGoalCreated {
 		t.Errorf("event 0: expected GoalCreated, got %s", firstEvt.Type)
 	}
@@ -89,7 +101,8 @@ func TestReplayFromSeq(t *testing.T) {
 		t.Fatalf("expected 5 events (seq 6-10), got %d", len(replayed))
 	}
 	var firstEvt events.Event
-	json.Unmarshal(replayed[0], &firstEvt)
+	jsonPart0, _ := parseWALLine(replayed[0])
+	json.Unmarshal(jsonPart0, &firstEvt)
 	if firstEvt.Seq != 6 {
 		t.Errorf("first event should be seq 6, got %d", firstEvt.Seq)
 	}

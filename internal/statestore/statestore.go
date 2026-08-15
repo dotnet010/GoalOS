@@ -10,6 +10,7 @@ package statestore
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -99,12 +100,6 @@ func (s *Store) Append(goalID string, evt events.Event) error {
 		return fmt.Errorf("statestore: 打开 events.jsonl 失败: %w", err)
 	}
 
-	data, err := json.Marshal(evt)
-	if err != nil {
-		f.Close()
-		s.mu.Unlock()
-		return fmt.Errorf("statestore: JSON 编码事件失败: %w", err)
-	}
 	// 三层完整性防线写入（R-1037/R-1041/R-1393/R-1373）：
 	// 防线二：seq 单调性——global_seq 递增（WAL 写入器唯一分配，发布方不设 Seq）
 	s.globalSeq++
@@ -115,19 +110,26 @@ func (s *Store) Append(goalID string, evt events.Event) error {
 	} else {
 		evt.PrevHash = fmt.Sprintf("%x", s.prevHash)
 	}
-	// 重新序列化（含 seq+prev_hash）
+	// 重新序列化（含 seq+prev_hash）——唯一一次 Marshal（R-1453：删除第一次 Marshal）
+	var data []byte
 	data, err = json.Marshal(evt)
 	if err != nil {
 		f.Close()
 		s.mu.Unlock()
-		return fmt.Errorf("statestore: JSON 编码事件失败: %w", err)
+		return fmt.Errorf("statestore: 编码事件失败: %w", err)
 	}
-	// 防线一：CRC32 条目级校验和（本行内容的 CRC32——恢复时校验）
+	// 防线一：CRC32 条目级校验和（计算输入=即将写入的确切字节——JSON 部分，R-1453）
 	crc := crc32.ChecksumIEEE(data)
-	_ = crc // 骨架：CRC32 附加到行尾归 3.16 完成态（当前仅内存状态）
-	data = append(data, '\n')
-	// 防线三：本行内容（不含 \n——与读取方 bufio.Scanner 对齐）的 SHA-256=下一条目的 prev_hash
-	s.prevHash = sha256.Sum256(data[:len(data)-1])
+	// 防线三：prevHash 暂存（\n 前——R-1453 可读性修正）
+	s.prevHash = sha256.Sum256(data)
+	// WAL 行 envelope 格式（R-1453）：<json>\t<crc32_hex>\t<format_version>\n
+	// format_version="1"——未来追加逐行字段的兼容锚点+区分"旧格式无 CRC 行"的唯一依据
+	line := append(data, '\t')
+	line = append(line, []byte(fmt.Sprintf("%08x", crc))...)
+	line = append(line, '\t')
+	line = append(line, '1')
+	line = append(line, '\n')
+	data = line
 
 	if _, err := f.Write(data); err != nil {
 		f.Close()
@@ -170,14 +172,24 @@ func (s *Store) Replay(goalID string, fromSeq int) ([]json.RawMessage, error) {
 	var events []json.RawMessage
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
+		// R-1453 envelope 格式解析：<json>\t<crc32_hex>\t<format_version>\n
+		// 读取方契约：先按 \t 拆分取 JSON 部分（seq 过滤+Unmarshal 用），
+		// 完整行（含 \t 后缀）保留用于 hash chain 验证
+		line := scanner.Bytes()
+		jsonPart := line
+		if idx := bytes.IndexByte(line, '\t'); idx >= 0 {
+			jsonPart = line[:idx]
+		}
 		// 按 seq 过滤
 		var evt struct{ Seq int `json:"seq"` }
-		json.Unmarshal(scanner.Bytes(), &evt)
+		if err := json.Unmarshal(jsonPart, &evt); err != nil {
+			continue // 非 JSON 行跳过（容错——旧格式兼容）
+		}
 		if evt.Seq > fromSeq {
-			// 复制字节——scanner.Bytes() 是临时缓冲区
-			line := make([]byte, len(scanner.Bytes()))
-			copy(line, scanner.Bytes())
-			events = append(events, line)
+			// 复制字节——scanner.Bytes() 是临时缓冲区（完整行含 envelope 后缀）
+			full := make([]byte, len(line))
+			copy(full, line)
+			events = append(events, full)
 		}
 	}
 	return events, scanner.Err()

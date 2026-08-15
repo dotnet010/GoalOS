@@ -7,6 +7,8 @@
 // 设计依据：08 沙箱规范 §4、R137、R345、会议 #63（Linus 方案）。
 package seccomp
 
+import "fmt"
+
 // Profile 定义 seccomp 过滤规则。
 type Profile struct {
 	DefaultAction   string   `json:"default_action"`   // "kill" | "errno"
@@ -60,16 +62,14 @@ func ForRiskLevel(riskLevel string) *Profile {
 // 契约：depth=0 原始字节哈希匹配不降级（预算耗尽=fail-closed guard_budget_exhausted+
 // SecurityIncident 去重）；depth>0 深度解码/规范化降级（预算内）。
 // 骨架：扫描入口存在（行为载体）——实现归任务 3.26/3.27。
+// ErrNotImplemented — 骨架阶段显式未实现错误（R-1455——诚实化：未实现≠合法负结果）。
+// 下游只要检查 error，就不可能把骨架结果当作干净扫描结果使用。
+var ErrNotImplemented = fmt.Errorf("seccomp: CanaryScan not implemented (skeleton stage)")
+
+// CanaryScan — 金丝雀扫描入口（R-1341/R-1382——预算耗尽后原始字节哈希匹配继续命中）。
+// 骨架诚实化（R-1455）：返回 ErrNotImplemented——fail-open 方向的桩=安全监控隐性失效，
+// 显式 error 防止调用方误读为"扫描后确认无金丝雀"。实现归任务 3.26/3.27。
+// SKELETON-LIMIT: 3.26/3.27 真实金丝雀检测归实现任务
 func (p *Profile) CanaryScan(data []byte, depth int, budgetRemaining int) (matched bool, budgetExhausted bool, err error) {
-	// 骨架：depth=0 原始字节哈希匹配锚点（预算耗尽后继续命中——R-1382 契约对象）。
-	// 实现归任务 3.26/3.27（代理层+写层检测点）。
-	if depth == 0 {
-		// 原始字节哈希匹配（不消耗预算——R-1382：预算耗尽后原始哈希匹配继续命中）
-		return false, false, nil // 骨架：无匹配（实现归 3.26/3.27）
-	}
-	if budgetRemaining <= 0 {
-		// 预算耗尽=fail-closed（guard_budget_exhausted + SecurityIncident 去重）
-		return false, true, nil
-	}
-	return false, false, nil // 骨架：深度解码降级（实现归 3.26/3.27）
+	return false, false, ErrNotImplemented
 }

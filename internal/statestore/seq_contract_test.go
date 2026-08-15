@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"testing"
 
+
 	"github.com/goalos/goalos/internal/statestore"
 	"github.com/goalos/goalos/pkg/events"
 )
@@ -49,7 +50,8 @@ func TestGlobalSeq_UniqueAcrossPublishers(t *testing.T) {
 		var evt struct {
 			Seq int `json:"seq"`
 		}
-		if err := json.Unmarshal(sc.Bytes(), &evt); err != nil {
+		jsonPart, _ := parseWALLine(sc.Bytes())
+		if err := json.Unmarshal(jsonPart, &evt); err != nil {
 			t.Fatalf("前置: 解析 WAL 行: %v", err)
 		}
 		seqs = append(seqs, evt.Seq)

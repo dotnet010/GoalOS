@@ -23,7 +23,8 @@ func TestPipelineState_RoundTrip(t *testing.T) {
 	}
 
 	var restored statestore.PipelineState
-	if err := json.Unmarshal(data, &restored); err != nil {
+	jsonPart, _ := parseWALLine(data)
+	if err := json.Unmarshal(jsonPart, &restored); err != nil {
 		t.Fatalf("PipelineState unmarshal failed: %v", err)
 	}
 
@@ -63,7 +64,8 @@ func TestGoalState_WithPipelineState(t *testing.T) {
 	}
 
 	var restored statestore.GoalState
-	if err := json.Unmarshal(data, &restored); err != nil {
+	jsonPart, _ := parseWALLine(data)
+	if err := json.Unmarshal(jsonPart, &restored); err != nil {
 		t.Fatalf("GoalState unmarshal failed: %v", err)
 	}
 
@@ -88,7 +90,8 @@ func TestGoalState_WithoutPipelineState(t *testing.T) {
 	}
 
 	var restored statestore.GoalState
-	if err := json.Unmarshal(data, &restored); err != nil {
+	jsonPart, _ := parseWALLine(data)
+	if err := json.Unmarshal(jsonPart, &restored); err != nil {
 		t.Fatalf("GoalState unmarshal failed: %v", err)
 	}
 
