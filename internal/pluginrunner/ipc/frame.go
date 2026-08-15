@@ -17,37 +17,53 @@ import (
 // maxInlinePayload — 内联 payload 上限（<4KB——R-1132 阈值单一规则）。
 const maxInlinePayload = 4096
 
-// encodeFrame — Message→两行 HMAC 协议帧（行1=HMAC 占位由调用方填，行2=JSON）。
-// 骨架：JSON 序列化+长度校验；HMAC 签名由 pluginrunner.fd3_protocol 注入。
-func encodeFrame(msg *Message) ([]byte, error) {
-	if msg == nil {
-		return nil, fmt.Errorf("frame: 消息为 nil")
-	}
-	payload, err := json.Marshal(msg)
-	if err != nil {
-		return nil, fmt.Errorf("frame: JSON 序列化失败: %w", err)
-	}
-	if len(payload) > maxInlinePayload {
-		return nil, fmt.Errorf("frame: 内联超阈值（%d > %d）——协议违规 fail-closed（R-1132）", len(payload), maxInlinePayload)
-	}
-	// 两行协议：行1=HMAC hex（占位，调用方签名后覆盖），行2=JSON payload
-	return []byte("\n" + string(payload) + "\n"), nil
+// RawFrame — 传输层与协议层的边界类型（R-1447——发现 1+5 合并：encode/decode 责任下放对称化）。
+// 传输层只搬运原始字节行（hmacLine+payloadLine 原样），不生成伪占位、不丢弃校验输入；
+// 协议层负责签名/校验/反序列化。
+type RawFrame struct {
+	HMACLine    []byte // 行1=HMAC hex 签名（协议层 VerifyHMAC 的输入——不可丢失）
+	PayloadLine []byte // 行2=JSON payload（<4KB 内联；超限→data_ref 引用）
 }
 
-// decodeFrame — 两行 HMAC 协议帧→Message（读两行：行1=HMAC，行2=JSON）。
-func decodeFrame(r io.Reader) (*Message, error) {
+// encodeFrame — RawFrame→两行 HMAC 协议帧（拼接两行原样——HMACLine 由调用方填入，
+// 传输层不生成伪占位）。契约：HMACLine 非空（协议违规 fail-closed——R-1132）。
+func encodeFrame(rf *RawFrame) ([]byte, error) {
+	if rf == nil {
+		return nil, fmt.Errorf("frame: RawFrame 为 nil")
+	}
+	if len(rf.HMACLine) == 0 {
+		return nil, fmt.Errorf("frame: HMACLine 为空——协议违规 fail-closed（R-1132：签名行必须由协议层注入）")
+	}
+	if len(rf.PayloadLine) > maxInlinePayload {
+		return nil, fmt.Errorf("frame: 内联超阈值（%d > %d）——协议违规 fail-closed（R-1132）", len(rf.PayloadLine), maxInlinePayload)
+	}
+	return []byte(string(rf.HMACLine) + "\n" + string(rf.PayloadLine) + "\n"), nil
+}
+
+// decodeFrame — 两行 HMAC 协议帧→RawFrame（读两行原样——HMACLine 不丢弃，交协议层校验）。
+// 消息反序列化归 protocol 层（VerifyHMAC 通过后 Unmarshal）——传输层职责收窄=只搬运字节行。
+func decodeFrame(r io.Reader) (*RawFrame, error) {
 	br := bufio.NewReader(r)
-	// 行1=HMAC hex（传输层不校验——校验归 protocol 层 VerifyHMAC）
-	if _, err := br.ReadBytes('\n'); err != nil {
+	hmacLine, err := br.ReadBytes('\n')
+	if err != nil {
 		return nil, fmt.Errorf("frame: 读 HMAC 行失败: %w", err)
 	}
-	// 行2=JSON payload
-	line, err := br.ReadBytes('\n')
+	payloadLine, err := br.ReadBytes('\n')
 	if err != nil {
 		return nil, fmt.Errorf("frame: 读 payload 行失败: %w", err)
 	}
+	// 去除行尾 \n（两行协议的边界符）
+	rf := &RawFrame{
+		HMACLine:    hmacLine[:len(hmacLine)-1],
+		PayloadLine: payloadLine[:len(payloadLine)-1],
+	}
+	return rf, nil
+}
+
+// UnmarshalPayload — RawFrame.PayloadLine→Message（协议层调用——VerifyHMAC 通过后）。
+func UnmarshalPayload(rf *RawFrame) (*Message, error) {
 	var msg Message
-	if err := json.Unmarshal(line, &msg); err != nil {
+	if err := json.Unmarshal(rf.PayloadLine, &msg); err != nil {
 		return nil, fmt.Errorf("frame: JSON 反序列化失败: %w", err)
 	}
 	return &msg, nil

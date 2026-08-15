@@ -24,9 +24,9 @@ type Message struct {
 // Transport — 传输层接口（任务 1.3 骨架）。fd 继承（Unix）与 named pipe（Windows）同语义。
 type Transport interface {
 	// Send — 发送一帧（HMAC 完整性由实现层保证）。
-	Send(ctx context.Context, msg *Message) error
+	Send(ctx context.Context, rf *RawFrame) error
 	// Recv — 接收一帧（阻塞至帧到达或 ctx 取消）。
-	Recv(ctx context.Context) (*Message, error)
+	Recv(ctx context.Context) (*RawFrame, error)
 	// Close — 关闭传输通道（幂等）。
 	Close() error
 }

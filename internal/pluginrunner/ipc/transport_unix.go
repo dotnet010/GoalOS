@@ -40,11 +40,11 @@ func ChildFD3() (*UnixTransport, error) {
 // Send — 发送一帧（两行 HMAC 协议：行1=HMAC hex，行2=JSON payload）。
 // 帧编码=protocol 层（encodeFrame）——HMAC 签名由调用方注入（session_secret 经 FD3 前导帧交付，
 // 派生 hmac_key=HMAC-SHA256(session_secret,"stdout-hmac:v1"，R-1261）；传输层只负责帧边界+顺序。
-func (t *UnixTransport) Send(ctx context.Context, msg *Message) error {
+func (t *UnixTransport) Send(ctx context.Context, rf *RawFrame) error {
 	if t.w == nil {
 		return fmt.Errorf("transport: 写端已关闭")
 	}
-	frame, err := encodeFrame(msg)
+	frame, err := encodeFrame(rf)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (t *UnixTransport) Send(ctx context.Context, msg *Message) error {
 }
 
 // Recv — 接收一帧（阻塞至帧到达或 ctx 取消）。
-func (t *UnixTransport) Recv(ctx context.Context) (*Message, error) {
+func (t *UnixTransport) Recv(ctx context.Context) (*RawFrame, error) {
 	if t.r == nil {
 		return nil, fmt.Errorf("transport: 读端已关闭")
 	}

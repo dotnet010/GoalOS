@@ -5777,3 +5777,30 @@ resolutions:
       - must_exist: "三型插件依赖契约"
         in_file: 05软件架构文档.md
         reason: "05 §3.19.8 必须落三型依赖契约（R-1445）"
+
+  R-1446:
+    desc: "八阶段开发纪律(PM 指令, 2026-08-15): v0.3.0 W1-W8 分 8 阶段; 每周开发后必经 测试阶段(交叉审查逐行——逻辑错误/隐藏 bug/资源未回收未闭合/隐蔽性错误; 简单错误就地改进, 复杂错误当场开会讨论, Ken 一票否决, 否决则重新开会至通过, 按会议决议修改)+验收阶段(全员+内部顾问按架构会议规范审议, 不合格返工至通过, 通过方可进下一周); 全部 8 周完成后整体 review(全部代码审核+检查开发文档设计是否得以实现); 周制门禁——任一阶段未过不进下一周。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 架构会议规范.md]
+    verify:
+      - must_exist: "八阶段开发纪律"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落八阶段开发纪律（PM 指令 R-1446）"
+      - must_exist: "八阶段开发纪律"
+        in_file: 架构会议规范.md
+        reason: "架构会议规范必须落八阶段开发纪律（PM 指令 R-1446）"
+
+  R-1447:
+    desc: "RawFrame 类型(会议 #212, W1 交叉审查发现 1+5 合并): encode/decode 责任下放对称化——type RawFrame struct{HMACLine, PayloadLine []byte}; 传输层只搬运原始字节行; decodeFrame 返回 RawFrame(不丢弃校验输入); encodeFrame 接受 RawFrame(HMACLine 由协议层注入不生成伪占位); UnmarshalPayload 归 protocol 层(VerifyHMAC 通过后)。disposition: 生效"
+    files: [08沙箱隔离与进程通信规范.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "RawFrame"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §17.1 必须落 RawFrame 注记（R-1447）"
+
+  R-1448:
+    desc: "AuthorizedSpec 类型(会议 #212, 发现 6 升维): 治理闸门编译期强制——type AuthorizedSpec struct{spec any}(导出类型+包私有字段, 唯一构造路径=governance.Authorize(), Policy==ALLOW 且 Capability==GRANTED 时返回否则 fail-closed); ExecuteSandboxed 签名改 AuthorizedSpec 参数; Go 语言现实修正(跨包参数类型必须导出——导出类型+包私有字段, 非妥协)。disposition: 生效"
+    files: [05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 10模块实现指南.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "AuthorizedSpec"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落 AuthorizedSpec 注记（R-1448）"

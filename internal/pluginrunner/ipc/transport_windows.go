@@ -40,11 +40,11 @@ func DialPipe(ctx context.Context, pipeName string) (*WindowsTransport, error) {
 }
 
 // Send — 发送一帧（两行 HMAC 协议）。帧编码=protocol 层（encodeFrame，与 Unix 同语义）。
-func (t *WindowsTransport) Send(ctx context.Context, msg *Message) error {
+func (t *WindowsTransport) Send(ctx context.Context, rf *RawFrame) error {
 	if t.conn == nil {
 		return fmt.Errorf("transport: 连接已关闭")
 	}
-	frame, err := encodeFrame(msg)
+	frame, err := encodeFrame(rf)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (t *WindowsTransport) Send(ctx context.Context, msg *Message) error {
 }
 
 // Recv — 接收一帧（阻塞至帧到达或 ctx 取消）。
-func (t *WindowsTransport) Recv(ctx context.Context) (*Message, error) {
+func (t *WindowsTransport) Recv(ctx context.Context) (*RawFrame, error) {
 	if t.conn == nil {
 		return nil, fmt.Errorf("transport: 连接已关闭")
 	}

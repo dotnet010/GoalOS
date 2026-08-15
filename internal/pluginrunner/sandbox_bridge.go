@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/goalos/goalos/internal/governance"
 	"github.com/goalos/goalos/internal/sandbox"
 )
 
@@ -33,14 +34,16 @@ func TranslateToCommandSpec(action ActionRequest, workspace string) (*sandbox.Co
 	return spec, nil
 }
 
-// ExecuteSandboxed — Goal 模式 Windows 插件首次沙箱化（任务 1.11）：
-// ActionRequest→CommandSpec 翻译→sandbox.Execute 调用。profile 必须经 Compile() 产出
-// （R-1106 零值非法化——零值 profile 在 Execute 入口被 Fatal fail-closed 拒绝）。
-func ExecuteSandboxed(ctx context.Context, sb sandbox.Sandbox, action ActionRequest, workspace string, profile sandbox.CompiledProfile) (*sandbox.Result, error) {
+// ExecuteSandboxed — Goal 模式 Windows 插件首次沙箱化（任务 1.11）。
+// R-1448（发现 6 升维）：治理闸门编译期强制——aspec 只能由 governance.Authorize() 返回
+// （authorizedSpec 未导出+包私有字段——pluginrunner 无法构造，绕过 Governance 的调用
+// 在编译期不存在该类型值）。桥接不评估治理，只消费授权凭证。
+// profile 必须经 Compile() 产出（R-1106 零值非法化）。
+func ExecuteSandboxed(ctx context.Context, sb sandbox.Sandbox, aspec governance.AuthorizedSpec, workspace string, profile sandbox.CompiledProfile) (*sandbox.Result, error) {
 	if !profile.Compiled() {
 		return nil, fmt.Errorf("sandbox bridge: CompiledProfile 零值非法（R-1106）——必须经 sandbox.Compile() 产出")
 	}
-	spec, err := TranslateToCommandSpec(action, workspace)
+	spec, err := TranslateToCommandSpec(aspec.Spec().(ActionRequest), workspace)
 	if err != nil {
 		return nil, err
 	}
