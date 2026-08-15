@@ -5975,3 +5975,27 @@ resolutions:
       - must_exist: "golangci-lint"
         in_file: Makefile
         reason: "Makefile 必须落 golangci-lint 接入（R-1469）"
+
+  R-1470:
+    desc: "发现 31——ValidateSummary 范围收窄修正(会议 #224): 字段名同名修正(Metadata ArtifactMetadata); 校验补全(MediaType/Size/Digest 三字段全校验——函数名承诺范围=实际检查范围); 代码库逐字段核对(函数名字承诺了什么、代码实际做了什么——ArtifactMetadata 全部字段核对)。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "ValidateSummary"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19 必须落 ValidateSummary 注记（R-1470）"
+
+  R-1471:
+    desc: "发现 32——常量硬编码同类扫描(会议 #224): ProgressIntervalTokens 常量删除改从 PolicyConfig 读取(policy.progress_interval_tokens 透传默认 500); 代码库同类扫描(所有 const 声明逐核对契约文档同名配置项——应该来自 PolicyConfig 却被写死成常量的实例一次核查完)。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "常量硬编码同类扫描"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落常量硬编码同类扫描注记（R-1471）"
+
+  R-1472:
+    desc: "发现 33+34 合并——Skeleton[T] 人机边界显式声明(会议 #224): Skeleton[T] 框架文档补一条——程序内部消费 vs 直接呈现给用户的两种场景不同落地方式(程序内部=Unwrap() ErrNotImplemented 类型系统强制; 用户呈现=显式决策记录——刻意过渡态 UX 非 bug); 四个 CLI 命令的骨架期行为=面向用户的过渡态命令(显式决策: 用户先看到命令存在+了解大致做什么, 后端调用未接=显式记录非技术债)。disposition: 生效"
+    files: [05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "人机边界"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19 必须落 Skeleton[T] 人机边界注记（R-1472）"
