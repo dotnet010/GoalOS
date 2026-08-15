@@ -7,6 +7,7 @@ package analysis
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -16,7 +17,7 @@ import (
 // NakedMapAnalyzer — 裸可变 map 检测（R-1461 方案 3：真实赋值/mutation 追踪）。
 //
 // 契约：包级 var 声明的 map 类型——若该标识符在任何函数体内出现在赋值语句左侧
-//（m[k]=v）或被传给 delete()，则判定为可变 map=FAIL。字面量初始化（含 {...}）不再
+// （m[k]=v）或被传给 delete()，则判定为可变 map=FAIL。字面量初始化（含 {...}）不再
 // 作为"只读"的代理特征——真实语义=是否被写。
 var NakedMapAnalyzer = &analysis.Analyzer{
 	Name:     "nakedmap",
@@ -28,36 +29,18 @@ var NakedMapAnalyzer = &analysis.Analyzer{
 func runNakedMap(pass *analysis.Pass) (interface{}, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
-	// 第一步：收集包级 map 变量声明（标识符→声明位置）——仅文件顶层 GenDecl（包级）
+	// 第一步：收集包级 map 变量（TypesInfo 驱动——R-1463 发现 25 治本：穿透类型别名/
+	// make() 调用/复合字面量/init() 延迟赋值——语法形态无关）。
 	mapVars := make(map[string]token.Pos)
-	for _, f := range pass.Files {
-		for _, decl := range f.Decls {
-			gd, ok := decl.(*ast.GenDecl)
-			if !ok || gd.Tok != token.VAR {
-				continue
-			}
-			for _, spec := range gd.Specs {
-				vs, ok := spec.(*ast.ValueSpec)
-				if !ok {
-					continue
-				}
-				for _, name := range vs.Names {
-					// 检查类型是否为 map
-					if vs.Type != nil {
-						if _, isMap := vs.Type.(*ast.MapType); isMap {
-							mapVars[name.Name] = name.Pos()
-						}
-					}
-					// 检查复合字面量初始化（var m = map[...]{...}）
-					for _, val := range vs.Values {
-						if cl, ok := val.(*ast.CompositeLit); ok {
-							if _, isMap := cl.Type.(*ast.MapType); isMap {
-								mapVars[name.Name] = name.Pos()
-							}
-						}
-					}
-				}
-			}
+	scope := pass.Pkg.Scope()
+	for _, name := range scope.Names() {
+		v, ok := scope.Lookup(name).(*types.Var)
+		if !ok {
+			continue
+		}
+		// 穿透类型别名和具名类型直接拿到底层类型（Underlying()）
+		if _, isMap := v.Type().Underlying().(*types.Map); isMap {
+			mapVars[name] = v.Pos()
 		}
 	}
 
