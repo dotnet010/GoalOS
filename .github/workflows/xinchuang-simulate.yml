@@ -1,0 +1,27 @@
+# W5-6 信创 4.19 模拟模式契约测试全量纳入每日构建（任务 5.7——发布闸口 R-929）
+
+name: W5-6 信创 4.19 模拟模式契约测试（发布闸口）
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 每日 03:00 UTC
+  push:
+    branches: [dev/v0.3.0, main]
+  workflow_dispatch:
+
+jobs:
+  xinchuang-simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: 模拟 4.19 模式契约测试（GOALOS_SANDBOX_SIMULATE_KERNEL=4.19）
+        env:
+          GOALOS_SANDBOX_SIMULATE_KERNEL: "4.19"
+        run: go test -count=1 -timeout 120s ./internal/sandbox/ ./internal/pluginrunner/...
