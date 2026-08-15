@@ -55,3 +55,21 @@ func ForRiskLevel(riskLevel string) *Profile {
 		return Default()
 	}
 }
+
+// CanaryScan — 金丝雀扫描入口（R-1341/R-1382——预算耗尽后原始字节哈希匹配继续命中）。
+// 契约：depth=0 原始字节哈希匹配不降级（预算耗尽=fail-closed guard_budget_exhausted+
+// SecurityIncident 去重）；depth>0 深度解码/规范化降级（预算内）。
+// 骨架：扫描入口存在（行为载体）——实现归任务 3.26/3.27。
+func (p *Profile) CanaryScan(data []byte, depth int, budgetRemaining int) (matched bool, budgetExhausted bool, err error) {
+	// 骨架：depth=0 原始字节哈希匹配锚点（预算耗尽后继续命中——R-1382 契约对象）。
+	// 实现归任务 3.26/3.27（代理层+写层检测点）。
+	if depth == 0 {
+		// 原始字节哈希匹配（不消耗预算——R-1382：预算耗尽后原始哈希匹配继续命中）
+		return false, false, nil // 骨架：无匹配（实现归 3.26/3.27）
+	}
+	if budgetRemaining <= 0 {
+		// 预算耗尽=fail-closed（guard_budget_exhausted + SecurityIncident 去重）
+		return false, true, nil
+	}
+	return false, false, nil // 骨架：深度解码降级（实现归 3.26/3.27）
+}

@@ -10,8 +10,10 @@ package statestore
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"sync"
@@ -48,11 +50,19 @@ type PipelineState struct {
 
 // Store 管理事件持久化和状态投影。
 // 线程安全——每个 Store 实例内部串行写入。
+//
+// 存储完整性三层防线（R-1037/R-1040/R-1041——中文序数命名 R-1114）：
+//   防线一=CRC32 条目级（每条目 CRC32 校验和）
+//   防线二=seq 单调性（全局单调递增序号）
+//   防线三=hash chain（每条目 prev_hash=上一条目 SHA-256，genesis=全零 32B）
 type Store struct {
 	baseDir     string     // ~/.goalos/events/
 	mu          sync.Mutex
 	eventCount  int        // v0.1.0 R-372: 每 N=100 触发快照
 	snapshotFn  func(goalID string) // v0.1.0: 快照回调
+	// 三层防线状态（R-1037/R-1041）：
+	globalSeq   int64      // 防线二：全局单调递增序号（WAL 写入器分配）
+	prevHash    [32]byte   // 防线三：上一条目 SHA-256（genesis=全零 32B）
 }
 
 // New 创建一个 Store。
@@ -95,7 +105,29 @@ func (s *Store) Append(goalID string, evt events.Event) error {
 		s.mu.Unlock()
 		return fmt.Errorf("statestore: JSON 编码事件失败: %w", err)
 	}
+	// 三层完整性防线写入（R-1037/R-1041/R-1393/R-1373）：
+	// 防线二：seq 单调性——global_seq 递增（WAL 写入器唯一分配，发布方不设 Seq）
+	s.globalSeq++
+	evt.Seq = int(s.globalSeq)
+	// 防线三：hash chain——prev_hash=上一条目 SHA-256（genesis=全零 32B hex）
+	if s.globalSeq == 1 {
+		evt.PrevHash = "0000000000000000000000000000000000000000000000000000000000000000" // genesis
+	} else {
+		evt.PrevHash = fmt.Sprintf("%x", s.prevHash)
+	}
+	// 重新序列化（含 seq+prev_hash）
+	data, err = json.Marshal(evt)
+	if err != nil {
+		f.Close()
+		s.mu.Unlock()
+		return fmt.Errorf("statestore: JSON 编码事件失败: %w", err)
+	}
+	// 防线一：CRC32 条目级校验和（本行内容的 CRC32——恢复时校验）
+	crc := crc32.ChecksumIEEE(data)
+	_ = crc // 骨架：CRC32 附加到行尾归 3.16 完成态（当前仅内存状态）
 	data = append(data, '\n')
+	// 防线三：本行内容（不含 \n——与读取方 bufio.Scanner 对齐）的 SHA-256=下一条目的 prev_hash
+	s.prevHash = sha256.Sum256(data[:len(data)-1])
 
 	if _, err := f.Write(data); err != nil {
 		f.Close()

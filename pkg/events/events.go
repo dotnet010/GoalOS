@@ -50,6 +50,7 @@ type Event struct {
 	SessionID string                 `json:"session_id,omitempty"` // R-772: 同一 Goal 的不同 Session。新 Session 重做时递增。
 	Payload   map[string]interface{} `json:"payload"`          // 事件特定数据
 	Metadata  map[string]interface{} `json:"metadata,omitempty"` // 元数据。可选
+	PrevHash  string                 `json:"prev_hash"`        // 第 13 字段（R-1393）：上一条目 SHA-256 hex；genesis=全零 32B
 }
 
 // ─── 事件类型常量 ──────────────────────────────────────────────

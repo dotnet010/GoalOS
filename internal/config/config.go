@@ -25,7 +25,16 @@ type Config struct {
 	LLM      LLMConfig      `yaml:"llm"`
 	MultiLLM MultiLLMConfig `yaml:"multi_llm"`
 	Policy   PolicyConfig   `yaml:"policy"`
+	Guard    GuardConfig    `yaml:"guard"`   // Guard LLM 前置审查配置（R-1340）
 	Persona  string         `yaml:"persona"`  // "concise"|"warm"|"minimal"
+}
+
+// GuardConfig 是 Guard LLM 前置审查配置（R-1340——金丝雀扫描预算载体）。
+type GuardConfig struct {
+	// ScanBudgetBytesPerSession 金丝雀扫描预算（字节/会话——R-1340 键）。
+	// 预算耗尽=fail-closed guard_budget_exhausted + SecurityIncident 去重（R-1382）；
+	// 预算耗尽后原始字节哈希匹配继续命中（depth=0 不降级）。
+	ScanBudgetBytesPerSession int `yaml:"scan_budget_bytes_per_session"` // 默认 1048576（1MB）
 }
 
 // DaemonConfig 是 Daemon 运行时配置。
