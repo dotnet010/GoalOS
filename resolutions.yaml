@@ -5943,3 +5943,35 @@ resolutions:
       - must_exist: "TypesInfo"
         in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
         reason: "计划必须落 TypesInfo 驱动注记（R-1465）"
+
+  R-1466:
+    desc: "发现 26——ReviewInput 具名类型(会议 #222): GuardLLM.Review 参数类型=governance.ReviewInput(governance 自己拥有的具名类型, 不 import sandbox——编排层转译: pluginrunner 把 sandbox.CompiledProfile 字段抽取构造 ReviewInput)。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "ReviewInput"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.17 必须落 ReviewInput 注记（R-1466）"
+
+  R-1467:
+    desc: "发现 27——schema 结构体承载(会议 #222): drift.Detector.Check 参数=GoalDeclarationSet/ToolCallSet 结构体(05 §3.18 附录 schema——字段名区分非裸参数顺序); 代码库扫描=5.14 §3.18 附录其他 schema 实体的同类检查(一次核查完)。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "GoalDeclarationSet"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.18 必须落 schema 结构体承载注记（R-1467）"
+
+  R-1468:
+    desc: "发现 28+29 合并——Skeleton[T] 统一+方向性判别补丁(会议 #222): 两函数骨架期统一走 Skeleton[Verdict].Unwrap()(不返回裁决类具体枚举值——WithinLimits/GuardEscalate 均不可信); Skeleton[T] 补丁: SkeletonValue() T+Justification() string(多值枚举的方向判别=显式声明选了哪个值+为什么); go/analysis 检查=裁决类枚举+error 签名形态的骨架实现是否满足错误路径下枚举值不可被信任约束。disposition: 生效"
+    files: [05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "SkeletonValue"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19 必须落 Skeleton[T] 补丁注记（R-1468）"
+
+  R-1469:
+    desc: "发现 30——staticcheck/golangci-lint 接入 CI 硬闸(会议 #222, 流程性建议跟踪执行): golangci-lint 接入 CI(含 S1039 规则——纯拼接/+= 循环拼接 PR 阶段自动标红); windows-daily.yml 加 golangci-lint 步骤; 流程性建议的跟踪执行=PR checklist 强制(本次改动是否引入新格式/编码决策? 是否已检索现有 ADR?——R-1457 类型 4 ADR 机制落地)。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "golangci-lint"
+        in_file: Makefile
+        reason: "Makefile 必须落 golangci-lint 接入（R-1469）"

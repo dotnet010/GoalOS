@@ -16,6 +16,10 @@ deadcode:
 	@which staticcheck > /dev/null 2>&1 || (echo "install staticcheck: go install honnef.co/go/tools/cmd/staticcheck@latest" && exit 1)
 	staticcheck ./...
 
+lint-full:
+	@which golangci-lint > /dev/null 2>&1 || (echo "install golangci-lint: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest" && exit 1)
+	golangci-lint run ./...
+
 all: lint race deadcode test build
 
 # ci 目标：运行全部 CI 检查脚本（v0.2.0 audit fix）。
