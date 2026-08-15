@@ -174,8 +174,11 @@ func main() {
 		}
 		fmt.Printf("预算已调整: %s → %s tokens\n", os.Args[3], resp["new_budget"])
 
+	case "error":
+		handleError(c, os.Args[2:])
+
 	case "review":
-			handleReview(c, os.Args[2:])
+		handleReview(c, os.Args[2:])
 
 	case "help", "--help", "-h":
 		printUsage()
@@ -188,6 +191,31 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("目标已创建: %s\n状态: 进行中\n", resp.GoalID)
+	}
+}
+
+// handleError 处理 goalos error 命令（R-1022——09 错误码知识库 v1）。
+// 子命令：explain <CODE>——四段式错误码解释（用户可见消息+触发条件+用户行动指南）。
+func handleError(c *client.Client, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "用法: goalos error explain <CODE>")
+		fmt.Fprintln(os.Stderr, "  goalos error explain SBX-WIN-F-001   解释错误码含义与修复指引")
+		os.Exit(1)
+	}
+	subCmd := args[0]
+	switch subCmd {
+	case "explain":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "用法: goalos error explain <CODE>")
+			os.Exit(1)
+		}
+		code := args[1]
+		// 骨架：错误码解释查询——实现归 daemon 端错误码知识库 API（09 §2 条目）。
+		// 先红挂起：daemon 端点 /api/errors/{code} 未实现（W3-4 任务）。
+		fmt.Printf("错误码: %s\n状态: [骨架] daemon 端错误码知识库 API 未实现（转绿归 W3-4）\n", code)
+	default:
+		fmt.Fprintf(os.Stderr, "未知子命令: %s\n用法: goalos error explain <CODE>\n", subCmd)
+		os.Exit(1)
 	}
 }
 
@@ -380,21 +408,31 @@ var lastVerdict string
 
 func verdictIcon(v string) string {
 	switch v {
-	case "PASS": return "✅"
-	case "WARN": return "⚠️"
-	case "FAIL": return "❌"
-	default: return ""
+	case "PASS":
+		return "✅"
+	case "WARN":
+		return "⚠️"
+	case "FAIL":
+		return "❌"
+	default:
+		return ""
 	}
 }
 
 func statusText(s string) string {
 	switch s {
-	case "created": return "目标已提交"
-	case "正在分析目标": return "LLM 正在分析目标..."
-	case "正在执行": return "正在执行任务..."
-	case "已完成": return "✅ 目标完成"
-	case "已失败": return "❌ 目标失败"
-	default: return s
+	case "created":
+		return "目标已提交"
+	case "正在分析目标":
+		return "LLM 正在分析目标..."
+	case "正在执行":
+		return "正在执行任务..."
+	case "已完成":
+		return "✅ 目标完成"
+	case "已失败":
+		return "❌ 目标失败"
+	default:
+		return s
 	}
 }
 
