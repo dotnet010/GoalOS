@@ -5839,3 +5839,43 @@ resolutions:
       - must_exist: "最小 stub"
         in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
         reason: "计划必须落骨架包最小 stub 纪律（R-1452）"
+
+  R-1453:
+    desc: "WAL 行 envelope 格式(会议 #216 裁决点1, 发现 12+13+16 合并): 行格式=<json>\t<crc32_hex>\t<format_version>\n; CRC32 计算输入=即将写入的确切字节(JSON 部分不含 \t 后内容); format_version=1(未来追加逐行字段兼容锚点+区分旧格式无 CRC 行); prevHash 暂存位置挪至 \n 前(可读性); R-1104 配合声明: 读取方长度不足/CRC32 不匹配→判定尾部截断(fail-closed 停服保留现场); 方案 3(长度前缀二进制帧)不采纳(可读性代价显式声明)。disposition: 生效"
+    files: [05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "envelope 格式"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落 WAL 行 envelope 格式（R-1453）"
+
+  R-1454:
+    desc: "骨架桩标注 CI 机检化(会议 #216 裁决点2, 发现 14 升维): AST 遍历函数体仅一行 return 字面量/零值模式→检查上方 SKELETON-LIMIT 标签存在性→无标签=CI 红; 首批 go/analysis 迁移检查项(R-1449 登记 W3-4 的首个落地)。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "骨架桩标注 CI 机检化"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落骨架桩标注 CI 机检化（R-1454）"
+
+  R-1455:
+    desc: "CanaryScan 骨架诚实化(会议 #216 裁决点3, 发现 15 拔高): CanaryScan 骨架返回 ErrNotImplemented(显式未实现 error——fail-open 方向的桩=安全监控隐性失效); 探针 D 拆分: ①入口存在+调用链正确(可绿) ②真实金丝雀凭证检测(转绿前必须红/skip——R-571 先红纪律)。disposition: 生效"
+    files: [12测试清单与规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "CanaryScan 骨架诚实化"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须落 CanaryScan 诚实化（R-1455）"
+
+  R-1456:
+    desc: "审查方法论——未承认共识的反向检查(会议 #216 裁决点4): 架构会议规范阶段 2 补——当「简单修正」的措辞里包含具体格式/结构选择时, 反向检查该选择是否同时出现在某条「需要开会」的复杂问题里; 如果有, 开会=正式追认共识, 不是从零讨论。disposition: 生效"
+    files: [架构会议规范.md]
+    verify:
+      - must_exist: "未承认共识的反向检查"
+        in_file: 架构会议规范.md
+        reason: "架构会议规范必须落审查方法论（R-1456）"
+
+  R-1457:
+    desc: "四类欠款并列的完整答案(会议 #216 裁决点5, Skeleton[T] 范围纠正——顾问两轮分析裁决): 类型 1 时间性欠款=Skeleton[T](Unwrap/Direction/TaskRef, Direction 保留 fail-open 必须附安全评审签字——组 A 标准解法); 类型 2 关系性欠款=具名关系类型(RawFrame 等逐场景设计无泛型参数化)+设计检查清单+Analyzer 启发式规则; 类型 3 授权/构造权欠款=包私有构造函数纪律+Analyzer 规则; 类型 4 格式/模式一致性欠款=ADR 机制+PR checklist 强制检索; go/analysis 元层=三类欠款各自 Analyzer 规则(守护者非替代品)。自证破绽显式记录: 方案自己提出的问题 4 自己的解法没有回答=不自洽。disposition: 生效"
+    files: [架构会议规范.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 12测试清单与规范.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "四类欠款并列"
+        in_file: 架构会议规范.md
+        reason: "架构会议规范必须落四类欠款并列（R-1457）"
