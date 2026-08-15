@@ -174,6 +174,18 @@ func main() {
 		}
 		fmt.Printf("预算已调整: %s → %s tokens\n", os.Args[3], resp["new_budget"])
 
+	case "decision":
+		handleDecision(c, os.Args[2:])
+
+	case "confirm":
+		handleConfirm(c, os.Args[2:])
+
+	case "retry":
+		handleRetry(c, os.Args[2:])
+
+	case "requirements":
+		handleRequirements(c, os.Args[2:])
+
 	case "error":
 		handleError(c, os.Args[2:])
 
@@ -192,6 +204,56 @@ func main() {
 		}
 		fmt.Printf("目标已创建: %s\n状态: 进行中\n", resp.GoalID)
 	}
+}
+
+// handleDecision 处理 goalos decision 命令（任务 7.20——R-1125 审批交互唯一呈现=CLI）。
+// 子命令：list/approve/reject/wait_more——审批决策命令族。
+func handleDecision(c *client.Client, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "用法: goalos decision list|approve|reject|wait_more <id>")
+		os.Exit(1)
+	}
+	subCmd := args[0]
+	switch subCmd {
+	case "list":
+		fmt.Println("[骨架] decision list——GET /api/approvals（daemon 端点既有）")
+	case "approve":
+		fmt.Println("[骨架] decision approve——POST /api/approvals/{id}/approve（daemon 端点既有）")
+	case "reject":
+		fmt.Println("[骨架] decision reject——POST /api/approvals/{id}/reject（daemon 端点既有）")
+	case "wait_more":
+		fmt.Println("[骨架] decision wait_more——POST /api/approvals/{id}/wait_more（daemon 端点既有）")
+	default:
+		fmt.Fprintf(os.Stderr, "未知子命令: %s\n", subCmd)
+		os.Exit(1)
+	}
+}
+
+// handleConfirm 处理 goalos confirm 命令（任务 7.20——前置状态 Planned/NeedsReview，R-1248）。
+func handleConfirm(c *client.Client, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "用法: goalos confirm <goal_id>")
+		os.Exit(1)
+	}
+	fmt.Println("[骨架] confirm——POST /api/goals/{id}/confirm（前置状态 Planned/NeedsReview）")
+}
+
+// handleRetry 处理 goalos retry 命令（任务 7.20——唯一恢复原语 R-1127）。
+func handleRetry(c *client.Client, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "用法: goalos retry <goal_id> [--feedback \"...\"]")
+		os.Exit(1)
+	}
+	fmt.Println("[骨架] retry——POST /api/goals/{id}/retry（唯一恢复原语 R-1127）")
+}
+
+// handleRequirements 处理 goalos requirements 命令（任务 7.20——需求注入）。
+func handleRequirements(c *client.Client, args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "用法: goalos requirements <goal_id> --add \"<需求>\"")
+		os.Exit(1)
+	}
+	fmt.Println("[骨架] requirements——POST /api/goals/{id}/requirements（需求注入）")
 }
 
 // handleError 处理 goalos error 命令（R-1022——09 错误码知识库 v1）。
