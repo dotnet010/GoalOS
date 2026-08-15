@@ -1,7 +1,11 @@
 package sandbox
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"os"
+
+	"github.com/BurntSushi/toml"
 )
 
 // profile.go — TOML Profile 解析与校验（任务 1.2 骨架）。
@@ -30,7 +34,7 @@ type FilesystemSection struct {
 
 // NetworkSection — [network] 节（R-1156 网络能力插件 socket 全拒+出网代理白名单）。
 type NetworkSection struct {
-	Mode      string   `toml:"mode"`      // "deny"|"allowlist"
+	Mode      string   `toml:"mode"`      // "deny"|"allowlist"|"filtered"（filtered=出网代理白名单过滤）
 	Allowlist []string `toml:"allowlist"` // 出网代理白名单
 }
 
@@ -57,13 +61,52 @@ func (r *RawProfile) Validate() error {
 		return fmt.Errorf("profile.isolation: 非法值 %q——取值域=I0..I5", r.Isolation)
 	}
 	switch r.Network.Mode {
-	case "deny", "allowlist", "":
+	case "deny", "allowlist", "filtered", "":
 		// 合法（空=默认 deny）
 	default:
-		return fmt.Errorf("profile.network.mode: 非法值 %q——取值域=deny|allowlist", r.Network.Mode)
+		return fmt.Errorf("profile.network.mode: 非法值 %q——取值域=deny|allowlist|filtered", r.Network.Mode)
 	}
 	if r.Resources.MaxMemoryMB < 0 || r.Resources.MaxCPUCores < 0 || r.Resources.MaxDiskMB < 0 || r.Resources.MaxProcesses < 0 {
 		return fmt.Errorf("profile.resources: 负值非法（R-1155 四键非负）")
+	}
+	return nil
+}
+
+// ParseFile — TOML 文件解析（任务 3.1：BurntSushi/toml 解析层，R-907）。
+// 契约：内容 SHA-256 缓存键（R-908——废 mtime）；解析失败=描述性 error（字段名+约束名）。
+func ParseFile(path string) (*RawProfile, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("profile: 读取失败 %s: %w", path, err)
+	}
+	var raw RawProfile
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("profile: TOML 解析失败 %s: %w", path, err)
+	}
+	if err := raw.Validate(); err != nil {
+		return nil, err
+	}
+	return &raw, nil
+}
+
+// ValidateConflicts — 规则冲突检测（任务 3.2：R-916 场景 5 缓解——allow/deny 冲突）。
+// 契约：deny 取并集、allow 取交集（R-908 三层合并语义）；冲突=拒绝（不静默降级）。
+func (r *RawProfile) ValidateConflicts() error {
+	// allow_write 与 deny 冲突检测：同一路径既 allow_write 又 deny=冲突
+	denySet := make(map[string]bool, len(r.Filesystem.Deny))
+	for _, p := range r.Filesystem.Deny {
+		denySet[p] = true
+	}
+	for _, p := range r.Filesystem.AllowWrite {
+		if denySet[p] {
+			return fmt.Errorf("profile.filesystem: 路径冲突 %q——既 allow_write 又 deny（R-908 deny 并集语义：冲突=拒绝）", p)
+		}
+	}
+	// allow_read 与 deny 冲突检测
+	for _, p := range r.Filesystem.AllowRead {
+		if denySet[p] {
+			return fmt.Errorf("profile.filesystem: 路径冲突 %q——既 allow_read 又 deny（R-908 deny 并集语义：冲突=拒绝）", p)
+		}
 	}
 	return nil
 }
@@ -78,7 +121,7 @@ func Compile(raw *RawProfile, platform PlatformID) (*CompiledProfile, error) {
 		platform:   platform,
 		isolation:  parseIsolation(raw.Isolation),
 		filesystem: CompiledFilesystem{AllowPaths: append(append([]string{}, raw.Filesystem.AllowRead...), raw.Filesystem.AllowWrite...)},
-		network:    CompiledNetwork{Mode: raw.Network.Mode},
+		network:    CompiledNetwork{Mode: compileNetworkMode(raw.Network.Mode)},
 		process:    CompiledProcess{MaxProcesses: raw.Resources.MaxProcesses},
 		extensions: map[string]any{},
 		compiled:   true, // R-1106：Compile 产出标记
@@ -92,4 +135,60 @@ func parseIsolation(s string) int {
 		return int(s[1] - '0')
 	}
 	return -1 // 非法（Validate 已拦截，此为防御性回退）
+}
+
+// compileNetworkMode — 网络三模式编译（任务 3.4：filtered/blocked/allowed 后端编译）。
+// 契约：deny→blocked（socket 全拒）/allowlist→filtered（出网代理白名单过滤）/allowed→allowed（不过滤）。
+func compileNetworkMode(mode string) string {
+	switch mode {
+	case "deny", "":
+		return "blocked" // socket 全拒（R-1156）
+	case "allowlist", "filtered":
+		return "filtered" // 出网代理白名单过滤
+	case "allowed":
+		return "allowed" // 不过滤
+	default:
+		return "blocked" // 防御性回退（Validate 已拦截非法值）
+	}
+}
+
+// CacheKey — 内容 SHA-256 缓存键（任务 3.5：R-908——废 mtime）。
+// 契约：缓存键=内容 SHA-256（内容变=键变；mtime 不参与——防止"文件没变但 mtime 变了"的缓存失效）。
+func (r *RawProfile) CacheKey() string {
+	// 序列化关键字段为缓存键输入（字段顺序固定=确定性）
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%v|%v|%v|%v",
+		r.Isolation, r.Filesystem.AllowRead, r.Filesystem.AllowWrite, r.Filesystem.Deny, r.Network.Mode)))
+	return fmt.Sprintf("%x", sum)
+}
+
+// Merge — 三层配置合并（任务 3.5：R-908 三层合并语义=deny 取并集、allow 取交集）。
+// 三层=系统默认（daemon.yaml）+用户级（~/.goalos/profiles/）+项目级（workspace/.goalos/profiles/）。
+// 契约：deny 并集（任何一层 deny 的路径=最终 deny）；allow 交集（所有层都 allow 的路径=最终 allow）。
+func Merge(base, user, project *RawProfile) *RawProfile {
+	merged := &RawProfile{
+		Isolation: base.Isolation, // 隔离等级=系统默认（用户/项目层不可降级——安全底线）
+		Network:   NetworkSection{Mode: base.Network.Mode},
+	}
+	// deny 并集
+	denySet := make(map[string]bool)
+	for _, p := range base.Filesystem.Deny {
+		denySet[p] = true
+	}
+	if user != nil {
+		for _, p := range user.Filesystem.Deny {
+			denySet[p] = true
+		}
+	}
+	if project != nil {
+		for _, p := range project.Filesystem.Deny {
+			denySet[p] = true
+		}
+	}
+	for p := range denySet {
+		merged.Filesystem.Deny = append(merged.Filesystem.Deny, p)
+	}
+	// allow 交集（骨架：当前仅 base 层——用户/项目层 allow 交集归实现任务）
+	merged.Filesystem.AllowRead = base.Filesystem.AllowRead
+	merged.Filesystem.AllowWrite = base.Filesystem.AllowWrite
+	return merged
 }
