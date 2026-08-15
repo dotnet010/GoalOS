@@ -5804,3 +5804,38 @@ resolutions:
       - must_exist: "AuthorizedSpec"
         in_file: 05软件架构文档.md
         reason: "05 必须落 AuthorizedSpec 注记（R-1448）"
+
+  R-1449:
+    desc: "CI 脚本 go/analysis 迁移登记(会议 #214, 发现 7+8 根因): check-compiledprofile-construction.sh 与 check-warn-branch.sh 迁移到 go/analysis pass(AST 遍历——函数声明节点类型签名+注释节点分离); 登记 W3-4 CI 脚本重写任务。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "go/analysis 迁移"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须登记 go/analysis 迁移任务（R-1449）"
+
+  R-1450:
+    desc: "staticcheck 接入 CI 硬闸(会议 #214, 发现 9 根因): Makefile deadcode 目标升级为硬闸(staticcheck 未安装=CI 红); windows-daily.yml 加 staticcheck 步骤。disposition: 生效"
+    files: []
+    verify:
+      - must_exist: "staticcheck ./..."
+        in_file: Makefile
+        reason: "Makefile 必须落 staticcheck 硬闸（R-1450）"
+      - must_exist: "staticcheck"
+        in_file: .github/workflows/windows-daily.yml
+        reason: "CI 工作流必须落 staticcheck 步骤（R-1450）"
+
+  R-1451:
+    desc: "UnmarshalPayload 归位 protocol 层(会议 #214, 发现 10 彻底形态): UnmarshalPayload 从 ipc/frame.go 搬至 pluginrunner/fd3_protocol.go——传输层职责收窄=纯字节搬运(RawFrame 行), 反序列化=VerifyHMAC 通过后的协议动作。disposition: 生效"
+    files: [08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "UnmarshalPayload"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §17.1 必须落 UnmarshalPayload 归位注记（R-1451）"
+
+  R-1452:
+    desc: "骨架包最小 stub+CI 区分 SKIP/FAIL(会议 #214, 发现 11): 纯测试包必须含最小 stub 源文件(ErrNotImplemented+New() 返回 error——包可编译/测试可运行/断言处 t.Skip); CI 区分: SKIP=合法先红(R-571 纪律), FAIL=非法。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "最小 stub"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落骨架包最小 stub 纪律（R-1452）"
