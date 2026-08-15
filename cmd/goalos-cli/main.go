@@ -174,6 +174,9 @@ func main() {
 		}
 		fmt.Printf("预算已调整: %s → %s tokens\n", os.Args[3], resp["new_budget"])
 
+	case "keepalive":
+		handleKeepAlive(c, os.Args[2:])
+
 	case "decision":
 		handleDecision(c, os.Args[2:])
 
@@ -204,6 +207,13 @@ func main() {
 		}
 		fmt.Printf("目标已创建: %s\n状态: 进行中\n", resp.GoalID)
 	}
+}
+
+// handleKeepAlive 处理 goalos keepalive 命令（任务 7.10——R-952 CLI 断线保活实现）。
+// 契约：Keep-Alive 心跳+重连后 events.jsonl 增量拉取（04-CLI 规范已更）。
+func handleKeepAlive(c *client.Client, args []string) {
+	// 骨架：断线保活实现归 7.10 完成态（Keep-Alive 心跳+重连后增量拉取）。
+	fmt.Println("[骨架] keepalive——Keep-Alive 心跳+重连后 events.jsonl 增量拉取（R-952）")
 }
 
 // handleDecision 处理 goalos decision 命令（任务 7.20——R-1125 审批交互唯一呈现=CLI）。
