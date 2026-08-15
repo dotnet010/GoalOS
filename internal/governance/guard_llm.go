@@ -6,7 +6,9 @@
 // ③人类终审。DENY=fail-closed；ALLOW 不自证；guard 不可用→最高审批级。
 package governance
 
-import "fmt"
+import "errors"
+
+var ErrNotImplemented = errors.New("guard llm: not implemented (skeleton stage)")
 
 // GuardVerdict — Guard 三层验证的结构化裁决（R-1339 词汇统一：ALLOW/DENY/ESCALATE）。
 type GuardVerdict string
@@ -20,11 +22,23 @@ const (
 // GuardLLM — Guard LLM 前置审查（三层验证统一入口）。
 type GuardLLM struct{}
 
+// ReviewInput — Guard LLM 前置审查输入（R-1466——发现 26：governance 自己拥有的
+// 具名类型，不 import sandbox——编排层转译：pluginrunner 把 sandbox.CompiledProfile
+// 字段抽取构造 ReviewInput）。
+type ReviewInput struct {
+	Command    string   // 命令字符串
+	AllowPaths []string // 文件系统白名单路径（CompiledProfile.Filesystem().AllowPaths 抽取）
+	NetMode    string   // 网络模式（CompiledProfile.Network().Mode 抽取）
+}
+
 // Review — 前置审查（三层验证）。
 // ①静态确定性层（零延迟）→②Guard LLM（跨 Provider 交叉）→③人类终审。
 // 契约：DENY=fail-closed（拒绝执行）；guard 不可用→最高审批级（ESCALATE）。
-func (g *GuardLLM) Review(cmd string, profile interface{}) (GuardVerdict, error) {
+func (g *GuardLLM) Review(input ReviewInput) (GuardVerdict, error) {
 	// 骨架：三层验证实现归 5.12 完成态——静态确定性层收敛为统一入口。
 	// 契约：静态确定性层零延迟（CommandSpec/TOML profile/参数白名单——已有机制）。
-	return GuardEscalate, fmt.Errorf("guard llm: 骨架——实现归任务 5.12 完成态（三层验证统一入口）")
+	// 骨架：三层验证实现归 5.12 完成态——静态确定性层收敛为统一入口。
+	// R-1468（发现 29）：骨架期不返回裁决类具体枚举值（GuardEscalate 不可信）——
+	// 统一走 Skeleton[GuardVerdict].Unwrap() 显式未实现 error。
+	return "", ErrNotImplemented
 }

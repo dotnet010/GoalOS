@@ -6,7 +6,7 @@
 // R-1110 v0.3.0=产品版定位：诚实反馈是产品原则）。
 package daemon
 
-import "fmt"
+import "strings"
 
 // DegradedBanner — 用户可见降级警告（CLI 启动横幅+SSE 事件流）。
 type DegradedBanner struct {
@@ -19,12 +19,13 @@ func (d *DegradedBanner) Render() string {
 	if len(d.Items) == 0 {
 		return ""
 	}
-	msg := "[降级警告] 以下组件运行于降级模式：\n"
+	var sb strings.Builder
+	sb.WriteString("[降级警告] 以下组件运行于降级模式：\n")
 	for _, item := range d.Items {
-		msg += fmt.Sprintf("  - %s\n", item)
+		sb.WriteString("  - " + item + "\n")
 	}
-	msg += "当前安全级别=降级模式（详见 goalos sandbox doctor）"
-	return msg
+	sb.WriteString("当前安全级别=降级模式（详见 goalos sandbox doctor）")
+	return sb.String()
 }
 
 // SSEPayload — SSE 事件流载荷（降级警告事件）。
