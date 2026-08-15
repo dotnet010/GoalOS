@@ -155,9 +155,14 @@ func compileNetworkMode(mode string) string {
 // CacheKey — 内容 SHA-256 缓存键（任务 3.5：R-908——废 mtime）。
 // 契约：缓存键=内容 SHA-256（内容变=键变；mtime 不参与——防止"文件没变但 mtime 变了"的缓存失效）。
 func (r *RawProfile) CacheKey() string {
-	// 序列化关键字段为缓存键输入（字段顺序固定=确定性）
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%v|%v|%v|%v",
-		r.Isolation, r.Filesystem.AllowRead, r.Filesystem.AllowWrite, r.Filesystem.Deny, r.Network.Mode)))
+	// 序列化关键字段为缓存键输入（字段顺序固定=确定性；CanonicalKey 长度前缀编码——R-1460，无歧义）
+	sum := sha256.Sum256([]byte(CanonicalKey(
+		r.Isolation,
+		CanonicalKey(r.Filesystem.AllowRead...),
+		CanonicalKey(r.Filesystem.AllowWrite...),
+		CanonicalKey(r.Filesystem.Deny...),
+		r.Network.Mode,
+	)))
 	return fmt.Sprintf("%x", sum)
 }
 
