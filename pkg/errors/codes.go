@@ -11,8 +11,6 @@
 // 旧版三段式常量（GOAL_NOT_FOUND 等）保留为兼容层——新码一律四段式。
 package errors
 
-import "fmt"
-
 // ─── v0.3.0 四段式错误码（P0 覆盖清单——09 §2 条目）───
 
 // SBX-WIN：沙箱域/Windows/Fatal
@@ -48,4 +46,4 @@ const (
 func (c Code) String() string { return string(c) }
 
 // Error — 实现 error 接口（四段式码的默认消息=码值本身；用户可见消息归 09 知识库条目）。
-func (c Code) Error() string { return fmt.Sprintf("[%s]", string(c)) }
+func (c Code) Error() string { return "[" + string(c) + "]" }

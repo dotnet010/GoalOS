@@ -42,7 +42,7 @@ while IFS= read -r file; do
     while IFS= read -r line; do
         lineno="${line%%:*}"
         # 提取该行所在的函数名（向上找最近的 func 行）
-        func_name=$(sed -n "1,${lineno}p" "$file" | grep -E '^func ' | tail -1 | sed 's/^func \([^(]*\).*/\1/')
+        func_name=$(sed -n "1,${lineno}p" "$file" | grep -E '^func ' | tail -1 | sed -E 's/^func (\([^)]*\) )?([A-Za-z_][A-Za-z0-9_]*).*/\2/')
         if [ "$func_name" != "Compile" ]; then
             FAILED=$((FAILED + 1))
             echo -e "  ${RED}[FAIL]${NC} ${file#$REPO_DIR/}:$lineno CompiledProfile{ 出现在 $func_name()——仅 Compile() 内允许（R-1106 零值非法化）"

@@ -6,8 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/goalos/goalos/internal/pluginrunner/ipc"
 )
 
 // FD3 是 Plugin 子进程的 IPC 控制通道文件描述符。
@@ -64,4 +67,14 @@ func GenerateSessionToken() (string, error) {
 		return "", fmt.Errorf("session_token: crypto/rand failed: %w", err)
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// UnmarshalPayload — RawFrame.PayloadLine→Message（R-1447——传输层职责收窄后的协议层职责）。
+// 契约：VerifyHMAC 通过后调用——反序列化=协议动作，不是字节搬运。
+func UnmarshalPayload(rf *ipc.RawFrame) (*ipc.Message, error) {
+	var msg ipc.Message
+	if err := json.Unmarshal(rf.PayloadLine, &msg); err != nil {
+		return nil, fmt.Errorf("protocol: JSON 反序列化失败: %w", err)
+	}
+	return &msg, nil
 }

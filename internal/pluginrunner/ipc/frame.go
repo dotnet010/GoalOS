@@ -2,7 +2,6 @@ package ipc
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 )
@@ -60,11 +59,5 @@ func decodeFrame(r io.Reader) (*RawFrame, error) {
 	return rf, nil
 }
 
-// UnmarshalPayload — RawFrame.PayloadLine→Message（协议层调用——VerifyHMAC 通过后）。
-func UnmarshalPayload(rf *RawFrame) (*Message, error) {
-	var msg Message
-	if err := json.Unmarshal(rf.PayloadLine, &msg); err != nil {
-		return nil, fmt.Errorf("frame: JSON 反序列化失败: %w", err)
-	}
-	return &msg, nil
-}
+// UnmarshalPayload 归 protocol 层（fd3_protocol.go）——传输层职责收窄=纯字节搬运（R-1447 彻底形态）。
+

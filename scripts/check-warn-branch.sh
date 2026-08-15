@@ -37,7 +37,7 @@ while IFS= read -r file; do
     [ -z "$HITS" ] && continue
 
     # 检查是否有显式计数器递增（warnCount++/warn_escalation_threshold 引用）
-    HAS_COUNTER=$(grep -cE 'warnCount|warn_escalation_threshold|warnings.*append' "$file" 2>/dev/null || true)
+    HAS_COUNTER=$(grep -vE '^\s*//' "$file" | grep -cE 'warnCount|warn_escalation_threshold|warnings.*append' 2>/dev/null || true)
     if [ "$HAS_COUNTER" -eq 0 ]; then
         FAILED=$((FAILED + 1))
         echo -e "  ${RED}[FAIL]${NC} ${file#$REPO_DIR/} Check WARN 分支无显式计数器——静默忽略 WARN=CI FAIL（R-1232）:"
