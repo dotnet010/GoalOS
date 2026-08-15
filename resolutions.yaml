@@ -5919,3 +5919,27 @@ resolutions:
       - must_exist: "会议 #218"
         in_file: 会议纪要.md
         reason: "会议纪要必须含会议 #218 记录（R-1462）"
+
+  R-1463:
+    desc: "穷尽性欠款第五类+SimTarget 类型收窄(会议 #220, 发现 22): 穷尽性/划分完整性欠款=第五类(值域被要求覆盖完整却无机制保证); SimTarget 类型收窄+穷尽性 switch+exhaustive linter 检查; build tag=类型系统触及范围之外的欠款(go/build/constraint 检查脚本登记 W3-4)。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
+    verify:
+      - must_exist: "穷尽性欠款"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落穷尽性欠款注记（R-1463）"
+
+  R-1464:
+    desc: "发现 24 前提验证+项目级测试文件排除约定(会议 #220): checker.IncludeTests=true(singlechecker/multichecker 默认分析测试文件——grep checker.go:53 实证); 排除逻辑=必要非冗余; 项目级约定=自定义 analyzer 排除测试文件(规则编号固化)。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "IncludeTests"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落 IncludeTests 前提验证注记（R-1464）"
+
+  R-1465:
+    desc: "发现 25 自指——TypesInfo 驱动治本(会议 #220): naked_map.go 迁移 TypesInfo 驱动(Underlying() 穿透类型别名和具名类型——make()/类型别名/init() 延迟赋值/嵌套字段一次性堵住); 真实命中 trace.go active map 三处(白名单登记或 SafeMap 包装待裁决)。disposition: 生效"
+    files: [开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "TypesInfo"
+        in_file: 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md
+        reason: "计划必须落 TypesInfo 驱动注记（R-1465）"
