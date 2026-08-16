@@ -52,10 +52,30 @@ type VerificationResult struct {
 }
 
 // Context is the planning context.
+// R-741（新 Session 重做——会议 #107）：Agent 在开启新 Session 重新 Plan 时能够感知已完成的
+// 产出物，避免重复规划与重复执行——CompletedArtifacts 字典+ExecutionHistory 结构入 Context。
 type Context struct {
 	GoalID      string
 	GoalText    string
 	AnchorCheck bool
+
+	// CompletedArtifacts — 已完成 Action 的产出物字典（R-741 新 Session 重做）。
+	// 契约：key=ActionID，value=产出物路径列表（artifact_paths）——Agent 重新 Plan 时
+	// 感知已完成产出物，避免重复规划与重复执行。
+	CompletedArtifacts map[string][]string
+
+	// ExecutionHistory — 执行历史结构（R-741 新 Session 重做）。
+	// 契约：已完成 Action 的执行记录（ActionID/Status/ArtifactPaths/Timestamp）——
+	// Agent 重新 Plan 时感知执行历史，基于当前上下文+失败原因重新规划。
+	ExecutionHistory []ExecutionRecord
+}
+
+// ExecutionRecord — 执行记录（已完成 Action 的历史）。
+type ExecutionRecord struct {
+	ActionID      string   // Action ID
+	Status        string   // 执行状态（Completed/Failed/...）
+	ArtifactPaths []string // 产出物路径列表（artifact_paths）
+	Timestamp     string   // 完成时间戳
 }
 
 // CompletionCriteria defines "what does done look like" for a Goal.
@@ -106,12 +126,12 @@ type GraphEdge struct {
 
 // Engine is the Mission Engine.
 type Engine struct {
-	bus          *eventbus.EventBus
-	agent        Agent
-	fallbackAgent Agent     // v0.2.2 W8 B13: Plan 失败时的回退 Provider
-	seq          int
-	flowComposer interface{} // A18: FlowComposer 验证（*scheduler.FlowComposer）
-	autoConfirm  bool        // v0.2.2 W6 B10: autonomous 模式自动确认
+	bus           *eventbus.EventBus
+	agent         Agent
+	fallbackAgent Agent // v0.2.2 W8 B13: Plan 失败时的回退 Provider
+	seq           int
+	flowComposer  interface{} // A18: FlowComposer 验证（*scheduler.FlowComposer）
+	autoConfirm   bool        // v0.2.2 W6 B10: autonomous 模式自动确认
 }
 
 // SetFallbackAgent 设置 Plan 阶段的回退 Provider（B13）。
@@ -480,9 +500,9 @@ func isTimeout(err error) bool {
 // pushProgress 推送 Plan 阶段进度到 EventBus（R-835: 实时反馈——SSE /api/events 事件流，CLI 消费；Dashboard 已拆除 R-1372）。
 func (e *Engine) pushProgress(goalID, stage, detail string) {
 	e.publish(events.Event{
-		Type:    "PlanProgressUpdate",
-		GoalID:  goalID,
-		Source:  "mission-engine",
+		Type:   "PlanProgressUpdate",
+		GoalID: goalID,
+		Source: "mission-engine",
 		Payload: map[string]interface{}{
 			"stage":  stage,
 			"detail": detail,
