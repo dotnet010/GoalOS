@@ -86,6 +86,10 @@ func TestCloneBPF_FixtureVectors(t *testing.T) {
 		{"clone-vec-006 clone3 ENOSYS", clone3Nr, 0x40000000, seccompRetErrno | uint32(38)},
 		// 通用拒绝升级（Default 白名单外 syscall——socket）
 		{"socket 通用拒绝 KILL_PROCESS", detectArchSyscallNo(t, "socket"), 0, seccompRetKillProcess},
+		// Go runtime 异步抢占三件套必须放行（插件二进制为 Go 编译——CI 红出根因）
+		{"tgkill 抢占信号放行", detectArchSyscallNo(t, "tgkill"), 0, seccompRetAllow},
+		{"rt_sigreturn 信号返回放行", detectArchSyscallNo(t, "rt_sigreturn"), 0, seccompRetAllow},
+		{"sched_yield 让步放行", detectArchSyscallNo(t, "sched_yield"), 0, seccompRetAllow},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

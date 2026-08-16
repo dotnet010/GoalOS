@@ -214,6 +214,7 @@ func runThreadCloneHelper() {
 		fmt.Fprintf(os.Stderr, "THREAD_HELPER: Apply: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Printf("THREAD_HELPER: pre-clone flags=0x%X\n", cloneThreadFlags)
 	tid, errno := rawCloneThread(cloneThreadFlags)
 	if errno != 0 {
 		fmt.Fprintf(os.Stderr, "THREAD_HELPER: thread_created=false errno=%d\n", errno)

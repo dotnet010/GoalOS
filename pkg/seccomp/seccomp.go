@@ -16,6 +16,10 @@ type Profile struct {
 }
 
 // Default 返回 L0-L2 严格 seccomp 配置（deny-all + ~30 syscall 白名单）。
+// v0.3.0 fix（CI 红出）: 补 Go runtime 异步抢占三件套——tgkill（SIGURG 抢占信号）/
+// rt_sigreturn（信号处理器返回）/sched_yield（runtime 让步路径）。插件二进制多为
+// Go（shell-executor 即 Go 编译）——缺这三者时 Apply 后首个抢占事件=deny→
+// KILL_PROCESS 击杀整个插件进程（CI 实测 SIGSYS 无输出）。
 func Default() *Profile {
 	return &Profile{
 		DefaultAction: "kill",
@@ -25,6 +29,7 @@ func Default() *Profile {
 			"openat", "lseek", "fstat", "stat", "access", "getdents64",
 			"clock_gettime", "gettimeofday", "nanosleep",
 			"futex", "clone", "rt_sigprocmask", "sigaltstack",
+			"tgkill", "rt_sigreturn", "sched_yield",
 		},
 	}
 }
