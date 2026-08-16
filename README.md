@@ -17,22 +17,24 @@ You state your goal → The system understands → You agree on "what done means
 
 Any feature that does not directly serve this chain should be removed.
 
-## v0.2.1 Core Capabilities
+## v0.3.0 Core Capabilities
 
 | Capability | Description |
 |------------|-------------|
 | **CompletionContract** | System establishes a contract with you on "what done means" before execution begins |
 | **PipelineRunner** | 3-primitive pipeline: Check→Exec→Decide. Wait is intermediate state. State projected from events |
-| **Flow Templates** | Same goal type follows the same standard process — predictable results |
+| **Flow Templates** | Same goal type follows the same standard process — predictable results. Unknown flow → confirmation flow only (no silent fallback, R-1368) |
 | **Multi-LLM Verification** | Multiple AI models (cross-Provider) independently review output. Voting-based verdict (R-844). Debate round on divergence (R-860). Cold review mode (R-858) |
 | **ReviewReport + User Decision** | Structured review reports with per-Provider reasoning. Dashboard review panel + CLI `goalos review`. User decides: retry / accept / refine |
 | **Verification Pyramid** | auto_tests → cross_model_review → behavioral_tests. Deterministic verification is the final authority |
 | **New Session Redo** | On failure: fresh session retry (1×) → human handoff. No same-session retry loop (Semantic Drift protection) |
 | **PlanHash Tamper Detection** | SHA256(MissionGraph) computed at plan time, verified throughout execution (R-859) |
 | **Provider Health Check** | All MultiLLM providers tested at daemon startup. Unhealthy providers auto-skipped (R-861) |
-| **Zero Trust Security** | Capability Token + seccomp sandbox (Linux) + FD3 IPC + HMAC. Every Action passes through Governance |
+| **Zero Trust Security** | Capability Token + seccomp sandbox (Linux) + FD3 IPC + HMAC. Every Action passes through Governance. Governance face UDS-only — approvals family never exposed over TCP (R-1378/R-1322) |
 | **Persona Decoupled** | The system's "voice" is under your control. Core produces neutral events; Persona controls how it speaks |
 | **Honest Feedback** | System never fakes success. MultiLLM review is probabilistic — not deterministic verification. Review report shows this disclosure (R-865) |
+| **WAL Truth Model** | events.jsonl = single logical truth (append + fsync commit point). Snapshot projections are discardable lagging side-effects (R-1397). CRC32 + global seq + hash chain integrity (R-1393/R-1453) |
+| **State Algebra Matrix** | Four-dimensional state matrix (Goal×Action×Pipeline×Approval) as single authority. Illegal transitions rejected + StateMachineViolation (R-1095/R-1407/R-1343) |
 | **Runtime Observability** | Audit timeline, runtime invariants, Prometheus metrics, SSE progress streaming |
 
 ## Quick Start

@@ -17,22 +17,24 @@ GoalOS 不是聊天机器人，不是 Workflow 引擎，不是 Agent 框架。�
 
 任何不直接服务这一链路的功能都应被摒弃。
 
-## v0.2.1 核心能力
+## v0.3.0 核心能力
 
 | 能力 | 说明 |
 |------|------|
 | **CompletionContract** | 系统与你就"什么叫完成"建立契约。不再盲目执行 |
 | **PipelineRunner** | 三原语管线：Check→Exec→Decide。Wait 为中间状态。状态从事件推导 |
-| **Flow 模板** | 同一类目标每次按相同标准流程执行——结果可预测 |
+| **Flow 模板** | 同一类目标每次按相同标准流程执行——结果可预测。flow 无匹配=确认流程唯一路径（禁止静默回退，R-1368） |
 | **Multi-LLM 交叉验证** | 多 AI 模型（跨 Provider）独立审查产出。投票制裁决（R-844）。分歧时辩论轮次（R-860）。冷验证模式（R-858） |
 | **ReviewReport + 用户决策** | 结构化审查报告——含每个 Provider 的独立意见。Dashboard 审查面板 + CLI `goalos review`。用户决定：带反馈重试 / 接受结果 / 修改需求 |
 | **验证金字塔** | auto_tests → cross_model_review → behavioral_tests。确定性验证是最终裁决 |
 | **新 Session 重做** | 执行失败时：新 Session 重试 1 次 → 人工介入。取消同 Session 循环重试（语义漂移防护） |
 | **PlanHash 防篡改** | SHA256(MissionGraph) 在规划时计算，执行全链路验证（R-859） |
 | **Provider 健康检查** | daemon 启动时检测所有 MultiLLM Provider。不可用的自动跳过（R-861） |
-| **Zero Trust 安全** | Capability Token + seccomp 沙箱（Linux）+ FD3 IPC + HMAC。每个 Action 必经 Governance 五引擎审批 |
+| **Zero Trust 安全** | Capability Token + seccomp 沙箱（Linux）+ FD3 IPC + HMAC。每个 Action 必经 Governance 五引擎审批。治理面 UDS-only——审批族永不暴露于 TCP（R-1378/R-1322） |
 | **Persona 解耦** | 系统的"声音"由你控制。Core 产中性事件，Persona 决定怎么说 |
 | **诚实反馈** | 系统不伪造成功。MultiLLM 审查是概率性判断——不是确定性验证。审查面板显式标注（R-865） |
+| **WAL Truth 模型** | events.jsonl=唯一逻辑真理（append+fsync 提交点）。快照投影=可丢弃滞后副作用（R-1397）。CRC32+全局 seq+哈希链完整性（R-1393/R-1453） |
+| **状态代数矩阵** | 四维状态矩阵（Goal×Action×Pipeline×Approval）单一权威。非法迁移拒绝+StateMachineViolation（R-1095/R-1407/R-1343） |
 | **运行可观测** | Timeline 审计、运行时不变式、Prometheus metrics、SSE 进度推送 |
 
 ## 快速开始
