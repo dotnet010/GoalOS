@@ -2,20 +2,47 @@
 //
 // 契约：三层验证——①静态确定性层（CommandSpec/TOML profile/参数白名单，零延迟——
 // 已有机制收敛为统一入口）②Guard LLM（第二模型、跨 Provider 部署 OpenAI↔Ollama 交叉；
-// 不可信输入以数据非指令呈现+显式分隔符协议；结构化 verdict=ALLOW/DENY/ESCALATE）
-// ③人类终审。DENY=fail-closed；ALLOW 不自证；guard 不可用→最高审批级。
+// 不可信输入以数据非指令呈现+显式分隔符协议；结构化 verdict=safe/suspicious/escalate
+// ——R-1339 词汇统一）③人类终审。escalate=拒绝(fail-closed)；safe 不自证；
+// guard 不可用→最高审批级（suspicious）。
 package governance
 
 import "github.com/goalos/goalos/internal/skeleton"
 
-// GuardVerdict — Guard 三层验证的结构化裁决（R-1339 词汇统一：ALLOW/DENY/ESCALATE）。
+// GuardVerdict — Guard 三层验证的结构化裁决（R-1339 词汇统一：safe/suspicious/escalate）。
 type GuardVerdict string
 
 const (
-	GuardAllow    GuardVerdict = "ALLOW"    // 允许（不自证——不等于安全）
-	GuardDeny     GuardVerdict = "DENY"     // 拒绝（fail-closed）
-	GuardEscalate GuardVerdict = "ESCALATE" // 升级人类终审
+	GuardSafe       GuardVerdict = "safe"       // 放行（不自证——不等于安全）
+	GuardSuspicious GuardVerdict = "suspicious" // 升级人类审批（风险级临时提升 R-1392）
+	GuardRejected   GuardVerdict = "escalate"   // 拒绝（reject_reason=guard_rejected，fail-closed）
 )
+
+// GuardVerdictAction — guard 裁决的三值行为映射结果（R-1339）:
+// safe=放行 / suspicious=升级人类审批 / escalate=拒绝(guard_rejected)。
+type GuardVerdictAction string
+
+const (
+	VerdictProceed       GuardVerdictAction = "proceed"        // safe=放行
+	VerdictEscalateHuman GuardVerdictAction = "escalate_human" // suspicious=升级人类审批
+	VerdictGuardRejected GuardVerdictAction = "guard_rejected" // escalate=拒绝
+)
+
+// MapGuardVerdict — guard verdict 三值映射的公开判定入口（R-1339）。
+// safe=放行 / suspicious=升级人类审批（ActionPendingApproval，风险级临时提升
+// R-1392）/ escalate=拒绝(guard_rejected)。未知值 fail-closed → guard_rejected
+// ——禁止静默放行（R-1339 escalate=拒绝）。
+func (e *Engine) MapGuardVerdict(verdict string) GuardVerdictAction {
+	switch GuardVerdict(verdict) {
+	case GuardSafe:
+		return VerdictProceed
+	case GuardSuspicious:
+		return VerdictEscalateHuman
+	default:
+		// GuardRejected 与未知值同路径——fail-closed（R-1339 escalate=拒绝）
+		return VerdictGuardRejected
+	}
+}
 
 // GuardLLM — Guard LLM 前置审查（三层验证统一入口）。
 type GuardLLM struct{}
@@ -31,7 +58,7 @@ type ReviewInput struct {
 
 // Review — 前置审查（三层验证）。
 // ①静态确定性层（零延迟）→②Guard LLM（跨 Provider 交叉）→③人类终审。
-// 契约：DENY=fail-closed（拒绝执行）；guard 不可用→最高审批级（ESCALATE）。
+// 契约：escalate=拒绝（fail-closed）；guard 不可用→最高审批级（suspicious）。
 func (g *GuardLLM) Review(input ReviewInput) (skeleton.Skeleton[GuardVerdict], error) {
 	// 骨架：三层验证实现归 5.12 完成态——静态确定性层收敛为统一入口。
 	// R-1468（发现 29）+R-1473（发现 35 先例核实）：骨架期=完整 Skeleton[GuardVerdict] 包装类型

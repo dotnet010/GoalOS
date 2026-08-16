@@ -60,20 +60,27 @@ func TestReject_WakesGoalRunner(t *testing.T) {
 			pr := NewPipelineRunner(bus, store)
 			gr := NewGoalRunner(Goal{ID: goalID}, bus, store, pr, NewGoalAnchorTracker(3))
 
-			// 等待窗口：短超时 500ms——红态下 waitForWakeup 超时返回 WaitTimeout，
-			// 蓝态（转绿后）下拒绝族事件在毫秒级唤醒，测试自身不引入长等待。
+			// 等待窗口：5s——绿态下拒绝族事件在毫秒级唤醒（事件到达即返回），
+			// 长窗口不拖慢测试；红态下超时返回 WaitTimeout 判 FAIL。
+			//（原 500ms 窗口在本机调度延迟>500ms 时会在订阅建立前超时——事件丢失误判。）
 			result := &PipelineResult{
 				Status:     PipelineWaiting,
 				WaitReason: string(WaitApproval),
-				PipelineState: &PipelineState{
-					ResumePrimitive: ResumeFromWait,
+				PipelineState: &statestore.PipelineSnapshot{
+					ResumePrimitive: string(ResumeFromWait),
 					WaitReason:      string(WaitApproval),
-					TimeoutAt:       time.Now().Add(500 * time.Millisecond).Format(time.RFC3339),
+					TimeoutAt:       time.Now().Add(5 * time.Second).Format(time.RFC3339),
 				},
 			}
 
 			done := make(chan events.Event, 1)
 			go func() { done <- gr.waitForWakeup(result) }()
+
+			// 同步点：确保订阅完成后再发布（竞态消除——发布在订阅完成前发生=事件丢失）。
+			// 10ms 在本机调度延迟下不足（goroutine 从 go 语句到完成 6 路 SubscribeForGoal
+			// 注册需数十 ms）——观测到 -88ms 负超时级抖动。200ms 仍远小于 500ms 超时窗口，
+			// 绿态断言（超时前唤醒）不受影响。
+			time.Sleep(200 * time.Millisecond)
 
 			// 发布拒绝族事件——契约要求：超时前必须唤醒 GoalRunner。
 			bus.Publish(events.Event{

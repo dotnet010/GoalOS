@@ -22,10 +22,12 @@ func NewEvent(typ, goalID, source string) Event {
 }
 
 // WithAction 设置 Action 相关字段并返回 Event。
-// 自动生成幂等键：{goalID}-{actionID}-{seq}。
+// 自动生成幂等键：{goalID}-{actionID}-{sessionID}（R-1373——重试幂等由
+// {goal, action, session} 三元组承载，键不得含 seq：同三元组不同 seq 的重试
+// 事件必须得到相同幂等键）。
 func (e Event) WithAction(actionID string) Event {
 	e.ActionID = &actionID
-	e.ID = fmt.Sprintf("%s-%s-%d", e.GoalID, actionID, e.Seq)
+	e.ID = fmt.Sprintf("%s-%s-%s", e.GoalID, actionID, e.SessionID)
 	return e
 }
 
@@ -41,7 +43,7 @@ type Event struct {
 	Seq       int                    `json:"seq"`              // 全局递增序号
 	Type      string                 `json:"type"`             // 事件类型。见下方常量
 	Version   string                 `json:"version"`          // 事件版本。"1.0"
-	ID        string                 `json:"idempotency_key"`  // 幂等键：{goalID}-{actionID}-{seq}。重放时去重
+	ID        string                 `json:"idempotency_key"`  // 幂等键：{goalID}-{actionID}-{sessionID}（R-1373，不得含 seq）。重放时去重
 	Timestamp time.Time              `json:"timestamp"`        // 事件时间戳
 	GoalID    string                 `json:"goal_id"`          // 所属 Goal
 	MissionID *string                `json:"mission_id,omitempty"` // 所属 Mission。可选
@@ -65,9 +67,13 @@ const (
 	TypeGoalFailed       = "GoalFailed"       // Goal 失败。Publisher: GoalRunner
 	TypeGoalPaused       = "GoalPaused"       // Goal 已暂停。Publisher: Scheduler
 	TypeGoalResumed      = "GoalResumed"      // Goal 已恢复。Publisher: Scheduler
+	TypeGoalNeedsReview  = "GoalNeedsReview"  // Goal 需要审查（R-1376 唤醒集闭合——拒绝族事件入唤醒集）。Publisher: GoalRunner
 
 	// ── 规划调度 ──
 	TypePlanRequested = "PlanRequested" // Scheduler 请求 Mission Engine 规划。Publisher: Scheduler
+	// TypeFlowGenerationRequested — flow 无匹配时的确认流程请求（R-1368：
+	// FlowRecommender 静默回退删除，确认流程唯一路径）。Publisher: Mission Engine
+	TypeFlowGenerationRequested = "FlowGenerationRequested"
 
 	// ── Action 调度 ──
 	TypeActionScheduled = "ActionScheduled" // Scheduler 选出下一个 Action。Publisher: Scheduler
@@ -77,6 +83,7 @@ const (
 	TypeActionRejected        = "ActionRejected"        // Governance 拒绝。Publisher: Governance
 	TypeActionPendingApproval = "ActionPendingApproval" // 挂起等待人工审批。Publisher: Governance
 	TypeUserApprovedAction    = "UserApprovedAction"    // 用户批准挂起的审批。Publisher: Channel Adapter
+	TypeUserDecisionReceived  = "UserDecisionReceived"  // 用户决策接收（R-1161/R-1211——wait_more 经事件投递 GoalRunner）。Publisher: Channel Adapter
 
 	// ── 执行与结果 ──
 	TypeActionStarted   = "ActionStarted"   // 子进程开始执行。Publisher: Plugin Runner

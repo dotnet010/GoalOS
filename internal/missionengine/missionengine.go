@@ -58,6 +58,11 @@ type Context struct {
 	GoalID      string
 	GoalText    string
 	AnchorCheck bool
+	// Reason — 进入本管线的否定语义（R-1400 AI 上下文语义保真契约）:
+	// "approval_timeout"（系统客观超时→用户未响应）/ "user_rejected"（人类主观
+	// 否定→方案需改）。重规划/复盘输入与首次规划共用本管线——reason 必须显式
+	// 传递，禁止仅凭终态 Rejected 推断否定语义。
+	Reason string
 
 	// CompletedArtifacts — 已完成 Action 的产出物字典（R-741 新 Session 重做）。
 	// 契约：key=ActionID，value=产出物路径列表（artifact_paths）——Agent 重新 Plan 时
@@ -76,6 +81,15 @@ type ExecutionRecord struct {
 	Status        string   // 执行状态（Completed/Failed/...）
 	ArtifactPaths []string // 产出物路径列表（artifact_paths）
 	Timestamp     string   // 完成时间戳
+}
+
+// knownFlowTemplates — builtin flows v0.1 注册集（R-1368 约束）：
+// flow_name 在本集零命中=确认流程唯一路径（FlowGenerationRequested→用户确认），
+// 禁止静默回退 generic-v1。新模板注册=追加本集+07 事件注册表登记。
+var knownFlowTemplates = map[string]bool{
+	"generic-v1":        true,
+	"code-project-v1":   true,
+	"data-analysis-v1":  true,
 }
 
 // CompletionCriteria defines "what does done look like" for a Goal.
@@ -169,11 +183,15 @@ func (e *Engine) handlePlanRequested(evt events.Event) error {
 	goalText, _ := evt.Payload["goal_text"].(string)
 	anchorCheck, _ := evt.Payload["goal_anchor_check"].(bool)
 	flowName, _ := evt.Payload["flow_name"].(string) // v0.1.0: Flow 模板约束
+	// R-1400: reason 载荷键必须透传进 AI 上下文——重规划/复盘输入的否定语义
+	//（approval_timeout/user_rejected）不得被静默丢弃。
+	reason, _ := evt.Payload["reason"].(string)
 
 	ctx := Context{
 		GoalID:      evt.GoalID,
 		GoalText:    goalText,
 		AnchorCheck: anchorCheck,
+		Reason:      reason,
 	}
 
 	// v0.1.0 三步规划（R-350）：Align → Analyze → Plan
@@ -227,6 +245,22 @@ func (e *Engine) handlePlanRequested(evt events.Event) error {
 	// 如果 FlowRecommender 未指定模板，使用 Agent 推荐的 Flow
 	if flowName == "" {
 		flowName = analysis.SuggestedFlow
+	}
+
+	// R-1368: flow 无匹配=确认流程唯一路径（FlowGenerationRequested→用户确认），
+	// 禁止静默回退 generic-v1 直接产出 MissionGenerated。
+	if !knownFlowTemplates[flowName] {
+		log.Printf("[MissionEngine] flow %q 无匹配——进入确认流程（R-1368 唯一路径）", flowName)
+		e.publish(events.Event{
+			Type:   events.TypeFlowGenerationRequested,
+			GoalID: evt.GoalID,
+			Source: "mission-engine",
+			Payload: map[string]interface{}{
+				"goal_text": goalText,
+				"flow_name": flowName,
+			},
+		})
+		return nil
 	}
 
 	e.pushProgress(evt.GoalID, "Plan", "LLM 正在生成执行计划...")

@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -171,7 +173,25 @@ func main() {
 	bt = scheduler.NewBudgetTracker()
 	bt.SetEventBus(bus)
 
-	secretKey, err := governance.LoadOrGenerateSecret(goalOSDir + "/secrets.enc")
+	// R-1387: secrets.key 唯一主密钥文件（0600）；secrets.enc 仅一次性导入源——
+	// 主密钥文件不存在时尝试导入旧载体，导入成功后删除 secrets.enc（演进关系）。
+	secretKeyPath := cfg.Secrets.KeyPath
+	if strings.HasPrefix(secretKeyPath, "~/") {
+		secretKeyPath = filepath.Join(home, strings.TrimPrefix(secretKeyPath, "~/"))
+	}
+	legacyEncPath := filepath.Join(filepath.Dir(secretKeyPath), "secrets.enc")
+	if _, statErr := os.Stat(secretKeyPath); statErr != nil {
+		if data, readErr := os.ReadFile(legacyEncPath); readErr == nil && len(data) == 32 {
+			if writeErr := os.WriteFile(secretKeyPath, data, 0600); writeErr != nil {
+				log.Printf(`{"level":"WARN","msg":"Step 7: secrets.enc 导入失败: %v"}`, writeErr)
+			} else if rmErr := os.Remove(legacyEncPath); rmErr != nil {
+				log.Printf(`{"level":"WARN","msg":"Step 7: secrets.enc 删除失败（导入已完成）: %v"}`, rmErr)
+			} else {
+				log.Printf(`{"level":"INFO","msg":"Step 7: secrets.enc 一次性导入完成——已迁移至 secrets.key 并删除旧载体（R-1387）"}`)
+			}
+		}
+	}
+	secretKey, err := governance.LoadOrGenerateSecret(secretKeyPath)
 	if err != nil {
 		log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err)
 	}
@@ -442,6 +462,29 @@ func main() {
 		}
 	}()
 
+	// R-1378/R-1322: UDS 治理通道——审批族端点 UDS-only，治理面不暴露于 TCP。
+	// EADDRINUSE=大声失败（R-1378——不静默降级）。单实例已由 pid lock 保证
+	// （Step 0 先于本段），故已存在的 socket 文件必为上次退出遗留，可安全重建。
+	socketPath := cfg.Daemon.SocketPath
+	if strings.HasPrefix(socketPath, "~/") {
+		socketPath = filepath.Join(home, strings.TrimPrefix(socketPath, "~/"))
+	}
+	if err := os.MkdirAll(filepath.Dir(socketPath), 0700); err != nil {
+		log.Fatalf("UDS: 创建 run 目录失败: %v", err)
+	}
+	_ = os.Remove(socketPath)
+	udsListener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		log.Fatalf("UDS: %v（EADDRINUSE=大声失败，R-1378）", err)
+	}
+	udsServer := &http.Server{Handler: buildUDSMux(api)}
+	go func() {
+		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13b: UDS governance channel on %s"}`, time.Now().Format(time.RFC3339), socketPath)
+		if err := udsServer.Serve(udsListener); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("UDS: %v", err)
+		}
+	}()
+
 	bus.Publish(events.Event{Type: events.TypeSystemStarted, Source: "daemon", Seq: 0,
 		Payload: map[string]interface{}{"pid": os.Getpid(), "port": cfg.Daemon.Port}})
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted"}`, time.Now().Format(time.RFC3339))
@@ -479,12 +522,16 @@ func main() {
 	defer cancel()
 	api.SetShutdownHook(func() { cancel() })
 	server.Shutdown(shutdownCtx)
+	udsServer.Shutdown(shutdownCtx)
+	_ = os.Remove(socketPath) // UDS 治理通道清理（R-1378——无残留 socket 文件）
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"GoalOS stopped."}`, time.Now().Format(time.RFC3339))
 }
 
-// buildHTTPMux 组装 HTTP 路由表。
+// buildHTTPMux 组装 HTTP（TCP 面）路由表。
 // R-1372（C-UI-01）: Dashboard 已拆除 R-1372——"/" 路由不再注册页面处理器，
 // CLI 是唯一软件入口（R-1123），未匹配路径由 ServeMux 返回 404。
+// R-1378/R-1322: 治理面（审批族）UDS-only——本 TCP 面不注册审批族路由，
+// 治理面见 buildUDSMux（UDS 通道）。
 // 抽取为独立函数：契约测试直测真实路由表（R-1372）。
 func buildHTTPMux(api *daemon.Handler, sse *daemon.SSEManager, cfg *config.Config,
 	bus *eventbus.EventBus, missionEng *missionengine.Engine, home string) *http.ServeMux {
@@ -536,19 +583,8 @@ func buildHTTPMux(api *daemon.Handler, sse *daemon.SSEManager, cfg *config.Confi
 			api.HandleGetGoal(w, r)
 		}
 	})
-	mux.HandleFunc("/api/approvals", api.HandleListApprovals)
-	mux.HandleFunc("/api/approvals/", func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimPrefix(r.URL.Path, "/api/approvals/")
-		id = strings.Split(id, "/")[0]
-		r.SetPathValue("id", id)
-		if strings.HasSuffix(r.URL.Path, "/approve") {
-			api.HandleApprove(w, r)
-		} else if strings.HasSuffix(r.URL.Path, "/reject") {
-			api.HandleReject(w, r)
-		} else {
-			http.Error(w, `{"error":{"code":"INVALID_REQUEST"}}`, http.StatusNotFound)
-		}
-	})
+	// R-1378/R-1322: 治理面（审批族）UDS-only——buildHTTPMux 为 TCP 面，
+	// 不得注册审批族路由（契约测试直接断言 404）。审批族见 buildUDSMux。
 	mux.HandleFunc("/api/system/status", api.HandleSystemStatus)
 	mux.HandleFunc("/api/system/stop", api.HandleDaemonStop)
 	mux.HandleFunc("/api/system/restart", api.HandleDaemonRestart)
@@ -628,6 +664,28 @@ func buildHTTPMux(api *daemon.Handler, sse *daemon.SSEManager, cfg *config.Confi
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `","provider":"` + cfg.LLM.Provider + `"}`))
 		log.Printf("[Daemon] hot-reloaded: provider=%s model=%s, agent swapped", cfg.LLM.Provider, cfg.LLM.Model)
+	})
+	return mux
+}
+
+// buildUDSMux 组装 UDS 治理面路由表（R-1378/R-1322）。
+// 契约：审批族端点 UDS-only——治理面不得暴露于 TCP；TCP 面（buildHTTPMux）
+// 不注册本组路由。CLI 连接 UDS 后须反验 daemon 身份（SO_PEERCRED+exe 白名单
+// +祖先链三闸准入 R-1284——转绿任务 7.20）。
+func buildUDSMux(api *daemon.Handler) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/approvals", api.HandleListApprovals)
+	mux.HandleFunc("/api/approvals/", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimPrefix(r.URL.Path, "/api/approvals/")
+		id = strings.Split(id, "/")[0]
+		r.SetPathValue("id", id)
+		if strings.HasSuffix(r.URL.Path, "/approve") {
+			api.HandleApprove(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/reject") {
+			api.HandleReject(w, r)
+		} else {
+			http.Error(w, `{"error":{"code":"INVALID_REQUEST"}}`, http.StatusNotFound)
+		}
 	})
 	return mux
 }

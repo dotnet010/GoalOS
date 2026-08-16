@@ -36,17 +36,19 @@ type GoalState struct {
 	ApprovalPending   bool     `json:"approval_pending,omitempty"`   // v0.1.0: 是否有待审批 Action
 	DataSharingApproved bool   `json:"data_sharing_approved,omitempty"` // v0.1.0: 数据外发是否已确认
 	ActiveActions     int      `json:"active_actions,omitempty"`     // 当前并发 Action 数
-	PipelineState     *PipelineState `json:"pipeline_state,omitempty"`
+	PipelineState     *PipelineSnapshot `json:"pipeline_state,omitempty"`
 }
 
-// PipelineState 记录 PipelineRunner 在 Wait 期间的执行位置（v0.1.0）。
+// PipelineSnapshot 记录 PipelineRunner 在 Wait 期间的执行位置（v0.1.0；
+// S'-12 改名映射表——原 PipelineState 并入 scheduler 侧字段后更名）。
 // 不作为独立文件持久化——是 Snapshot 的字段，从 PipelinePaused 事件推导。
-type PipelineState struct {
-	ResumePoint     string `json:"resume_point"`     // 恢复节点 ID
-	ResumePrimitive string `json:"resume_primitive"` // 恢复后从哪个原语继续："decide"|"check"
-	WaitReason      string `json:"wait_reason"`      // "approval"|"dependency"|"resource"
-	TimeoutAt       string `json:"timeout_at"`       // ISO 8601 超时时间
+type PipelineSnapshot struct {
+	ResumePoint      string   `json:"resume_point"`               // 恢复节点 ID
+	ResumePrimitive  string   `json:"resume_primitive"`           // 恢复后从哪个原语继续："check"|"exec"|"wait"|"decide"（PipelinePrimitive 四值，R-1112）
+	WaitReason       string   `json:"wait_reason"`                // "approval"|"dependency"|"resource"
+	TimeoutAt        string   `json:"timeout_at"`                 // ISO 8601 超时时间
 	PendingActionIDs []string `json:"pending_action_ids,omitempty"` // 等待中的 Action ID 列表
+	CompletedNodes   []string `json:"completed_nodes,omitempty"`    // 已完成节点（scheduler 侧字段并入——S'-12 字段重叠合并）
 }
 
 // Store 管理事件持久化和状态投影。
@@ -249,7 +251,9 @@ func (s *Store) LoadLatestSnapshot(goalID string) (*GoalState, error) {
 	}
 
 	var latest *GoalState
-	var latestSeq int
+	// latestSeq=-1：seq=0 的快照（任何事件写入前的首个快照，LastAppliedSeq=0）
+	// 必须可被选中——0 作初值会因 `seq > latestSeq` 排除 snapshot-0.json。
+	var latestSeq = -1
 	for _, e := range entries {
 		var seq int
 		if _, err := fmt.Sscanf(e.Name(), "snapshot-%d.json", &seq); err != nil {

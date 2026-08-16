@@ -16,6 +16,7 @@ import (
 
 	"github.com/goalos/goalos/internal/errorcategory"
 	"github.com/goalos/goalos/internal/eventbus"
+	"github.com/goalos/goalos/internal/governance"
 	"github.com/goalos/goalos/internal/statestore"
 	"github.com/goalos/goalos/pkg/events"
 )
@@ -30,31 +31,42 @@ const (
 	PipelinePaused    PipelineStatus = "paused"
 )
 
-// ResumePrimitive 是 PipelineRunner 恢复执行的原语类型（P8: 类型安全）。
-type ResumePrimitive string
+// S'-12 改名映射表（会议 #200/R-1255，任务 3.26 完成态）:
+//   - 原 scheduler.RunState → PipelineState 枚举（四值顺序按 D1: Check/Exec/Wait/Decide）
+//   - 原 scheduler.ResumePrimitive → PipelinePrimitive 四值（补 exec——语义=重执行
+//     该动作节点，R-1112）
+//   - 原 scheduler.PipelineState（struct）→ 并入 statestore.PipelineSnapshot
+//     （字段重叠合并——执行位置快照的唯一类型）
+// Go 类型层唯一类型与别名关系：PipelineState 与 PipelinePrimitive 均为
+// governance.PipelinePhase 四值枚举的别名（状态代数矩阵 Pipeline 维单一权威，
+// R-1136/D1——无终态，循环性质）。
+type (
+	PipelineState    = governance.PipelinePhase // 状态机循环状态四值（check/exec/wait/decide）
+	PipelinePrimitive = governance.PipelinePhase // 恢复原语四值（补 exec——R-1112 重执行）
+)
 
 const (
-	ResumeFromCheck  ResumePrimitive = "check"
-	ResumeFromDecide ResumePrimitive = "decide"
-	ResumeFromWait   ResumePrimitive = "wait"
+	StateCheck  = governance.PipelineCheck
+	StateExec   = governance.PipelineExec
+	StateWait   = governance.PipelineWait
+	StateDecide = governance.PipelineDecide
+)
+
+// PipelinePrimitive 四值恢复原语（S'-12——原 ResumePrimitive 三值并入四值枚举）。
+const (
+	ResumeFromCheck  = governance.PipelineCheck
+	ResumeFromExec   = governance.PipelineExec  // 补 exec——语义=重执行该动作节点（R-1112）
+	ResumeFromDecide = governance.PipelineDecide
+	ResumeFromWait   = governance.PipelineWait
 )
 
 // PipelineResult 是 PipelineRunner.Run() 的返回值。
+// PipelineState 字段类型=S'-12 改名后唯一类型 statestore.PipelineSnapshot。
 type PipelineResult struct {
 	Status        PipelineStatus
 	Error         string
 	WaitReason    string
-	PipelineState *PipelineState
-}
-
-// PipelineState 记录 PipelineRunner 的执行位置（v0.1.0）。
-type PipelineState struct {
-	ResumePoint      string          `json:"resume_point"`
-	ResumePrimitive  ResumePrimitive `json:"resume_primitive"` // P8: 类型安全
-	WaitReason       string          `json:"wait_reason"`
-	TimeoutAt        string          `json:"timeout_at"`
-	PendingActionIDs []string        `json:"pending_action_ids,omitempty"`
-	CompletedNodes   []string        `json:"completed_nodes,omitempty"`
+	PipelineState *statestore.PipelineSnapshot
 }
 
 // CheckResult 是 Check 原语的返回结果。
@@ -80,7 +92,7 @@ const (
 type PipelineRunner struct {
 	bus      *eventbus.EventBus
 	store    *statestore.Store
-	state    *PipelineState
+	state    *statestore.PipelineSnapshot
 	multiLLM     *MultiLLMVerifier
 	retryCount   map[string]int
 	wakeupCh       chan struct{}       // R-765: Wait 唤醒通道
@@ -124,25 +136,19 @@ func NewPipelineRunner(bus *eventbus.EventBus, store *statestore.Store) *Pipelin
 func (pr *PipelineRunner) Run(goalID string, state *statestore.GoalState) (*PipelineResult, error) {
 	pr.currentGoalID = goalID // R-840: 供 publishVerdict 使用
 	if state.PipelineState != nil {
-		pr.state = &PipelineState{
-			ResumePoint:      state.PipelineState.ResumePoint,
-			ResumePrimitive:  ResumePrimitive(state.PipelineState.ResumePrimitive),
-			WaitReason:       state.PipelineState.WaitReason,
-			TimeoutAt:        state.PipelineState.TimeoutAt,
-			PendingActionIDs: state.PipelineState.PendingActionIDs,
-			CompletedNodes:   state.CompletedNodes,
-		}
+		// S'-12: 执行位置快照唯一类型=statestore.PipelineSnapshot——直接复制（无跨包转换）。
+		pr.state = state.PipelineState
 		log.Printf("[PipelineRunner] goal=%s resumed from %s primitive at node %s",
 			goalID, pr.state.ResumePrimitive, pr.state.ResumePoint)
 	} else {
-		pr.state = &PipelineState{}
+		pr.state = &statestore.PipelineSnapshot{}
 	}
 
 	// 恢复路径
-	if pr.state.ResumePrimitive == ResumeFromWait {
+	if PipelinePrimitive(pr.state.ResumePrimitive) == ResumeFromWait {
 		return pr.wait(goalID, pr.state.WaitReason)
 	}
-	if pr.state.ResumePrimitive == ResumeFromDecide {
+	if PipelinePrimitive(pr.state.ResumePrimitive) == ResumeFromDecide {
 		return pr.decide(goalID, "", nil)
 	}
 
@@ -177,8 +183,8 @@ func (pr *PipelineRunner) Run(goalID string, state *statestore.GoalState) (*Pipe
 		return &PipelineResult{
 			Status:     PipelineWaiting,
 			WaitReason: waitReason,
-			PipelineState: &PipelineState{
-				ResumePrimitive:  resumeFrom,
+			PipelineState: &statestore.PipelineSnapshot{
+				ResumePrimitive:  string(resumeFrom),
 				PendingActionIDs: []string{currentAction},
 			},
 		}, nil
@@ -240,7 +246,7 @@ func logProgress(goalID, stage, detail string) {
 
 // wait 进入等待状态。保存 PipelineState 并返回 WAITING。
 func (pr *PipelineRunner) wait(goalID string, reason string) (*PipelineResult, error) {
-	pr.state.ResumePrimitive = ResumeFromDecide
+	pr.state.ResumePrimitive = string(ResumeFromDecide)
 	pr.state.WaitReason = reason
 	// R-1384/R-1343: 计时单一权威——读 policy.approval_timeout（SetApprovalTimeout 注入），
 	// 不再硬编码 5min。GoalRunner.waitForWakeup 依据 TimeoutAt 计算实际等待时长。

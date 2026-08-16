@@ -102,18 +102,20 @@ func TestDashboard_NoApproveCallbackPath(t *testing.T) {
 
 // TestBuildHTTPMux_BaselineRoutes — 抽取 buildHTTPMux 后基线回归:
 //
-//	既有 API 路由不得被拆除动作波及。
+//	既有 API 路由不得被拆除动作波及。R-1378/R-1322（治理面 UDS-only）:
+//	审批族路由已移出 TCP 面（buildHTTPMux→404），由 buildUDSMux 承载（→200）。
 func TestBuildHTTPMux_BaselineRoutes(t *testing.T) {
 	mux := newTestMux(t)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
+	// TCP 面（buildHTTPMux）: 基线路由保留；审批族已移出（R-1378）
 	for _, tc := range []struct {
 		path string
 		want int
 	}{
 		{"/api/health", http.StatusOK},
-		{"/api/approvals", http.StatusOK},
+		{"/api/approvals", http.StatusNotFound}, // R-1378: 治理面移出 TCP
 	} {
 		resp, err := http.Get(srv.URL + tc.path)
 		if err != nil {
@@ -121,7 +123,20 @@ func TestBuildHTTPMux_BaselineRoutes(t *testing.T) {
 		}
 		resp.Body.Close()
 		if resp.StatusCode != tc.want {
-			t.Errorf("GET %s 应返回 %d（基线路由回归 R-1372），实际 %d", tc.path, tc.want, resp.StatusCode)
+			t.Errorf("GET %s 应返回 %d（基线路由回归 R-1372/R-1378），实际 %d", tc.path, tc.want, resp.StatusCode)
 		}
+	}
+
+	// UDS 面（buildUDSMux）: 审批族在此承载（R-1378 治理通道）
+	udsMux := buildUDSMux(daemon.NewHandler())
+	udsSrv := httptest.NewServer(udsMux)
+	defer udsSrv.Close()
+	resp, err := http.Get(udsSrv.URL + "/api/approvals")
+	if err != nil {
+		t.Fatalf("GET UDS /api/approvals 请求失败: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("GET UDS /api/approvals 应返回 200（R-1378 治理面在 UDS 承载），实际 %d", resp.StatusCode)
 	}
 }

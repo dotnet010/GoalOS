@@ -44,11 +44,13 @@ func TestWaitMore_ExtendsGoalRunnerTimeout(t *testing.T) {
 	bus := eventbus.New()
 	store := statestore.New(t.TempDir())
 	pr := NewPipelineRunner(bus, store)
-	pr.SetApprovalTimeout(300 * time.Millisecond) // 短窗口：观测在 ms 级完成
+	// 审批窗口 5s：必须大于本机调度延迟极值（观测到 >1s 的 goroutine 启动+6 路订阅
+	// 注册延迟——窗口过短时 waitForWakeup 在订阅建立前已超时，wait_more 事件丢失）。
+	pr.SetApprovalTimeout(5 * time.Second)
 
 	// wait() 前置：Run() 会初始化 pr.state（R-1342 签名唯一）——本测试直接进入
 	// wait 原语，按 Run 的初始化语义设置空 PipelineState（测试装配，非生产改动）。
-	pr.state = &PipelineState{}
+	pr.state = &statestore.PipelineSnapshot{}
 
 	// PipelineRunner 进入 wait——TimeoutAt = now + approvalTimeout（R-1384 单一计时权威）。
 	result, err := pr.wait(goalID, string(WaitApproval))
@@ -65,11 +67,14 @@ func TestWaitMore_ExtendsGoalRunnerTimeout(t *testing.T) {
 	if err := gr.savePipelineState(result.PipelineState); err != nil {
 		t.Fatalf("savePipelineState 失败: %v", err)
 	}
-	done := make(chan struct{})
+	done := make(chan events.Event, 1)
 	go func() {
-		gr.waitForWakeup(result)
-		close(done)
+		done <- gr.waitForWakeup(result)
 	}()
+
+	// 同步点：确保订阅完成后再发布（竞态消除——发布在订阅完成前发生=事件丢失）。
+	// 1s 宽限+5s 审批窗口——订阅建立最迟点距超时仍余 4s，wait_more 可达。
+	time.Sleep(1 * time.Second)
 
 	// wait_more 决策路径（R-1376/R-1379）: UserDecisionReceived{decision:"wait_more"}。
 	bus.Publish(events.Event{
@@ -83,8 +88,9 @@ func TestWaitMore_ExtendsGoalRunnerTimeout(t *testing.T) {
 	})
 
 	// 契约（R-1376 双写）: 快照中 TimeoutAt 必须被重写为晚于原值的时刻。
-	// 轮询窗口 3s——红态下事件无人消费，TimeoutAt 永不变化，轮询耗尽后失败。
-	deadline := time.Now().Add(3 * time.Second)
+	// 轮询窗口 10s——必须覆盖 waitForWakeup 的旧超时（5s 审批窗口）+ wait_more
+	// 重挂后的完整窗口（5s），否则新快照（TimeoutAt=原值+5s）写入时轮询已耗尽。
+	deadline := time.Now().Add(10 * time.Second)
 	extended := false
 	rewritten := ""
 	for time.Now().Before(deadline) {
@@ -100,8 +106,12 @@ func TestWaitMore_ExtendsGoalRunnerTimeout(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	// waitForWakeup 应已收到 wait_more 决策并返回（延长+持久化发生在返回前）。
+	evt := <-done
+	if evt.Type != waitMoreDecisionEventType {
+		t.Errorf("MUST 1 前置失败: waitForWakeup 未被 wait_more 决策唤醒——返回类型=%s", evt.Type)
+	}
 	if !extended {
 		t.Errorf("MUST 1 失败（R-1376 wait_more 双写）: wait_more 决策后 PipelineState.TimeoutAt 未被延长——原值=%s 当前快照值=%s；无 wait_more 决策路径消费 UserDecisionReceived 事件", original, rewritten)
 	}
-	<-done
 }
