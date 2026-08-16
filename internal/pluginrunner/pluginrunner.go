@@ -32,12 +32,17 @@ type Runner struct {
 
 // New creates a Plugin Runner with the given plugins directory and token secret.
 // tokenVerifier 可选——如果为 nil，使用 governance.VerifyToken（无撤销检查）。
+// 插件发现目录: GOALOS_PLUGINS_DIR 环境变量覆盖（测试隔离——沙箱模拟开关同先例
+// R-929/R-960；未设置时默认 ~/.goalos/plugins）。
 func New(bus *eventbus.EventBus, secretKey []byte, tokenVerifier TokenVerifier) *Runner {
-	home, err := osUserHomeDir()
-	if err != nil {
-		home = "/tmp" // fallback: 容器环境
+	pluginsDir := os.Getenv("GOALOS_PLUGINS_DIR")
+	if pluginsDir == "" {
+		home, err := osUserHomeDir()
+		if err != nil {
+			home = "/tmp" // fallback: 容器环境
+		}
+		pluginsDir = home + "/.goalos/plugins"
 	}
-	pluginsDir := home + "/.goalos/plugins"
 	return &Runner{
 		bus:           bus,
 		discovery:     NewPluginDiscovery(pluginsDir),
