@@ -14,11 +14,12 @@
 // 保留——防未来过度过滤把线程创建一并拒掉）。
 //
 // 转绿任务: 计划任务 3.19/3.17（seccomp 旗标级 BPF 过滤：
-//   放行条件 `(flags & ^ALLOWED_MASK)==0 && flags!=0 && 高 32 位==0`；
-//   CLONE_NEW* 命名空间旗标 → SECCOMP_RET_KILL_PROCESS(0x80000000)——
-//   注意 RET_KILL(线程级) 不够：Go runtime 的 sysmon 线程存活会导致进程挂起，
-//   本测试会以超时形式红出该缺陷；clone3 → SECCOMP_RET_ERRNO(ENOSYS)）。
-//   对应 R-1352/R-1371，验收夹具 = clone_flags_fixture.yaml 六向量全判。
+//
+//	放行条件 `(flags & ^ALLOWED_MASK)==0 && flags!=0 && 高 32 位==0`；
+//	CLONE_NEW* 命名空间旗标 → SECCOMP_RET_KILL_PROCESS(0x80000000)——
+//	注意 RET_KILL(线程级) 不够：Go runtime 的 sysmon 线程存活会导致进程挂起，
+//	本测试会以超时形式红出该缺陷；clone3 → SECCOMP_RET_ERRNO(ENOSYS)）。
+//	对应 R-1352/R-1371，验收夹具 = clone_flags_fixture.yaml 六向量全判。
 //
 // 隔离形态: 与 internal/statestore 的 reentry 契约测试同构——helper 场景
 // （Apply 自加载 seccomp 后的裸 clone）以 exec.Command 重执行本测试二进制、
@@ -44,16 +45,16 @@ import (
 const cloneHelperEnv = "GOALOS_SECCOMP_CLONE_HELPER"
 
 // seccompApplyEpermMarker — helper 在 Apply 因权限不足失败时的输出标记
-//（GitHub runner 非 root：现代内核下 no_new_privs 不再豁免非特权进程安装
+// （GitHub runner 非 root：现代内核下 no_new_privs 不再豁免非特权进程安装
 // seccomp 过滤器——需 CAP_SYS_ADMIN）。父测试据此经 sudo 重试（runner 免密
 // sudo）；sudo 亦不可用则诚实 skip（契约前置缺失，非伪绿）。
 const seccompApplyEpermMarker = "SECCOMP_APPLY_EPERM"
 
 // Linux uapi/linux/sched.h clone 旗标（Go syscall 包未导出，夹具自声明）。
 const (
-	cloneFlagNewnet  = 0x40000000  // CLONE_NEWNET —— 网络命名空间（vec-004 拒绝）
-	cloneFlagSigchld = 0x00000011  // SIGCHLD(17) —— clone 低字节退出信号
-	cloneThreadFlags = 0x00050F00  // clone-vec-001: VM|FS|FILES|SIGHAND|THREAD|SYSVSEM
+	cloneFlagNewnet  = 0x40000000 // CLONE_NEWNET —— 网络命名空间（vec-004 拒绝）
+	cloneFlagSigchld = 0x00000011 // SIGCHLD(17) —— clone 低字节退出信号
+	cloneThreadFlags = 0x00050F00 // clone-vec-001: VM|FS|FILES|SIGHAND|THREAD|SYSVSEM
 	// clone3Nr 由包常量提供（seccomp_linux.go——x86_64 与 arm64 均为 435）
 )
 
@@ -118,8 +119,10 @@ func TestSandbox_Clone3_Rejected(t *testing.T) {
 // TestSandbox_CloneFlags_ThreadAllowed —— clone-vec-001（R-1371）。
 // 断言来源: 夹具 clone-vec-001「Go runtime 六旗标组合 VM|FS|FILES|SIGHAND|THREAD|SYSVSEM——放行」。
 // 先红: 不适用——当前无旗标过滤，clone 本就放行 → 本测试当前绿属可接受
-//   （夹具语义：放行向量）；断言体保留——未来旗标过滤若过度收紧（误拒线程
-//   旗标向量）→ 本测试红出。
+//
+//	（夹具语义：放行向量）；断言体保留——未来旗标过滤若过度收紧（误拒线程
+//	旗标向量）→ 本测试红出。
+//
 // 转绿: 3.19/3.17 旗标过滤实现必须保留 ALLOWED_MASK 内向量放行。
 func TestSandbox_CloneFlags_ThreadAllowed(t *testing.T) {
 	if os.Getenv(cloneHelperEnv) == "1" {

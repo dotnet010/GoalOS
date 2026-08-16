@@ -76,9 +76,9 @@ const (
 	// fork 穿透口（SIGCHLD 承载的进程级 clone）=mask 外旗标=拒绝（K-03）。
 	cloneAllowedMask = uint32(0x013D0F00)
 	// clone3Nr — SYS_CLONE3（x86_64 与 arm64 均为 435，R-1371）。
-	clone3Nr = uint32(435)
-	auditArchX8664  = 0xC000003E
-	auditArchARM64  = 0xC00000B7 // v0.3.0: ARM64 support
+	clone3Nr       = uint32(435)
+	auditArchX8664 = 0xC000003E
+	auditArchARM64 = 0xC00000B7 // v0.3.0: ARM64 support
 )
 
 // detectArch 通过 uname 检测 CPU 架构，返回对应的 audit arch 常量和 syscall 映射表。
@@ -158,7 +158,7 @@ func buildBPF(profile *Profile) []seccompInstr {
 	if _, ok := syscallMap["clone"]; ok {
 		hasCloneSpecial = true
 		// 占位——目标块在程序尾部，偏移回填
-		insns = append(insns, seccompInstr{Code: 0x15, Jt: 0, Jf: 0, K: clone3Nr})          // jeq clone3
+		insns = append(insns, seccompInstr{Code: 0x15, Jt: 0, Jf: 0, K: clone3Nr})            // jeq clone3
 		insns = append(insns, seccompInstr{Code: 0x15, Jt: 0, Jf: 0, K: syscallMap["clone"]}) // jeq clone
 	}
 	allowedNums := make([]uint32, 0)
@@ -190,15 +190,15 @@ func buildBPF(profile *Profile) []seccompInstr {
 		//   高 32 位 !=0→KILL_PROCESS; 否则 RET_ALLOW。
 		cloneIdx := len(insns)
 		insns = append(insns,
-			seccompInstr{Code: 0x20, K: 16},                 // [C0] ld [16] — flags 低 32
-			seccompInstr{Code: 0x15, Jt: 2, Jf: 0, K: 0},    // [C1] jeq 0 → killProc（flags==0 拒绝）
-			seccompInstr{Code: 0x14, K: ^cloneAllowedMask},  // [C2] and ^MASK（BPF_ALU|AND|K=0x14）— A = flags & ^MASK
-			seccompInstr{Code: 0x15, Jt: 1, Jf: 0, K: 0},    // [C3] jeq 0 → highcheck（子集合法）
+			seccompInstr{Code: 0x20, K: 16},                    // [C0] ld [16] — flags 低 32
+			seccompInstr{Code: 0x15, Jt: 2, Jf: 0, K: 0},       // [C1] jeq 0 → killProc（flags==0 拒绝）
+			seccompInstr{Code: 0x14, K: ^cloneAllowedMask},     // [C2] and ^MASK（BPF_ALU|AND|K=0x14）— A = flags & ^MASK
+			seccompInstr{Code: 0x15, Jt: 1, Jf: 0, K: 0},       // [C3] jeq 0 → highcheck（子集合法）
 			seccompInstr{Code: 0x06, K: seccompRetKillProcess}, // [C4] killProc（非法旗标落点）
-			seccompInstr{Code: 0x20, K: 20},                 // [C5] ld [20] — flags 高 32
-			seccompInstr{Code: 0x15, Jt: 1, Jf: 0, K: 0},    // [C6] jeq 0 → 跳过 C7 落 ALLOW（高32非零→C7 kill）
+			seccompInstr{Code: 0x20, K: 20},                    // [C5] ld [20] — flags 高 32
+			seccompInstr{Code: 0x15, Jt: 1, Jf: 0, K: 0},       // [C6] jeq 0 → 跳过 C7 落 ALLOW（高32非零→C7 kill）
 			seccompInstr{Code: 0x06, K: seccompRetKillProcess}, // [C7] 高 32 非零拒绝
-			seccompInstr{Code: 0x06, K: seccompRetAllow},    // [C8] 放行
+			seccompInstr{Code: 0x06, K: seccompRetAllow},       // [C8] 放行
 		)
 		// 回填前置 jeq 偏移（jt=从下一指令起跳过的指令数）
 		insns[4].Jt = uint8(enosysIdx - 5) // clone3 → ENOSYS 块
