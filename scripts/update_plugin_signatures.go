@@ -50,7 +50,7 @@ func main() {
 		}
 		binData, err := os.ReadFile(binPath)
 		if err != nil {
-			fmt.Printf("skip %s: binary not found: %s\n", manifestPath, binary)
+			fmt.Printf("skip %s: binary not found: %s (resolved: %s)\n", manifestPath, binary, binPath)
 			continue
 		}
 		m["signature"] = fmt.Sprintf("sha256:%x", sha256.Sum256(binData))
