@@ -192,7 +192,7 @@ func buildBPF(profile *Profile) []seccompInstr {
 		insns = append(insns,
 			seccompInstr{Code: 0x20, K: 16},                    // [C0] ld [16] — flags 低 32
 			seccompInstr{Code: 0x15, Jt: 2, Jf: 0, K: 0},       // [C1] jeq 0 → killProc（flags==0 拒绝）
-			seccompInstr{Code: 0x14, K: ^cloneAllowedMask},     // [C2] and ^MASK（BPF_ALU|AND|K=0x14）— A = flags & ^MASK
+			seccompInstr{Code: 0x54, K: ^cloneAllowedMask},     // [C2] and ^MASK（BPF_ALU|BPF_AND|K=0x04|0x50=0x54）— A = flags & ^MASK
 			seccompInstr{Code: 0x15, Jt: 1, Jf: 0, K: 0},       // [C3] jeq 0 → highcheck（子集合法）
 			seccompInstr{Code: 0x06, K: seccompRetKillProcess}, // [C4] killProc（非法旗标落点）
 			seccompInstr{Code: 0x20, K: 20},                    // [C5] ld [20] — flags 高 32

@@ -48,7 +48,7 @@ func simRun(t *testing.T, insns []seccompInstr, nr uint32, args0 uint64) uint32 
 			} else {
 				pc += 1 + int(in.Jf)
 			}
-		case 0x14: // ALU AND K
+		case 0x54: // ALU AND K（BPF_ALU|BPF_AND|K = 0x04|0x50）
 			a = a & in.K
 			pc++
 		case 0x06: // RET K
