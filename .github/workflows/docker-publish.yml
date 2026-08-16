@@ -89,7 +89,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.23"
+          # v0.3.0 发布修正: go.mod 已升 1.25（agentbox 依赖链）——release 任务
+          # 硬编码 1.23 导致跨平台构建直接失败（go.mod requires go>=1.25.0）。
+          # 与 test 任务同源：以 go.mod 为唯一版本权威。
+          go-version-file: go.mod
 
       - name: Build multi-platform binaries
         run: |
