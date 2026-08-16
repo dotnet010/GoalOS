@@ -5,8 +5,6 @@
 // （传输层契约子集已随 W1-2 落 TestTransport_NoSecretInEvent）+leak contract test 全量。
 package pluginrunner
 
-import "fmt"
-
 // SecretRedline — secret 红线落实（跨模块全量收敛）。
 // 契约：解密 secret 永不进事件/审计/日志全路径（R-917）；leak contract test 全量。
 type SecretRedline struct{}
@@ -15,5 +13,5 @@ type SecretRedline struct{}
 // 契约：secret 注入责任方=PluginRunner 唯一；解密 secret 永不进事件/审计/日志。
 func (s *SecretRedline) Verify() error {
 	// 骨架：跨模块全路径验证实现归 7.4 完成态。
-	return fmt.Errorf("secret redline: 骨架——实现归任务 7.4 完成态（跨模块全量收敛）")
+	return ErrNotImplemented
 }

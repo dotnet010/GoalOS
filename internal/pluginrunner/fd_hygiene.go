@@ -5,7 +5,9 @@
 // 对抗契约（子进程 fd 仅 {0,1,2,FD3}）。本轮=pluginrunner 全路径逐 fd 审计+跨后端统一。
 package pluginrunner
 
-import "fmt"
+import "errors"
+
+var ErrNotImplemented = errors.New("pluginrunner: not implemented (skeleton stage)")
 
 // FdHygieneAudit — fd CLOEXEC 卫生审计（全量跨后端收敛）。
 // 契约：pluginrunner 全路径逐 fd 审计+跨后端统一（Unix fd 继承收口/Windows HANDLE_LIST
@@ -16,5 +18,5 @@ type FdHygieneAudit struct{}
 // 契约：spawn 期唯一入口+子进程 fd 仅 {0,1,2,FD3}（验证期对抗契约 R-1086 ④）。
 func (f *FdHygieneAudit) Audit() error {
 	// 骨架：全路径逐 fd 审计实现归 7.3 完成态。
-	return fmt.Errorf("fd hygiene audit: 骨架——实现归任务 7.3 完成态（全路径逐 fd 审计+跨后端统一）")
+	return ErrNotImplemented
 }

@@ -210,10 +210,12 @@ func main() {
 }
 
 // handleKeepAlive 处理 goalos keepalive 命令（任务 7.10——R-952 CLI 断线保活实现）。
-// 契约：Keep-Alive 心跳+重连后 events.jsonl 增量拉取（04-CLI 规范已更）。
+// R-1474（发现 36——R-1472 范围修正）：keepalive=状态维持（非信息缺失）——骨架期伪装成功=
+// 正确性风险（用户相信维持住了某个东西而它实际正在悄悄过期）——必须走 ErrNotImplemented。
 func handleKeepAlive(c *client.Client, args []string) {
 	// 骨架：断线保活实现归 7.10 完成态（Keep-Alive 心跳+重连后增量拉取）。
-	fmt.Println("[骨架] keepalive——Keep-Alive 心跳+重连后 events.jsonl 增量拉取（R-952）")
+	fmt.Fprintln(os.Stderr, "错误: keepalive 命令骨架期未实现（R-1474——状态维持命令不适用 R-1472 过渡态 UX）")
+	os.Exit(1)
 }
 
 // handleDecision 处理 goalos decision 命令（任务 7.20——R-1125 审批交互唯一呈现=CLI）。
