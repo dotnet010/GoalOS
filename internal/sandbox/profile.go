@@ -19,10 +19,11 @@ import (
 
 // RawProfile — TOML 原始结构（解析后未校验）。
 type RawProfile struct {
-	Isolation  string            `toml:"isolation"`  // I0-I5 请求等级（编译期降级为实际生效，R-1012）
-	Filesystem FilesystemSection `toml:"filesystem"` // 文件系统白名单
-	Network    NetworkSection    `toml:"network"`    // 网络白名单
-	Resources  ResourcesSection  `toml:"resources"`  // 资源限制（R-1155 四键）
+	Isolation    string            `toml:"isolation"`     // I0-I5 请求等级（编译期降级为实际生效，R-1012）
+	MinIsolation string            `toml:"min_isolation"` // R-1459——发现 18+21 合并：Isolation 合并语义=MinIsolation 显式字段（project/user 层只能声明下限，生效值=max(base.Isolation, project.MinIsolation, user.MinIsolation)——Linux 能力先例：子层级只能收紧不能放松）
+	Filesystem   FilesystemSection `toml:"filesystem"`    // 文件系统白名单
+	Network      NetworkSection    `toml:"network"`       // 网络白名单
+	Resources    ResourcesSection  `toml:"resources"`     // 资源限制（R-1155 四键）
 }
 
 // FilesystemSection — [filesystem] 节。
@@ -137,6 +138,25 @@ func parseIsolation(s string) int {
 	return -1 // 非法（Validate 已拦截，此为防御性回退）
 }
 
+// mergeIsolation — Isolation 合并语义（R-1459——发现 18+21 合并）。
+// 契约：生效值=max(base.Isolation, project.MinIsolation, user.MinIsolation)——
+// 子层级只能收紧不能放松（Linux 能力先例：子层级只能在父层级划定的边界内进一步收紧）。
+func mergeIsolation(base string, user, project *RawProfile) string {
+	baseLevel := parseIsolation(base)
+	maxLevel := baseLevel
+	if user != nil && user.MinIsolation != "" {
+		if userLevel := parseIsolation(user.MinIsolation); userLevel > maxLevel {
+			maxLevel = userLevel // 用户层只能收紧（声明更高隔离等级）
+		}
+	}
+	if project != nil && project.MinIsolation != "" {
+		if projectLevel := parseIsolation(project.MinIsolation); projectLevel > maxLevel {
+			maxLevel = projectLevel // 项目层只能收紧（声明更高隔离等级）
+		}
+	}
+	return "I" + string(rune('0'+maxLevel)) // I0-I5
+}
+
 // compileNetworkMode — 网络三模式编译（任务 3.4：filtered/blocked/allowed 后端编译）。
 // 契约：deny→blocked（socket 全拒）/allowlist→filtered（出网代理白名单过滤）/allowed→allowed（不过滤）。
 func compileNetworkMode(mode string) string {
@@ -171,7 +191,10 @@ func (r *RawProfile) CacheKey() string {
 // 契约：deny 并集（任何一层 deny 的路径=最终 deny）；allow 交集（所有层都 allow 的路径=最终 allow）。
 func Merge(base, user, project *RawProfile) *RawProfile {
 	merged := &RawProfile{
-		Isolation: base.Isolation, // 隔离等级=系统默认（用户/项目层不可降级——安全底线）
+		// R-1459（发现 18+21 合并）：Isolation 合并语义=MinIsolation 显式字段——
+		// 生效值=max(base.Isolation, project.MinIsolation, user.MinIsolation)——
+		// 子层级只能收紧不能放松（Linux 能力/seccomp/cgroup 先例）。
+		Isolation: mergeIsolation(base.Isolation, user, project),
 		Network:   NetworkSection{Mode: base.Network.Mode},
 	}
 	// deny 并集
