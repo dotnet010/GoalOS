@@ -42,22 +42,22 @@ validGoalID:
 
 	// M6: goal 非空
 	if p.Title == "" {
-		return fmt.Errorf("Title: nonempty")
+		return fmt.Errorf("title: nonempty")
 	}
 	// M6: len < 10000
 	if len(p.Title) > 10000 {
-		return fmt.Errorf("Title: len<10000 (actual=%d)", len(p.Title))
+		return fmt.Errorf("title: len<10000 (actual=%d)", len(p.Title))
 	}
 	// M6: UTF-8
 	if !utf8.ValidString(p.Title) {
-		return fmt.Errorf("Title: utf8")
+		return fmt.Errorf("title: utf8")
 	}
 	// M6: 无 HTML 标签
 	for i := 0; i < len(p.Title)-1; i++ {
 		if p.Title[i] == '<' {
 			for j := i + 1; j < len(p.Title); j++ {
 				if p.Title[j] == '>' {
-					return fmt.Errorf("Title: no_html (found <%s>)", p.Title[i+1:j])
+					return fmt.Errorf("title: no_html (found <%s>)", p.Title[i+1:j])
 				}
 			}
 		}
@@ -106,19 +106,19 @@ type IPCResultPayload struct {
 func (p IPCResultPayload) Validate() error {
 	// M3: type 枚举检查
 	if p.Type != "result" && p.Type != "error" {
-		return fmt.Errorf("Type: invalid value %q (expected result|error)", p.Type)
+		return fmt.Errorf("type: invalid value %q (expected result|error)", p.Type)
 	}
 	// M3: status 枚举检查
 	if p.Status != "success" && p.Status != "failure" {
-		return fmt.Errorf("Status: invalid value %q (expected success|failure)", p.Status)
+		return fmt.Errorf("status: invalid value %q (expected success|failure)", p.Status)
 	}
 	// M3: action_id 非空
 	if p.ActionID == "" {
-		return fmt.Errorf("ActionID: nonempty")
+		return fmt.Errorf("actionID: nonempty")
 	}
 	// M3: output ≤ 64KB
 	if len(p.Output) > 64*1024 {
-		return fmt.Errorf("Output: len<=64KB (actual=%d)", len(p.Output))
+		return fmt.Errorf("output: len<=64KB (actual=%d)", len(p.Output))
 	}
 	return nil
 }
@@ -156,7 +156,7 @@ func (p FileContentPayload) Validate() error {
 	// M7: 文件大小 ≤ 10MB
 	const maxSize int64 = 10 * 1024 * 1024
 	if p.Size > maxSize {
-		return fmt.Errorf("Size: len<=%d (actual=%d)", maxSize, p.Size)
+		return fmt.Errorf("size: len<=%d (actual=%d)", maxSize, p.Size)
 	}
 	return nil
 }

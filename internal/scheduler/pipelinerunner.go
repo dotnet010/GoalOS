@@ -327,15 +327,6 @@ func (pr *PipelineRunner) publishVerdict(actionID string, verdict *Verdict) {
 	})
 }
 
-// recoveryActionToDecidePath 将 RecoveryPath.Action 映射为 DecidePath。
-// H1: RETRY/AUTO_FIX/SWITCH_TOOL 已废除（会议 #107）。收敛为 CONTINUE/ESCALATE。
-func recoveryActionToDecidePath(action string) DecidePath {
-	if action == "ESCALATE" {
-		return DecideESCALATE
-	}
-	return DecideCONTINUE
-}
-
 // decidePath 发布 DecidePathSelected 事件并返回对应 PipelineResult。
 func (pr *PipelineRunner) decidePath(goalID string, actionID string, path DecidePath, reason string) (*PipelineResult, error) {
 	// P16: nil bus guard
@@ -389,24 +380,6 @@ func (pr *PipelineRunner) publishCheckPerformed(goalID string, actionID string, 
 	})
 }
 
-// ── 辅助方法 ──
-
-func (pr *PipelineRunner) isActionCompleted(goalID string, actionID string) bool {
-	if pr.store == nil {
-		return false
-	}
-	state, err := pr.store.LoadState(goalID)
-	if err != nil {
-		log.Printf("[PipelineRunner] isActionCompleted: LoadState error for %s: %v — skipping to avoid duplicate", goalID, err)
-		return true // CR-B2: 出错时保守返回 true，避免重复执行
-	}
-	for _, id := range state.CompletedNodes {
-		if id == actionID {
-			return true
-		}
-	}
-	return false
-}
 
 func (pr *PipelineRunner) requiresWait(goalID string, actionID string) bool {
 	// v0.2.0 W1 fix: nil guard for store

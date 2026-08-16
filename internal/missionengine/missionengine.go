@@ -338,7 +338,7 @@ func PlanHash(graph *MissionGraph) string {
 	}
 	nodes := make([]nodeRep, len(graph.Nodes))
 	for i, n := range graph.Nodes {
-		nodes[i] = nodeRep{n.ID, n.Type, n.Description, n.ActionType, n.Target}
+		nodes[i] = nodeRep(n) // GraphNode 与 nodeRep 同构——直接类型转换（S1016）
 	}
 	// 按 ID 排序确保确定性
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].ID < nodes[j].ID })

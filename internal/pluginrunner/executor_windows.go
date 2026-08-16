@@ -70,8 +70,3 @@ func sanitizeChildProcess(cmd *exec.Cmd) {
 	}
 	assignProc.Call(job, uintptr(currentProc))
 }
-
-// applySeccompToChild Windows 无 seccomp，stub 保留接口兼容性。
-func applySeccompToChild(cmd *exec.Cmd, profile interface{}) {
-	// no-op: seccomp is a Linux-only feature
-}

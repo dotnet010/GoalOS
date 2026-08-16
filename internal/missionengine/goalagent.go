@@ -143,7 +143,6 @@ func (g *GoalAgent) Analyze(criteria *CompletionCriteria, ctx Context) (*TaskAna
 type alignAnalyzeResult struct {
 	Criteria *CompletionCriteria
 	Analysis *TaskAnalysis
-	cached   bool
 }
 
 // alignAndAnalyze 合并 Align+Analyze 为一次 LLM 调用。

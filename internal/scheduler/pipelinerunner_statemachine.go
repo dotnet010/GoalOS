@@ -144,7 +144,7 @@ func (pr *PipelineRunner) checkAction(actionID string, code ...string) CheckResu
 	if pr.pluginCache != nil && pr.pluginCache.Count() == 0 {
 		return CheckWARN
 	}
-	if pr.retryCount != nil && len(pr.retryCount) > 100 {
+	if len(pr.retryCount) > 100 { // len(nil map)==0——nil 检查冗余（S1009）
 		return CheckBLOCK
 	}
 	// v0.3.0 fix: 最终通过 governance check() 验证审批状态

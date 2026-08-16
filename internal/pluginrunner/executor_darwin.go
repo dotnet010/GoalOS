@@ -109,6 +109,3 @@ func randomID() string {
 	}
 	return string(out)
 }
-
-// applySeccompToChild macOS 无 seccomp，Seatbelt 已在 sanitizeChildProcess 中应用。
-func applySeccompToChild(cmd *exec.Cmd, profile interface{}) {}

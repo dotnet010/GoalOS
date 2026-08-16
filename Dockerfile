@@ -1,6 +1,6 @@
 # GoalOS Docker 镜像 — ghcr.io
 # 多阶段构建：编译 → 最小运行时
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /build
 COPY go.mod go.sum* ./
 RUN go mod download 2>/dev/null || true

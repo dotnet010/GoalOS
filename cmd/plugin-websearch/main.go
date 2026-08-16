@@ -211,7 +211,7 @@ func callBingAPI(query, apiKey string) (*searchOutput, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Bing API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("bing API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var bingResp bingResponse
@@ -268,7 +268,7 @@ func callSerperAPI(query, apiKey string) (*searchOutput, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Serper returned %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		return nil, fmt.Errorf("serper returned %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 
 	var sResp serperResponse
@@ -321,7 +321,7 @@ func callBraveAPI(query, apiKey string) (*searchOutput, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Brave API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("brave API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var braveResp braveResponse
