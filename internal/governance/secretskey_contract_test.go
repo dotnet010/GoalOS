@@ -29,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -53,9 +54,13 @@ func TestSecretsKey_Permissions_0600(t *testing.T) {
 	if err != nil {
 		t.Fatalf("密钥文件未创建: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0600 {
-		t.Errorf("MUST 1（R-1387）: 密钥文件权限=%o，必须为 0600（仅 daemon 属主可读写）", perm)
-		gaps++
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0600 {
+			t.Errorf("MUST 1（R-1387）: 密钥文件权限=%o，必须为 0600（仅 daemon 属主可读写）", perm)
+			gaps++
+		}
+	} else {
+		t.Logf("Windows ACL 模型：跳过 POSIX 0600 位断言（权限经 DACL 承载——R-1387 平台×进程威胁模型）")
 	}
 
 	// 探针 B/C（R-1387/R-1360）: 主密钥文件载体必须为 "secrets.key"（非 "secrets.enc"）。

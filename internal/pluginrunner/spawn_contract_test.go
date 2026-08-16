@@ -102,7 +102,9 @@ func TestSpawn_SingleEntryPoint(t *testing.T) {
 // spawn 点（零 exec.Command 直调）——HANDLE_LIST 白名单路径无进程创建旁路
 // （dll-search 攻击面不因传输层扩大）。跨平台可执行：AST 解析不依赖构建标签。
 func TestSandbox_Adversarial_Windows_DLLHijack(t *testing.T) {
-	files, err := filepath.Glob("*.go")
+	// Windows 红出定位（2026-08-17）: transport_windows.go 位于 ipc/ 子包——
+	// 此前 glob 本包 *.go 永远找不到该文件，Windows 平台下误报"载体缺失"。
+	files, err := filepath.Glob(filepath.Join("ipc", "*.go"))
 	if err != nil {
 		t.Fatalf("前置: 模块源文件枚举失败: %v", err)
 	}
