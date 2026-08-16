@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: "0 2 * * *"   # 每日 02:00 UTC
   push:
-    branches: [dev/v0.3.0, main]
+    branches: [main]  # 分支策略（2026-08-17 Jobs 裁定）：只保留主分支
   workflow_dispatch:
 
 jobs:
