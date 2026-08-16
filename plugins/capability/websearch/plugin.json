@@ -1,11 +1,11 @@
 {
-  "name": "websearch",
-  "type": "capability",
-  "version": "1.0.0",
-  "signature": "sha256:4debc8df57a9187b52286fd5aac1200bac0a895c66c266dbe649d9948c9e02dc",
   "binary": "./plugin-websearch",
   "declared_capabilities": [
     "web.search"
   ],
-  "description": "Web \u641c\u7d22\u6267\u884c\u5668 \u2014 \u8c03\u7528 Bing Search API\uff0c\u8fd4\u56de\u7ed3\u6784\u5316\u641c\u7d22\u7ed3\u679c"
+  "description": "Web 搜索执行器 — 调用 Bing Search API，返回结构化搜索结果",
+  "name": "websearch",
+  "signature": "sha256:6e41a591b2baa598a723efc79d0780ed17ee414c154813bc912a8bc697d3db27",
+  "type": "capability",
+  "version": "1.0.0"
 }

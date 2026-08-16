@@ -1,8 +1,4 @@
 {
-  "name": "shell-executor",
-  "type": "capability",
-  "version": "1.0.0",
-  "signature": "sha256:7863d1fbfcba5db8e38a37a18ba72611d3b6abbbd36297d10c258782bbee2fd7",
   "binary": "./plugin-shell",
   "declared_capabilities": [
     "shell.execute",
@@ -13,5 +9,9 @@
     "fs.create_dir",
     "fs.list"
   ],
-  "description": "Shell \u547d\u4ee4\u6267\u884c\u5668 \u2014 \u5728\u72ec\u7acb OS \u5b50\u8fdb\u7a0b\u4e2d\u8fd0\u884c shell \u547d\u4ee4"
+  "description": "Shell 命令执行器 — 在独立 OS 子进程中运行 shell 命令",
+  "name": "shell-executor",
+  "signature": "sha256:4792084b4837f4026782feeaff284a1388c934b09fd744a583c6206c51e33198",
+  "type": "capability",
+  "version": "1.0.0"
 }
