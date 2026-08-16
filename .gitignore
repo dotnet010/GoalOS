@@ -14,6 +14,14 @@
 *.swp
 *.swo
 
+# ─── 内部文档（发布规范 §3.1——不进入 git）───
+GIT-RULES.md
+发布规范.md
+开发日志.md
+验收规范.md
+开发规范.md
+RELEASE.md
+
 # ─── OS ───
 .DS_Store
 Thumbs.db
