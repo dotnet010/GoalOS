@@ -54,7 +54,7 @@ const (
 	cloneFlagNewnet  = 0x40000000  // CLONE_NEWNET —— 网络命名空间（vec-004 拒绝）
 	cloneFlagSigchld = 0x00000011  // SIGCHLD(17) —— clone 低字节退出信号
 	cloneThreadFlags = 0x00050F00  // clone-vec-001: VM|FS|FILES|SIGHAND|THREAD|SYSVSEM
-	clone3Nr         = 435         // SYS_CLONE3 —— x86_64 与 arm64 均为 435
+	// clone3Nr 由包常量提供（seccomp_linux.go——x86_64 与 arm64 均为 435）
 )
 
 // TestSandbox_CloneFlags_NamespaceRejected —— clone-vec-004（R-1371）。
@@ -184,7 +184,7 @@ func runClone3Helper() {
 	var args [64]byte
 	binary.LittleEndian.PutUint64(args[0:8], uint64(cloneFlagNewnet))
 	binary.LittleEndian.PutUint64(args[32:40], uint64(syscall.SIGCHLD))
-	r1, _, errno := syscall.RawSyscall(clone3Nr, uintptr(unsafe.Pointer(&args)), uintptr(len(args)), 0)
+	r1, _, errno := syscall.RawSyscall(uintptr(clone3Nr), uintptr(unsafe.Pointer(&args)), uintptr(len(args)), 0)
 	if r1 == 0 {
 		// 子进程（无 CLONE_VM——私有内存拷贝）：立即裸退出，不触碰运行时状态。
 		syscall.RawSyscall(syscall.SYS_EXIT, 0, 0, 0)

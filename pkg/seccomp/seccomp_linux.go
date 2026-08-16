@@ -66,6 +66,17 @@ const (
 	seccompRetKill  = 0x00000000
 	seccompRetAllow = 0x7FFF0000
 	seccompRetErrno = 0x00050000
+	// seccompRetKillProcess — SECCOMP_RET_KILL_PROCESS（0x80000000，R-1371）:
+	// 线程级 RET_KILL 在 Go 多线程进程中只杀调用线程——runtime sysmon 存活导致
+	// 进程挂起（CI 实测 5m 超时）。拒绝路径统一进程级击杀（fail-closed 不挂起）。
+	seccompRetKillProcess = 0x80000000
+	// cloneAllowedMask — clone 旗标白名单（R-1352/R-1371 夹具 allowed_mask 聚合）:
+	// VM|FS|FILES|SIGHAND|THREAD|SYSVSEM|SETTLS|PARENT_SETTID|CHILD_CLEARTID|
+	// CHILD_SETTID=0x013D0F00。旗标子集检查：非法旗标/0/高 32 位非零=KILL_PROCESS；
+	// fork 穿透口（SIGCHLD 承载的进程级 clone）=mask 外旗标=拒绝（K-03）。
+	cloneAllowedMask = uint32(0x013D0F00)
+	// clone3Nr — SYS_CLONE3（x86_64 与 arm64 均为 435，R-1371）。
+	clone3Nr = uint32(435)
 	auditArchX8664  = 0xC000003E
 	auditArchARM64  = 0xC00000B7 // v0.3.0: ARM64 support
 )
@@ -124,19 +135,31 @@ func Apply(profile *Profile) error {
 	return nil
 }
 
-// buildBPF 生成 deny-all + 白名单 BPF 程序。
+// buildBPF 生成 deny-all + 白名单 BPF 程序（R-1371 旗标级过滤——任务 3.19 完成态）。
 // v0.3.0 fix (C7): 运行时检测 CPU 架构——ARM64 和 x86_64 双架构支持。
+// v0.3.0 fix (R-1371): clone 族旗标级过滤——clone3 任何旗标=RET_ERRNO(ENOSYS)
+// （BPF 无法读用户内存 flags；glibc 自动回退 clone）；clone(nr) 旗标子集检查：
+// (flags & ^ALLOWED_MASK)==0 且高 32 位==0 且 flags!=0 否则 KILL_PROCESS
+// （线程级 kill 在 Go 多线程进程下挂起——sysmon 存活，CI 实测）。
 func buildBPF(profile *Profile) []seccompInstr {
 	arch, syscallMap := detectArch()
-	killAct := uint32(seccompRetKill)
+	killAct := uint32(seccompRetKillProcess) // R-1371: 拒绝路径进程级击杀（非线程级）
 	if profile.DefaultAction == "errno" {
 		killAct = seccompRetErrno | 1
 	}
 	insns := []seccompInstr{
-		{Code: 0x20, K: 4},                    // ld [4] — 加载 seccomp_data.arch
-		{Code: 0x15, Jt: 1, Jf: 0, K: arch},   // jeq arch → 继续; 否则 kill
-		{Code: 0x06, K: killAct},               // kill（架构不匹配）
-		{Code: 0x20, K: 0},                     // ld [0] — 加载 seccomp_data.nr（系统调用号）
+		{Code: 0x20, K: 4},                  // ld [4] — 加载 seccomp_data.arch
+		{Code: 0x15, Jt: 1, Jf: 0, K: arch}, // jeq arch → 继续; 否则 kill
+		{Code: 0x06, K: killAct},            // kill（架构不匹配）
+		{Code: 0x20, K: 0},                  // ld [0] — 加载 seccomp_data.nr（系统调用号）
+	}
+	// clone3/clone 专用前置检查（R-1371——白名单链之前拦截）
+	hasCloneSpecial := false
+	if _, ok := syscallMap["clone"]; ok {
+		hasCloneSpecial = true
+		// 占位——目标块在程序尾部，偏移回填
+		insns = append(insns, seccompInstr{Code: 0x15, Jt: 0, Jf: 0, K: clone3Nr})          // jeq clone3
+		insns = append(insns, seccompInstr{Code: 0x15, Jt: 0, Jf: 0, K: syscallMap["clone"]}) // jeq clone
 	}
 	allowedNums := make([]uint32, 0)
 	for _, name := range profile.AllowedSyscalls {
@@ -155,5 +178,32 @@ func buildBPF(profile *Profile) []seccompInstr {
 	}
 	insns = append(insns, seccompInstr{Code: 0x06, K: killAct})
 	insns = append(insns, seccompInstr{Code: 0x06, K: seccompRetAllow})
+
+	if hasCloneSpecial {
+		// clone3 落点: RET_ERRNO(ENOSYS)（glibc 自动回退 clone，R-1371）
+		enosysIdx := len(insns)
+		insns = append(insns, seccompInstr{Code: 0x06, K: seccompRetErrno | uint32(syscall.ENOSYS)})
+
+		// clone 旗标块（R-1371 夹具语义）:
+		//   ld [16]→flags 低 32; flags==0→KILL_PROCESS（fork 穿透口，K-03）;
+		//   flags & ^MASK !=0→KILL_PROCESS（命名空间旗标/未授权旗标）;
+		//   高 32 位 !=0→KILL_PROCESS; 否则 RET_ALLOW。
+		cloneIdx := len(insns)
+		insns = append(insns,
+			seccompInstr{Code: 0x20, K: 16},                 // [C0] ld [16] — flags 低 32
+			seccompInstr{Code: 0x15, Jt: 2, Jf: 0, K: 0},    // [C1] jeq 0 → killProc（flags==0 拒绝）
+			seccompInstr{Code: 0x14, K: ^cloneAllowedMask},  // [C2] and ^MASK（BPF_ALU|AND|K=0x14）— A = flags & ^MASK
+			seccompInstr{Code: 0x15, Jt: 1, Jf: 0, K: 0},    // [C3] jeq 0 → highcheck（子集合法）
+			seccompInstr{Code: 0x06, K: seccompRetKillProcess}, // [C4] killProc（非法旗标落点）
+			seccompInstr{Code: 0x20, K: 20},                 // [C5] ld [20] — flags 高 32
+			seccompInstr{Code: 0x15, Jt: 1, Jf: 0, K: 0},    // [C6] jeq 0 → 跳过 C7 落 ALLOW（高32非零→C7 kill）
+			seccompInstr{Code: 0x06, K: seccompRetKillProcess}, // [C7] 高 32 非零拒绝
+			seccompInstr{Code: 0x06, K: seccompRetAllow},    // [C8] 放行
+		)
+		// 回填前置 jeq 偏移（jt=从下一指令起跳过的指令数）
+		insns[4].Jt = uint8(enosysIdx - 5) // clone3 → ENOSYS 块
+		insns[5].Jt = uint8(cloneIdx - 6)  // clone → 旗标块
+		_ = cloneIdx
+	}
 	return insns
 }
