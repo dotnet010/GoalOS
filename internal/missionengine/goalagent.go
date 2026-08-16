@@ -189,6 +189,9 @@ func (g *GoalAgent) alignAndAnalyze(goal string, ctx Context) (*alignAnalyzeResu
 // Plan 在 Flow 模板约束内生成 MissionGraph（R-350）。
 // [FIXED] 原代码：LLM 失败时调用 fallbackPlan 返回假任务图
 // [FIXED] 现在：LLM 失败即返回真实错误
+// Plan — Agent 规划（R-741 新 Session 重做——重新 Plan 时感知已完成产出物）。
+// 契约：ctx.CompletedArtifacts=已完成 Action 的产出物字典+ctx.ExecutionHistory=执行历史——
+// Agent 在开启新 Session 重新 Plan 时感知已完成产出物，避免重复规划与重复执行。
 func (g *GoalAgent) Plan(criteria *CompletionCriteria, analysis *TaskAnalysis, flowName string, ctx Context) (*MissionGraph, error) {
 	goal := ctx.GoalText
 	if criteria != nil && criteria.SuccessDefinition != "" {

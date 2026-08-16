@@ -1,0 +1,47 @@
+# clone 旗标白名单夹具（R-1352/R-1371——会议 #202/#203，LP-16 夹具落点）
+#
+# 用途（08 §4.2 seccomp 白名单）：
+#   - TestSandbox_CloneFlags_NamespaceRejected / TestSandbox_Clone3_Rejected /
+#     TestSandbox_CloneFlags_ThreadAllowed 转绿判据输入。
+# 裁决语义（R-1371）：clone3(nr 435)=RET_ERRNO(ENOSYS)（glibc 自动回退 clone；
+#   Go runtime 不用 clone3——strace 实证入档 08 §4.2）；clone(nr 56) 允许，
+#   BPF args[0] 检查：`(flags & ^ALLOWED_MASK) == 0` 且高 32 位==0 且 flags!=0。
+# ALLOWED_MASK=VM|FS|FILES|SIGHAND|THREAD|SYSVSEM|SETTLS|PARENT_SETTID|CHILD_SETTID|CHILD_CLEARTID
+#   （Go runtime 线程创建六旗标 VM|FS|FILES|SIGHAND|THREAD|SYSVSEM + glibc pthread 良性旗标）。
+version: 1
+allowed_mask:
+  CLONE_VM: 0x00000100
+  CLONE_FS: 0x00000200
+  CLONE_FILES: 0x00000400
+  CLONE_SIGHAND: 0x00000800
+  CLONE_THREAD: 0x00010000
+  CLONE_SYSVSEM: 0x00040000
+  CLONE_SETTLS: 0x00080000
+  CLONE_PARENT_SETTID: 0x00100000
+  CLONE_CHILD_CLEARTID: 0x00200000
+  CLONE_CHILD_SETTID: 0x01000000
+test_vectors:
+  - id: clone-vec-001
+    flags: 0x00050F00
+    description: "Go runtime 六旗标组合 VM|FS|FILES|SIGHAND|THREAD|SYSVSEM——放行"
+    expected: allow
+  - id: clone-vec-002
+    flags: 0x003D0F00
+    description: "六旗标+SETTLS|PARENT_SETTID|CHILD_CLEARTID（glibc pthread）——放行（K-03）"
+    expected: allow
+  - id: clone-vec-003
+    flags: 0x00000000
+    description: "flags=0 裸 clone（等价 fork）——显式拒绝（K-03：子集检查下 fork 穿透口）"
+    expected: reject
+  - id: clone-vec-004
+    flags: 0x20000000
+    description: "CLONE_NEWNET 命名空间旗标——拒绝（userns/netns 逃逸面封死，K-01）"
+    expected: reject
+  - id: clone-vec-005
+    flags: 0x10000000
+    description: "CLONE_NEWUSER 命名空间旗标——拒绝（用户态命名空间 LPE 攻击面）"
+    expected: reject
+  - id: clone-vec-006
+    syscall: clone3
+    description: "clone3(nr 435) 任何旗标——RET_ERRNO(ENOSYS)（BPF 无法读用户内存 flags，R-1371）"
+    expected: enosys

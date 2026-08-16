@@ -10,8 +10,11 @@ package statestore
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"path/filepath"
 	"sync"
@@ -33,26 +36,36 @@ type GoalState struct {
 	ApprovalPending   bool     `json:"approval_pending,omitempty"`   // v0.1.0: 是否有待审批 Action
 	DataSharingApproved bool   `json:"data_sharing_approved,omitempty"` // v0.1.0: 数据外发是否已确认
 	ActiveActions     int      `json:"active_actions,omitempty"`     // 当前并发 Action 数
-	PipelineState     *PipelineState `json:"pipeline_state,omitempty"`
+	PipelineState     *PipelineSnapshot `json:"pipeline_state,omitempty"`
 }
 
-// PipelineState 记录 PipelineRunner 在 Wait 期间的执行位置（v0.1.0）。
+// PipelineSnapshot 记录 PipelineRunner 在 Wait 期间的执行位置（v0.1.0；
+// S'-12 改名映射表——原 PipelineState 并入 scheduler 侧字段后更名）。
 // 不作为独立文件持久化——是 Snapshot 的字段，从 PipelinePaused 事件推导。
-type PipelineState struct {
-	ResumePoint     string `json:"resume_point"`     // 恢复节点 ID
-	ResumePrimitive string `json:"resume_primitive"` // 恢复后从哪个原语继续："decide"|"check"
-	WaitReason      string `json:"wait_reason"`      // "approval"|"dependency"|"resource"
-	TimeoutAt       string `json:"timeout_at"`       // ISO 8601 超时时间
+type PipelineSnapshot struct {
+	ResumePoint      string   `json:"resume_point"`               // 恢复节点 ID
+	ResumePrimitive  string   `json:"resume_primitive"`           // 恢复后从哪个原语继续："check"|"exec"|"wait"|"decide"（PipelinePrimitive 四值，R-1112）
+	WaitReason       string   `json:"wait_reason"`                // "approval"|"dependency"|"resource"
+	TimeoutAt        string   `json:"timeout_at"`                 // ISO 8601 超时时间
 	PendingActionIDs []string `json:"pending_action_ids,omitempty"` // 等待中的 Action ID 列表
+	CompletedNodes   []string `json:"completed_nodes,omitempty"`    // 已完成节点（scheduler 侧字段并入——S'-12 字段重叠合并）
 }
 
 // Store 管理事件持久化和状态投影。
 // 线程安全——每个 Store 实例内部串行写入。
+//
+// 存储完整性三层防线（R-1037/R-1040/R-1041——中文序数命名 R-1114）：
+//   防线一=CRC32 条目级（每条目 CRC32 校验和）
+//   防线二=seq 单调性（全局单调递增序号）
+//   防线三=hash chain（每条目 prev_hash=上一条目 SHA-256，genesis=全零 32B）
 type Store struct {
 	baseDir     string     // ~/.goalos/events/
 	mu          sync.Mutex
 	eventCount  int        // v0.1.0 R-372: 每 N=100 触发快照
 	snapshotFn  func(goalID string) // v0.1.0: 快照回调
+	// 三层防线状态（R-1037/R-1041）：
+	globalSeq   int64      // 防线二：全局单调递增序号（WAL 写入器分配）
+	prevHash    [32]byte   // 防线三：上一条目 SHA-256（genesis=全零 32B）
 }
 
 // New 创建一个 Store。
@@ -65,12 +78,17 @@ func (s *Store) SetSnapshotCallback(fn func(goalID string)) { s.snapshotFn = fn 
 
 // Append 向 Goal 的 events.jsonl 追加一个事件。
 // 调用 fsync 保证持久性。O_APPEND 保证 POSIX 原子写入。
+//
+// R-1384 (P-7 实测): 快照回调必须在 s.mu 临界区之外执行——daemon 注册的回调
+// （main.go R-383 接线）会重入 SaveSnapshot（再次 s.mu.Lock()），而 Go sync.Mutex
+// 不可重入：锁内调用回调即自锁死锁。因此锁内只完成事件文件追加并记录"是否需要
+// 快照"标志，锁释放后再调用 snapshotFn。触发条件数值不变（每 N=100 事件）。
 func (s *Store) Append(goalID string, evt events.Event) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	dir := filepath.Join(s.baseDir, goalID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("statestore: 创建目录失败: %w", err)
 	}
 
@@ -80,25 +98,63 @@ func (s *Store) Append(goalID string, evt events.Event) error {
 		0600,
 	)
 	if err != nil {
+		s.mu.Unlock()
 		return fmt.Errorf("statestore: 打开 events.jsonl 失败: %w", err)
 	}
-	defer f.Close()
 
-	data, err := json.Marshal(evt)
+	// 三层完整性防线写入（R-1037/R-1041/R-1393/R-1373）：
+	// 防线二：seq 单调性——global_seq 递增（WAL 写入器唯一分配，发布方不设 Seq）
+	s.globalSeq++
+	evt.Seq = int(s.globalSeq)
+	// 防线三：hash chain——prev_hash=上一条目 SHA-256（genesis=全零 32B hex）
+	if s.globalSeq == 1 {
+		evt.PrevHash = "0000000000000000000000000000000000000000000000000000000000000000" // genesis
+	} else {
+		evt.PrevHash = fmt.Sprintf("%x", s.prevHash)
+	}
+	// 重新序列化（含 seq+prev_hash）——唯一一次 Marshal（R-1453：删除第一次 Marshal）
+	var data []byte
+	data, err = json.Marshal(evt)
 	if err != nil {
-		return fmt.Errorf("statestore: JSON 编码事件失败: %w", err)
+		f.Close()
+		s.mu.Unlock()
+		return fmt.Errorf("statestore: 编码事件失败: %w", err)
 	}
-	data = append(data, '\n')
-	s.eventCount++
-	// v0.1.0 R-372: 每 N=100 事件触发快照
-	if s.eventCount%100 == 0 && s.snapshotFn != nil {
-		s.snapshotFn(goalID)
-	}
+	// 防线一：CRC32 条目级校验和（计算输入=即将写入的确切字节——JSON 部分，R-1453）
+	crc := crc32.ChecksumIEEE(data)
+	// 防线三：prevHash 暂存（\n 前——R-1453 可读性修正）
+	s.prevHash = sha256.Sum256(data)
+	// WAL 行 envelope 格式（R-1453）：<json>\t<crc32_hex>\t<format_version>\n
+	// format_version="1"——未来追加逐行字段的兼容锚点+区分"旧格式无 CRC 行"的唯一依据
+	line := append(data, '\t')
+	line = append(line, []byte(fmt.Sprintf("%08x", crc))...)
+	line = append(line, '\t')
+	line = append(line, '1')
+	line = append(line, '\n')
+	data = line
 
 	if _, err := f.Write(data); err != nil {
+		f.Close()
+		s.mu.Unlock()
 		return fmt.Errorf("statestore: 写入事件失败: %w", err)
 	}
-	return f.Sync()
+	if err := f.Sync(); err != nil {
+		f.Close()
+		s.mu.Unlock()
+		return fmt.Errorf("statestore: fsync 失败: %w", err)
+	}
+	f.Close()
+
+	s.eventCount++
+	// v0.1.0 R-372: 每 N=100 事件触发快照（阈值不变）。
+	needsSnapshot := s.eventCount%SnapshotInterval == 0 && s.snapshotFn != nil
+	s.mu.Unlock()
+
+	// R-1384: 回调移至锁外——允许回调重入 Store（SaveSnapshot/Append）。
+	if needsSnapshot {
+		s.snapshotFn(goalID)
+	}
+	return nil
 }
 
 // Replay 从 events.jsonl 回放事件。
@@ -118,14 +174,24 @@ func (s *Store) Replay(goalID string, fromSeq int) ([]json.RawMessage, error) {
 	var events []json.RawMessage
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
+		// R-1453 envelope 格式解析：<json>\t<crc32_hex>\t<format_version>\n
+		// 读取方契约：先按 \t 拆分取 JSON 部分（seq 过滤+Unmarshal 用），
+		// 完整行（含 \t 后缀）保留用于 hash chain 验证
+		line := scanner.Bytes()
+		jsonPart := line
+		if idx := bytes.IndexByte(line, '\t'); idx >= 0 {
+			jsonPart = line[:idx]
+		}
 		// 按 seq 过滤
 		var evt struct{ Seq int `json:"seq"` }
-		json.Unmarshal(scanner.Bytes(), &evt)
+		if err := json.Unmarshal(jsonPart, &evt); err != nil {
+			continue // 非 JSON 行跳过（容错——旧格式兼容）
+		}
 		if evt.Seq > fromSeq {
-			// 复制字节——scanner.Bytes() 是临时缓冲区
-			line := make([]byte, len(scanner.Bytes()))
-			copy(line, scanner.Bytes())
-			events = append(events, line)
+			// 复制字节——scanner.Bytes() 是临时缓冲区（完整行含 envelope 后缀）
+			full := make([]byte, len(line))
+			copy(full, line)
+			events = append(events, full)
 		}
 	}
 	return events, scanner.Err()
@@ -185,7 +251,9 @@ func (s *Store) LoadLatestSnapshot(goalID string) (*GoalState, error) {
 	}
 
 	var latest *GoalState
-	var latestSeq int
+	// latestSeq=-1：seq=0 的快照（任何事件写入前的首个快照，LastAppliedSeq=0）
+	// 必须可被选中——0 作初值会因 `seq > latestSeq` 排除 snapshot-0.json。
+	var latestSeq = -1
 	for _, e := range entries {
 		var seq int
 		if _, err := fmt.Sscanf(e.Name(), "snapshot-%d.json", &seq); err != nil {

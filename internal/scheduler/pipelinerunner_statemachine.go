@@ -11,15 +11,9 @@ import (
 	"github.com/goalos/goalos/internal/errorcategory"
 )
 
-// RunState 是状态机循环的状态。
-type RunState int
-
-const (
-	StateCheck  RunState = iota
-	StateWait
-	StateExec
-	StateDecide
-)
+// S'-12 改名映射表: 原 RunState → PipelineState 枚举（四值顺序按 D1:
+// Check/Exec/Wait/Decide）。唯一类型与别名关系见 pipelinerunner.go——
+// PipelineState = governance.PipelinePhase 别名，State* 常量为同包别名。
 
 // StateMachineResult 是状态机循环的返回。
 type StateMachineResult struct {

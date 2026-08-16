@@ -22,10 +22,12 @@ func NewEvent(typ, goalID, source string) Event {
 }
 
 // WithAction 设置 Action 相关字段并返回 Event。
-// 自动生成幂等键：{goalID}-{actionID}-{seq}。
+// 自动生成幂等键：{goalID}-{actionID}-{sessionID}（R-1373——重试幂等由
+// {goal, action, session} 三元组承载，键不得含 seq：同三元组不同 seq 的重试
+// 事件必须得到相同幂等键）。
 func (e Event) WithAction(actionID string) Event {
 	e.ActionID = &actionID
-	e.ID = fmt.Sprintf("%s-%s-%d", e.GoalID, actionID, e.Seq)
+	e.ID = fmt.Sprintf("%s-%s-%s", e.GoalID, actionID, e.SessionID)
 	return e
 }
 
@@ -41,7 +43,7 @@ type Event struct {
 	Seq       int                    `json:"seq"`              // 全局递增序号
 	Type      string                 `json:"type"`             // 事件类型。见下方常量
 	Version   string                 `json:"version"`          // 事件版本。"1.0"
-	ID        string                 `json:"idempotency_key"`  // 幂等键：{goalID}-{actionID}-{seq}。重放时去重
+	ID        string                 `json:"idempotency_key"`  // 幂等键：{goalID}-{actionID}-{sessionID}（R-1373，不得含 seq）。重放时去重
 	Timestamp time.Time              `json:"timestamp"`        // 事件时间戳
 	GoalID    string                 `json:"goal_id"`          // 所属 Goal
 	MissionID *string                `json:"mission_id,omitempty"` // 所属 Mission。可选
@@ -50,6 +52,7 @@ type Event struct {
 	SessionID string                 `json:"session_id,omitempty"` // R-772: 同一 Goal 的不同 Session。新 Session 重做时递增。
 	Payload   map[string]interface{} `json:"payload"`          // 事件特定数据
 	Metadata  map[string]interface{} `json:"metadata,omitempty"` // 元数据。可选
+	PrevHash  string                 `json:"prev_hash"`        // 第 13 字段（R-1393）：上一条目 SHA-256 hex；genesis=全零 32B
 }
 
 // ─── 事件类型常量 ──────────────────────────────────────────────
@@ -60,13 +63,17 @@ const (
 	TypeMissionGenerated = "MissionGenerated" // Agent 产出 MissionGraph。Publisher: Mission Engine
 	TypeUserConfirmed    = "UserConfirmed"    // 用户确认 MissionGraph。Publisher: Channel Adapter
 	TypeUserRejected     = "UserRejected"     // 用户拒绝 MissionGraph。Publisher: Channel Adapter
-	TypeGoalCompleted    = "GoalCompleted"
-	TypeGoalFailed      = "GoalFailed"    // Goal 完成。Publisher: Scheduler
+	TypeGoalCompleted    = "GoalCompleted"    // Goal 完成。Publisher: GoalRunner（R-1365）
+	TypeGoalFailed       = "GoalFailed"       // Goal 失败。Publisher: GoalRunner
 	TypeGoalPaused       = "GoalPaused"       // Goal 已暂停。Publisher: Scheduler
 	TypeGoalResumed      = "GoalResumed"      // Goal 已恢复。Publisher: Scheduler
+	TypeGoalNeedsReview  = "GoalNeedsReview"  // Goal 需要审查（R-1376 唤醒集闭合——拒绝族事件入唤醒集）。Publisher: GoalRunner
 
 	// ── 规划调度 ──
 	TypePlanRequested = "PlanRequested" // Scheduler 请求 Mission Engine 规划。Publisher: Scheduler
+	// TypeFlowGenerationRequested — flow 无匹配时的确认流程请求（R-1368：
+	// FlowRecommender 静默回退删除，确认流程唯一路径）。Publisher: Mission Engine
+	TypeFlowGenerationRequested = "FlowGenerationRequested"
 
 	// ── Action 调度 ──
 	TypeActionScheduled = "ActionScheduled" // Scheduler 选出下一个 Action。Publisher: Scheduler
@@ -76,6 +83,7 @@ const (
 	TypeActionRejected        = "ActionRejected"        // Governance 拒绝。Publisher: Governance
 	TypeActionPendingApproval = "ActionPendingApproval" // 挂起等待人工审批。Publisher: Governance
 	TypeUserApprovedAction    = "UserApprovedAction"    // 用户批准挂起的审批。Publisher: Channel Adapter
+	TypeUserDecisionReceived  = "UserDecisionReceived"  // 用户决策接收（R-1161/R-1211——wait_more 经事件投递 GoalRunner）。Publisher: Channel Adapter
 
 	// ── 执行与结果 ──
 	TypeActionStarted   = "ActionStarted"   // 子进程开始执行。Publisher: Plugin Runner
@@ -108,12 +116,19 @@ const (
 
 	// ── 快照与系统 ──
 	TypeSnapshotCreated      = "SnapshotCreated"      // 快照写入。Publisher: State Store
-	TypeTokenUsage           = "TokenUsage"           // Token 消耗记录。Publisher: Scheduler
+	TypeTokenUsage           = "TokenUsage"           // Token 消耗记录。Publisher: Plugin Runner 汇总（R-1363）
 	TypeSystemStarted        = "SystemStarted"        // Daemon 启动完成。Publisher: daemon
 	TypeMissionGraphRejected = "MissionGraphRejected" // MissionGraph 校验失败。Publisher: Mission Engine
 	// R-1058: 配置热重载完成事件——nginx 代际模型：新配置只影响"新一代"决策，
 	// 进行中审批/执行继续按旧快照运行。Publisher: daemon（HTTP reload + SIGHUP 两条路径）
 	TypeConfigReloaded = "ConfigReloaded"
+
+	// ── 安全与治理（R-1385 注册——会议 #202~#204 批量传播）──
+	// wire 值小写蛇形；payload shape 见 07 事件注册表 §4/X.8（R-1362）。
+	TypeSecurityIncident          = "security_incident"           // 安全事件（密钥泄露/seccomp 违规/Provider 全超时/guard 不可用）。Publisher: 各核心模块。Payload: {severity: CRITICAL|WARN|INFO, module, detail}（07 X.8）
+	TypeRequirementAdded          = "requirement_added"           // 追加需求软入口（不直接改 DAG）。Publisher: Channel Adapter。Payload: {goal_id, requirement_text, source, added_at}（07 §4 R-1362）
+	TypeBudgetAdjustmentRequested = "budget_adjustment_requested" // 预算调整请求。Publisher: Channel Adapter。Payload: {goal_id, requested_delta, reason}（07 §4 R-1362）
+	TypeStateMachineViolation     = "state_machine_violation"     // 非法迁移企图（终态后 wait_more 等）。Publisher: GoalRunner。Payload: {goal_id, event_type, current_state, expected_states, attempted_transition}（07 §4 R-1362）
 
 	// ── 消息 ──
 	TypeMessageReceived = "MessageReceived" // 收到用户消息。Publisher: Channel Adapter

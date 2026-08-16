@@ -46,17 +46,17 @@ type StateChangeNotifier interface {
 // 上层可以依赖下层。下层禁止依赖上层。
 //
 // 分层铁律 (会议 #76 A1):
-//   Dashboard(0) → API(1) → Scheduler(2) → GoalRunner(3) → PipelineRunner(4) → PluginRunner(5)
+//   API(0) → Scheduler(1) → GoalRunner(2) → PipelineRunner(3) → PluginRunner(4)
 //   EventBus = 横向通道。MissionEngine/Governance/ContextEngine 作为同级模块通过 EventBus 通信。
+//   （R-1372: Dashboard 层已拆除 R-1372——CLI 是唯一软件入口 R-1123）
 type Layer int
 
 const (
-	LayerDashboard      Layer = iota // 0: Dashboard / Web UI
-	LayerAPI                         // 1: HTTP API (daemon/api.go)
-	LayerScheduler                   // 2: Scheduler (Goal 级事件路由)
-	LayerGoalRunner                  // 3: GoalRunner (Goal 生命周期管理)
-	LayerPipelineRunner              // 4: PipelineRunner (Action 级三原语执行)
-	LayerPluginRunner                // 5: PluginRunner (子进程启动/IPC/生命周期)
+	LayerAPI            Layer = iota // 0: HTTP API (daemon/api.go)
+	LayerScheduler                   // 1: Scheduler (Goal 级事件路由)
+	LayerGoalRunner                  // 2: GoalRunner (Goal 生命周期管理)
+	LayerPipelineRunner              // 3: PipelineRunner (Action 级三原语执行)
+	LayerPluginRunner                // 4: PluginRunner (子进程启动/IPC/生命周期)
 )
 
 // Layered 是所有架构分层模块必须实现的接口。

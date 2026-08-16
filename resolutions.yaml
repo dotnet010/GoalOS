@@ -4173,7 +4173,7 @@ resolutions:
         in_file: 07事件注册表.md
         reason: "07 发布者表必须落两行补全（S'-11）"
   R-1255:
-    desc: "显式改名映射表(会议 #200, S'-12 采纳, 取代 S-35): statestore.PipelineState→PipelineSnapshot; scheduler.PipelineState→并入 PipelineSnapshot(字段重叠合并); scheduler.RunState→PipelineState 枚举(四值顺序按 D1: Check/Exec/Wait/Decide); scheduler.ResumePrimitive→PipelinePrimitive 四值(补 exec, 语义=重执行该动作节点); Go 类型层写明唯一类型与别名关系(type PipelineState = PipelinePrimitive); 迁移点清单: resolutions.yaml 锚点/goalrunner.go:142-144 跨包转换/pipelinerunner.go 十余处/pipelinerunner_statemachine_contract_test.go。disposition: 生效"
+    desc: "显式改名映射表(会议 #200, S'-12 采纳, 取代 S-35): statestore.PipelineState→PipelineSnapshot; scheduler.PipelineState→并入 PipelineSnapshot(字段重叠合并); scheduler.RunState→PipelineState 枚举(四值顺序按 D1: Check/Exec/Wait/Decide); scheduler.ResumePrimitive→PipelinePrimitive 四值(补 exec, 语义=重执行该动作节点); Go 类型层写明唯一类型与别名关系(type PipelineState = PipelinePrimitive); 迁移点清单: resolutions.yaml 锚点/goalrunner.go:142-144 跨包转换/pipelinerunner.go 十余处/pipelinerunner_statemachine_contract_test.go。修订注记(2026-08-17 任务 3.26 落地): 迁移完成——statestore.PipelineSnapshot(并入 CompletedNodes)/scheduler 层 type PipelineState = governance.PipelinePhase 与 type PipelinePrimitive = governance.PipelinePhase 别名(状态代数矩阵 Pipeline 维单一权威)/RunState 删除; goalrunner.go 跨包转换删除(直接持久化); 契约测试同步迁移(statestore_v1_1/reject_wakeup/waitmore)。disposition: 生效"
     files: [05软件架构文档.md, 10模块实现指南.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md]
     verify:
       - must_exist: "type PipelineState = PipelinePrimitive"

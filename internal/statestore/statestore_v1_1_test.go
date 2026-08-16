@@ -9,7 +9,7 @@ import (
 
 // TestPipelineState_RoundTrip 验证 PipelineState 序列化往返（v0.1.0）。
 func TestPipelineState_RoundTrip(t *testing.T) {
-	ps := &statestore.PipelineState{
+	ps := &statestore.PipelineSnapshot{
 		ResumePoint:     "node-3",
 		ResumePrimitive: "decide",
 		WaitReason:      "approval",
@@ -22,8 +22,9 @@ func TestPipelineState_RoundTrip(t *testing.T) {
 		t.Fatalf("PipelineState marshal failed: %v", err)
 	}
 
-	var restored statestore.PipelineState
-	if err := json.Unmarshal(data, &restored); err != nil {
+	var restored statestore.PipelineSnapshot
+	jsonPart, _ := parseWALLine(data)
+	if err := json.Unmarshal(jsonPart, &restored); err != nil {
 		t.Fatalf("PipelineState unmarshal failed: %v", err)
 	}
 
@@ -49,7 +50,7 @@ func TestGoalState_WithPipelineState(t *testing.T) {
 	gs := &statestore.GoalState{
 		GoalID:        "goal-001",
 		InternalState: "running",
-		PipelineState: &statestore.PipelineState{
+		PipelineState: &statestore.PipelineSnapshot{
 			ResumePoint:     "node-2",
 			ResumePrimitive: "decide",
 			WaitReason:      "dependency",
@@ -63,7 +64,8 @@ func TestGoalState_WithPipelineState(t *testing.T) {
 	}
 
 	var restored statestore.GoalState
-	if err := json.Unmarshal(data, &restored); err != nil {
+	jsonPart, _ := parseWALLine(data)
+	if err := json.Unmarshal(jsonPart, &restored); err != nil {
 		t.Fatalf("GoalState unmarshal failed: %v", err)
 	}
 
@@ -88,7 +90,8 @@ func TestGoalState_WithoutPipelineState(t *testing.T) {
 	}
 
 	var restored statestore.GoalState
-	if err := json.Unmarshal(data, &restored); err != nil {
+	jsonPart, _ := parseWALLine(data)
+	if err := json.Unmarshal(jsonPart, &restored); err != nil {
 		t.Fatalf("GoalState unmarshal failed: %v", err)
 	}
 

@@ -102,6 +102,8 @@ func (vc *VerdictCombiner) weightedScore(votes []ProviderVote) float64 {
 }
 
 // voteWeight 返回投票权重。
+// S-20 四规则语义（R-1331）：投票值枚举无弃权位——超时在采集层记 FAIL(reason=llm_timeout)，
+// Provider 只输出 PASS/WARN/FAIL。任何未知值 fail-closed 按 FAIL 权重 3 处理，绝不宽松化。
 func (vc *VerdictCombiner) voteWeight(vote string) int {
 	switch vote {
 	case "FAIL":
@@ -111,7 +113,7 @@ func (vc *VerdictCombiner) voteWeight(vote string) int {
 	case "PASS":
 		return 1
 	default:
-		return 1 // ABSTAIN 等同 PASS
+		return 3 // 兜底 fail-closed：未知投票值按 FAIL 权重 3（S-20 无 ABSTAIN 值，不得宽松化）
 	}
 }
 
@@ -364,6 +366,7 @@ func GenerateReviewReport(goalID, actionID string, verdict *Verdict) *events.Rev
 }
 
 // countVotes 统计投票分布（R-844 投票制）。
+// R-1331：Abstain 兜底分支已删除——S-20 投票值枚举无弃权位，仅 PASS/WARN/FAIL。
 func countVotes(votes []ProviderVote) events.VoteDist {
 	var dist events.VoteDist
 	for _, v := range votes {
@@ -374,8 +377,6 @@ func countVotes(votes []ProviderVote) events.VoteDist {
 			dist.Warn++
 		case "FAIL":
 			dist.Fail++
-		default:
-			dist.Abstain++
 		}
 	}
 	return dist
@@ -384,7 +385,7 @@ func countVotes(votes []ProviderVote) events.VoteDist {
 // SummaryMessage 返回 MultiLLM 审查的人类可读摘要消息（R-847）。
 func SummaryMessage(report *events.ReviewReport) string {
 	total := report.VoteDistribution.Pass + report.VoteDistribution.Warn +
-		report.VoteDistribution.Fail + report.VoteDistribution.Abstain
+		report.VoteDistribution.Fail
 	switch report.Verdict {
 	case "FAIL":
 		return fmt.Sprintf("MultiLLM 审查发现 %d 个问题。%d 个模型审查，%d FAIL / %d WARN / %d PASS。",

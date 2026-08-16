@@ -27,6 +27,27 @@ func New(baseURL string) *Client {
 	}
 }
 
+// CLI 退出码契约（R-1323/R-1379）: 124=超时；125=审批未获通过/guard 拦截。
+// 语义互斥——124 与 125 不可复用同一码位。
+const (
+	ExitCodeTimeout        = 124 // 超时（R-1323）
+	ExitCodeApprovalDenied = 125 // 审批未获通过 / guard 拦截（R-1379）
+)
+
+// ExitCodeFor 将失败原因映射为 CLI 退出码（R-1323/R-1379）。
+// 契约: cause="timeout"→124；"approval_denied"/"guard_intercepted"→125；
+// 其余→1（通用失败——CLI 既有行为）。
+func (c *Client) ExitCodeFor(cause string) int {
+	switch cause {
+	case "timeout":
+		return ExitCodeTimeout
+	case "approval_denied", "guard_intercepted":
+		return ExitCodeApprovalDenied
+	default:
+		return 1
+	}
+}
+
 // Health checks if the daemon is running.
 func (c *Client) Health() (bool, error) {
 	resp, err := c.http.Get(c.baseURL + "/api/health")

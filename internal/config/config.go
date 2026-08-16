@@ -25,7 +25,24 @@ type Config struct {
 	LLM      LLMConfig      `yaml:"llm"`
 	MultiLLM MultiLLMConfig `yaml:"multi_llm"`
 	Policy   PolicyConfig   `yaml:"policy"`
+	Guard    GuardConfig    `yaml:"guard"`   // Guard LLM 前置审查配置（R-1340）
+	Secrets  SecretsConfig  `yaml:"secrets"` // 主密钥文件配置（R-1387——secrets.key 唯一主密钥文件）
 	Persona  string         `yaml:"persona"`  // "concise"|"warm"|"minimal"
+}
+
+// SecretsConfig 是主密钥文件配置（R-1387——secrets.key 唯一主密钥文件，0600）。
+// secrets.enc 仅作一次性导入源——导入后删除，不得作为主密钥载体（R-1387 演进关系）。
+type SecretsConfig struct {
+	// KeyPath 主密钥文件路径（唯一主密钥载体）。默认 ~/.goalos/secrets.key
+	KeyPath string `yaml:"key_path"`
+}
+
+// GuardConfig 是 Guard LLM 前置审查配置（R-1340——金丝雀扫描预算载体）。
+type GuardConfig struct {
+	// ScanBudgetBytesPerSession 金丝雀扫描预算（字节/会话——R-1340 键）。
+	// 预算耗尽=fail-closed guard_budget_exhausted + SecurityIncident 去重（R-1382）；
+	// 预算耗尽后原始字节哈希匹配继续命中（depth=0 不降级）。
+	ScanBudgetBytesPerSession int `yaml:"scan_budget_bytes_per_session"` // 默认 1048576（1MB）
 }
 
 // DaemonConfig 是 Daemon 运行时配置。
@@ -34,6 +51,9 @@ type DaemonConfig struct {
 	AutonomyLevel   string        `yaml:"autonomy_level"`  // "observe"|"suggest"|"approve"|"autonomous"。默认 "approve"
 	IdleTimeout     time.Duration `yaml:"idle_timeout"`    // 空闲超时后退出。默认 5m
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"` // 优雅关闭超时。默认 5s
+	// SocketPath 是 UDS 治理通道路径（R-1322/R-1378）——审批族端点 UDS-only，
+	// 治理面不得暴露于 TCP。默认 "~/.goalos/run/daemon.sock"
+	SocketPath string `yaml:"socket_path"`
 }
 
 
@@ -86,6 +106,8 @@ func Default() *Config {
 			AutonomyLevel:   "approve", // 默认 approve——安全优先（需用户确认计划）
 			IdleTimeout:     5 * time.Minute,
 			ShutdownTimeout: 5 * time.Second,
+			// R-1322 权威路径：UDS 治理通道 ~/.goalos/run/daemon.sock
+			SocketPath: "~/.goalos/run/daemon.sock",
 		},
 		LLM: LLMConfig{
 			Provider:    "anthropic",
@@ -101,6 +123,14 @@ func Default() *Config {
 				ApprovalTimeout: 300, TokenTTL: 300, TokenBudget: 1_000_000, TokenWarning: 0.8,
 				AutoFixMax: 3, FlowDegradeThreshold: 3, GoalAnchorInterval: 20, RecoveryRetryMax: 3,
 			},
+		// R-1387: 主密钥唯一文件 secrets.key（0600）——secrets.enc 仅一次性导入源
+		Secrets: SecretsConfig{
+			KeyPath: "~/.goalos/secrets.key",
+		},
+		// R-1340: guard 配置键——扫描预算默认 1048576（1MB/会话）
+		Guard: GuardConfig{
+			ScanBudgetBytesPerSession: 1048576,
+		},
 		Persona: "concise",
 	}
 }

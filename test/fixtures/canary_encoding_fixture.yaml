@@ -1,0 +1,50 @@
+# 金丝雀双编码样本夹具（R-1341/R-1382/R-1383——会议 #202~#204，LP-16 夹具落点）
+#
+# 用途（06 §9.7 金丝雀三层机制）：
+#   - TestCanary_BudgetExhausted_KeepsRawMatch 转绿判据输入：预算耗尽后原始字节哈希匹配
+#     必须继续命中（仅深度解码/规范化降级）——本夹具提供 0/1/2 层编码样本与明文对照。
+#   - TestCanary_TouchTriggersAudit（任务 1.27）加载本夹具断言触发语义。
+# 规范化单一权威（R-1262 S'-19）：解码候选集=base64(含 url-safe/无填充/换行剥离)/hex/
+#   percent-decode，递归深度上限 2——本夹具按该规则构造（depth 标注解码层数）。
+# 零误报硬契约（R-1080）：金丝雀凭据值不出现在任何正常流程；检测点=代理层出网请求+
+#   文件写入层（R-1341 修订）；env 读取/回显不触发（G11 边界）。
+# 维护：新增编码变体→追加样本+决议注册。样本不得删除（历史对抗记录）。
+version: 1
+canary_credential: "CANARY_AWS_AKIA1234567890EXAMPLE"   # 金丝雀凭据明文（示例占位形态）
+samples:
+  - id: can-enc-001
+    encoding: plaintext
+    depth: 0
+    payload: "CANARY_AWS_AKIA1234567890EXAMPLE"
+    expected: match                    # 原始字节哈希匹配必须命中（预算耗尽后仍命中——R-1382）
+    source: R-1262 规范化链第 0 层
+  - id: can-enc-002
+    encoding: base64
+    depth: 1
+    payload: "Q0FOQVJZX0FXU19BS0lBMTIzNDU2Nzg5MEVYQU1QTEU="
+    expected: match                    # 预算充足时深度 1 解码命中；耗尽后此层可降级
+    source: R-1262 规范化链第 1 层
+  - id: can-enc-003
+    encoding: hex
+    depth: 1
+    payload: "43414e4152595f4157535f414b4941313233343536373839304558414d504c45"
+    expected: match
+    source: R-1262 规范化链第 1 层
+  - id: can-enc-004
+    encoding: base64-of-hex
+    depth: 2
+    payload: "NDM0MTRlNDE1MjU5NWY0MTU3NTM1ZjQxNGI0OTQxMzEzMjMzMzQzNTM2MzczODM5MzA0NTU4NDE0ZDUwNGM0NQ=="
+    expected: match                    # 递归深度 2 命中；深度>2 的样本不在夹具内（超限=诚实标注盲区，R-1388）
+    source: R-1262 递归深度上限 2 边界样本
+  - id: can-enc-005
+    encoding: url_safe_base64_no_padding
+    depth: 1
+    payload: "Q0FOQVJZX0FXU19BS0lBMTIzNDU2Nzg5MEVYQU1QTEU"
+    expected: match
+    source: R-1262 无填充 url-safe 变体
+  - id: can-neg-001
+    encoding: plaintext
+    depth: 0
+    payload: "NORMAL_USER_API_KEY_NOT_A_CANARY_9876543210"
+    expected: no_match                 # 负样本：非金丝雀值不得误报（零误报契约）
+    source: 零误报硬契约控制组

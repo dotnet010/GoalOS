@@ -1,0 +1,55 @@
+# =============================================================================
+# GoalOS 错误码机器可读单一数据源（R-1022/R-1118 / R-1267 S''-24② / R-1300 F-18）
+#
+# 唯一维护侧: 新增/变更枚举值必须先改本文件 → 再改 09 §2.5 表 → 再改 07 内联枚举
+# （R-1118 顺序纪律, CI 双向比对强制执行此顺序）。
+# check-error-codes.sh 只读本文件比对 09 §2.5 映射表与 07 事件注册表。
+#
+# 语义: 07 的 error_type/failure_type/reason 枚举字段 = wire format 稳定字段,
+#       其语义 = 四段式错误码（域+严重级）的投影子集。
+#       完整四段式码（含子域+序号）按 09 §2 条目逐一登记（不在本文件重复）。
+# 域值: SBX/CTR/IPC/CFG/GOV; 严重级: R/F/W/I; "—" = 非错误映射（惯例行:
+#       reason=completed、reject_reason=state_changed——无错误码, 有 07 锚点）。
+# 本文件为唯一维护侧（R-1300 F-18——yaml 首改→09 §2.5→07；非"转录源"）。
+# 计数: 行数随枚举变更动态变化（R-1389/C-16——落地时五处计数全检），
+#       当前: error_type 14 + failure_type 7 + reason 12 + reject_reason 5。
+# =============================================================================
+event_field_mapping:
+  - {field: error_type, value: timeout, domain: SBX, severity: R}
+  - {field: error_type, value: crash, domain: SBX, severity: F}
+  - {field: error_type, value: seccomp_violation, domain: SBX, severity: F}
+  - {field: error_type, value: execution_error, domain: SBX, severity: F}
+  - {field: error_type, value: accept_criteria_not_met, domain: CTR, severity: F}
+  - {field: error_type, value: ipc_error, domain: IPC, severity: R}
+  - {field: error_type, value: ipc_security_violation, domain: IPC, severity: F}
+  - {field: error_type, value: force_kill, domain: SBX, severity: F}
+  - {field: error_type, value: crash_incomplete_write, domain: SBX, severity: F}
+  - {field: error_type, value: crash_unknown, domain: SBX, severity: F}
+  - {field: error_type, value: profile_invalid, domain: SBX, severity: F}
+  - {field: error_type, value: physical_guard, domain: SBX, severity: F}
+  - {field: error_type, value: validation_error, domain: SBX, severity: F}
+  - {field: error_type, value: approval_extensions_exhausted, domain: GOV, severity: F}
+  - {field: failure_type, value: check_rejected, domain: CTR, severity: W}
+  - {field: failure_type, value: check_blocked, domain: CTR, severity: W}
+  - {field: failure_type, value: exec_crash, domain: SBX, severity: F}
+  - {field: failure_type, value: exec_timeout, domain: SBX, severity: R}
+  - {field: failure_type, value: seccomp_violation, domain: SBX, severity: F}
+  - {field: failure_type, value: accept_criteria_not_met, domain: CTR, severity: F}
+  - {field: failure_type, value: wait_timeout, domain: CTR, severity: R}
+  - {field: reason, value: completed, domain: —, severity: —}
+  - {field: reason, value: timeout, domain: SBX, severity: R}
+  - {field: reason, value: crash, domain: SBX, severity: F}
+  - {field: reason, value: seccomp_violation, domain: SBX, severity: F}
+  - {field: reason, value: daemon_stopping, domain: CFG, severity: I}
+  - {field: reason, value: io_error, domain: SBX, severity: R}
+  - {field: reason, value: invalid_graph, domain: CTR, severity: F}
+  - {field: reason, value: plan_failed, domain: CTR, severity: W}
+  - {field: reason, value: flow_template_missing, domain: CTR, severity: W}
+  - {field: reason, value: verification_divergence, domain: CTR, severity: W}
+  - {field: reason, value: llm_timeout, domain: GOV, severity: R}
+  - {field: reason, value: user_rejected, domain: CTR, severity: W}
+  - {field: reject_reason, value: state_changed, domain: —, severity: —}
+  - {field: reject_reason, value: governance_denied, domain: GOV, severity: F}
+  - {field: reject_reason, value: guard_unavailable, domain: GOV, severity: F}
+  - {field: reject_reason, value: guard_rejected, domain: GOV, severity: F}
+  - {field: reject_reason, value: guard_budget_exhausted, domain: GOV, severity: F}

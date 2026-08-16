@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -106,6 +108,8 @@ func main() {
 	// TC-GL-006: GoalRunner per-Goal 执行控制。v0.1.1 fix: per-Goal PipelineRunner 避免跨 Goal 状态污染
 	bus.Subscribe(events.TypeGoalCreated, func(evt events.Event) error {
 		pr := scheduler.NewPipelineRunner(bus, store)
+		// R-1384/R-1343: Wait 超时单一计时权威——注入 policy.approval_timeout（与 Governance 同源）
+		pr.SetApprovalTimeout(time.Duration(cfg.Policy.ApprovalTimeout) * time.Second)
 		if cfg.MultiLLM.Enabled && len(cfg.MultiLLM.Providers) > 0 {
 			log.Printf("[Daemon] MultiLLM: enabled with %d providers", len(cfg.MultiLLM.Providers))
 			// R-861: Provider 健康检查——启动时过滤不可用 Provider
@@ -113,7 +117,9 @@ func main() {
 			var providers []scheduler.ProviderClient
 			for _, p := range cfg.MultiLLM.Providers {
 				maxTokens := p.MaxTokens
-				if maxTokens == 0 { maxTokens = 16384 }
+				if maxTokens == 0 {
+					maxTokens = 16384
+				}
 				pc := scheduler.ProviderConfig{Name: p.Name, Model: p.Model, Endpoint: p.BaseURL}
 				status := scheduler.CheckProviderHealth(pc, p.APIKey)
 				if status.Healthy {
@@ -167,7 +173,25 @@ func main() {
 	bt = scheduler.NewBudgetTracker()
 	bt.SetEventBus(bus)
 
-	secretKey, err := governance.LoadOrGenerateSecret(goalOSDir + "/secrets.enc")
+	// R-1387: secrets.key 唯一主密钥文件（0600）；secrets.enc 仅一次性导入源——
+	// 主密钥文件不存在时尝试导入旧载体，导入成功后删除 secrets.enc（演进关系）。
+	secretKeyPath := cfg.Secrets.KeyPath
+	if strings.HasPrefix(secretKeyPath, "~/") {
+		secretKeyPath = filepath.Join(home, strings.TrimPrefix(secretKeyPath, "~/"))
+	}
+	legacyEncPath := filepath.Join(filepath.Dir(secretKeyPath), "secrets.enc")
+	if _, statErr := os.Stat(secretKeyPath); statErr != nil {
+		if data, readErr := os.ReadFile(legacyEncPath); readErr == nil && len(data) == 32 {
+			if writeErr := os.WriteFile(secretKeyPath, data, 0600); writeErr != nil {
+				log.Printf(`{"level":"WARN","msg":"Step 7: secrets.enc 导入失败: %v"}`, writeErr)
+			} else if rmErr := os.Remove(legacyEncPath); rmErr != nil {
+				log.Printf(`{"level":"WARN","msg":"Step 7: secrets.enc 删除失败（导入已完成）: %v"}`, rmErr)
+			} else {
+				log.Printf(`{"level":"INFO","msg":"Step 7: secrets.enc 一次性导入完成——已迁移至 secrets.key 并删除旧载体（R-1387）"}`)
+			}
+		}
+	}
+	secretKey, err := governance.LoadOrGenerateSecret(secretKeyPath)
 	if err != nil {
 		log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err)
 	}
@@ -249,7 +273,9 @@ func main() {
 	if len(cfg.MultiLLM.Providers) > 1 {
 		p := cfg.MultiLLM.Providers[1]
 		mt := p.MaxTokens
-		if mt == 0 { mt = 16384 }
+		if mt == 0 {
+			mt = 16384
+		}
 		fallbackClient := missionengine.NewCloudLLMClient(p.BaseURL, p.APIKey, p.Model, mt)
 		missionEng.SetFallbackAgent(missionengine.NewGoalAgentWithBus(fallbackClient, bus))
 		log.Printf("[Daemon] B13: fallback provider set: %s/%s", p.Name, p.Model)
@@ -279,9 +305,9 @@ func main() {
 					Source: "telegram-bot",
 					GoalID: msg.SenderID, // 用 SenderID 关联用户
 					Payload: map[string]interface{}{
-						"channel":  msg.Channel,
-						"sender":   msg.SenderID,
-						"content":  msg.Content,
+						"channel": msg.Channel,
+						"sender":  msg.SenderID,
+						"content": msg.Content,
 					},
 				})
 				return nil
@@ -410,13 +436,13 @@ func main() {
 		if actionID, ok := evt.Payload["action_id"].(string); ok && actionID != "" {
 			api.UpdateActionStatus(evt.GoalID, actionID, "", "completed")
 		}
-	// R-828 final: flat payload——status 不再嵌套在 result 内
-	api.TrackResult(evt.GoalID, evt.Payload)
-	if status, _ := evt.Payload["status"].(string); status == "success" {
-		api.UpdateGoalStatus(evt.GoalID, "已完成")
-	}
-	sse.Push("ActionCompleted", evt.Payload)
-	return nil
+		// R-828 final: flat payload——status 不再嵌套在 result 内
+		api.TrackResult(evt.GoalID, evt.Payload)
+		if status, _ := evt.Payload["status"].(string); status == "success" {
+			api.UpdateGoalStatus(evt.GoalID, "已完成")
+		}
+		sse.Push("ActionCompleted", evt.Payload)
+		return nil
 	})
 	bus.Subscribe(events.TypeActionApproved, func(evt events.Event) error {
 		api.RemovePendingApproval(fmt.Sprint(evt.Payload["action_id"]))
@@ -427,8 +453,97 @@ func main() {
 		return nil
 	})
 
+	mux := buildHTTPMux(api, sse, cfg, bus, missionEng, home)
+	// 点火测试发现（2026-08-17）: TCP 端口占用必须同步大声失败——先 net.Listen
+	// 绑定，再启动 Serve goroutine 与 UDS 通道。此前 ListenAndServe 在 goroutine 内
+	// 异步 EADDRINUSE→log.Fatalf，进程在 UDS 监听器创建之后才死——残留
+	// daemon.sock 与 pid 文件（虽自愈，但启动序列不干净）。
+	tcpListener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", cfg.Daemon.Port))
+	if err != nil {
+		log.Fatalf("HTTP: %v（EADDRINUSE=大声失败，R-1378 同源）", err)
+	}
+	server := &http.Server{Handler: mux}
+	go func() {
+		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13: HTTP on localhost:%d"}`, time.Now().Format(time.RFC3339), cfg.Daemon.Port)
+		if err := server.Serve(tcpListener); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("HTTP: %v", err)
+		}
+	}()
+
+	// R-1378/R-1322: UDS 治理通道——审批族端点 UDS-only，治理面不暴露于 TCP。
+	// EADDRINUSE=大声失败（R-1378——不静默降级）。单实例已由 pid lock 保证
+	// （Step 0 先于本段），故已存在的 socket 文件必为上次退出遗留，可安全重建。
+	socketPath := cfg.Daemon.SocketPath
+	if strings.HasPrefix(socketPath, "~/") {
+		socketPath = filepath.Join(home, strings.TrimPrefix(socketPath, "~/"))
+	}
+	if err := os.MkdirAll(filepath.Dir(socketPath), 0700); err != nil {
+		log.Fatalf("UDS: 创建 run 目录失败: %v", err)
+	}
+	_ = os.Remove(socketPath)
+	udsListener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		log.Fatalf("UDS: %v（EADDRINUSE=大声失败，R-1378）", err)
+	}
+	udsServer := &http.Server{Handler: buildUDSMux(api)}
+	go func() {
+		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13b: UDS governance channel on %s"}`, time.Now().Format(time.RFC3339), socketPath)
+		if err := udsServer.Serve(udsListener); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("UDS: %v", err)
+		}
+	}()
+
+	bus.Publish(events.Event{Type: events.TypeSystemStarted, Source: "daemon", Seq: 0,
+		Payload: map[string]interface{}{"pid": os.Getpid(), "port": cfg.Daemon.Port}})
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted"}`, time.Now().Format(time.RFC3339))
+	// SIGHUP 热加载配置（v0.1.0 UX1）
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGHUP)
+		for range sigCh {
+			configPath := home + "/.goalos/config/daemon.yaml"
+			if err := cfg.Reload(configPath); err != nil {
+				log.Printf("[Daemon] SIGHUP reload failed: %v", err)
+			} else {
+				// R-1058: 热重载参数经事件总线分发（与 HTTP reload 同路径）。
+				bus.Publish(events.Event{
+					Type:   events.TypeConfigReloaded,
+					Source: "daemon",
+					Payload: map[string]interface{}{
+						"approval_timeout_seconds": float64(cfg.Policy.ApprovalTimeout),
+						"token_ttl_seconds":        float64(cfg.Policy.TokenTTL),
+						"autonomy_level":           cfg.Daemon.AutonomyLevel,
+					},
+				})
+				log.Printf("[Daemon] SIGHUP reloaded: model=%s", cfg.LLM.Model)
+			}
+		}
+	}()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"Shutting down..."}`, time.Now().Format(time.RFC3339))
+	gov.Stop() // H18: 停止 auditFlushLoop + revokedTokensCleanup
+	bus.Shutdown()
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"EventBus stopped."}`, time.Now().Format(time.RFC3339))
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Daemon.ShutdownTimeout)
+	defer cancel()
+	api.SetShutdownHook(func() { cancel() })
+	server.Shutdown(shutdownCtx)
+	udsServer.Shutdown(shutdownCtx)
+	_ = os.Remove(socketPath) // UDS 治理通道清理（R-1378——无残留 socket 文件）
+	log.Printf(`{"level":"INFO","ts":"%s","msg":"GoalOS stopped."}`, time.Now().Format(time.RFC3339))
+}
+
+// buildHTTPMux 组装 HTTP（TCP 面）路由表。
+// R-1372（C-UI-01）: Dashboard 已拆除 R-1372——"/" 路由不再注册页面处理器，
+// CLI 是唯一软件入口（R-1123），未匹配路径由 ServeMux 返回 404。
+// R-1378/R-1322: 治理面（审批族）UDS-only——本 TCP 面不注册审批族路由，
+// 治理面见 buildUDSMux（UDS 通道）。
+// 抽取为独立函数：契约测试直测真实路由表（R-1372）。
+func buildHTTPMux(api *daemon.Handler, sse *daemon.SSEManager, cfg *config.Config,
+	bus *eventbus.EventBus, missionEng *missionengine.Engine, home string) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", daemon.HandleDashboard)
 	mux.HandleFunc("/api/events", sse.HandleSSE)
 	mux.HandleFunc("/api/health", api.HandleHealth)
 	mux.HandleFunc("/api/goals", func(w http.ResponseWriter, r *http.Request) {
@@ -476,26 +591,17 @@ func main() {
 			api.HandleGetGoal(w, r)
 		}
 	})
-	mux.HandleFunc("/api/approvals", api.HandleListApprovals)
-	mux.HandleFunc("/api/approvals/", func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimPrefix(r.URL.Path, "/api/approvals/")
-		id = strings.Split(id, "/")[0]
-		r.SetPathValue("id", id)
-		if strings.HasSuffix(r.URL.Path, "/approve") {
-			api.HandleApprove(w, r)
-		} else if strings.HasSuffix(r.URL.Path, "/reject") {
-			api.HandleReject(w, r)
-		} else {
-			http.Error(w, `{"error":{"code":"INVALID_REQUEST"}}`, http.StatusNotFound)
-		}
-	})
+	// R-1378/R-1322: 治理面（审批族）UDS-only——buildHTTPMux 为 TCP 面，
+	// 不得注册审批族路由（契约测试直接断言 404）。审批族见 buildUDSMux。
 	mux.HandleFunc("/api/system/status", api.HandleSystemStatus)
 	mux.HandleFunc("/api/system/stop", api.HandleDaemonStop)
 	mux.HandleFunc("/api/system/restart", api.HandleDaemonRestart)
 	// R-840: MultiLLM 运行时配置——用户可随时开关
 	mux.HandleFunc("/api/system/multi-llm", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			var body struct{ Enabled bool `json:"enabled"` }
+			var body struct {
+				Enabled bool `json:"enabled"`
+			}
 			json.NewDecoder(r.Body).Decode(&body)
 			cfg.MultiLLM.Enabled = body.Enabled
 			w.Header().Set("Content-Type", "application/json")
@@ -538,75 +644,58 @@ func main() {
 		if maxTokens == 0 {
 			maxTokens = 16384
 		}
-	// B19: 跨 Provider 热加载——与 startup 逻辑一致
-	var newAgent missionengine.Agent
-	model := cfg.LLM.Model
-	if m := os.Getenv("GOALOS_LLM_MODEL"); m != "" { model = m }
-	switch {
-	case cfg.LLM.Provider == "ollama" || os.Getenv("OLLAMA_MODEL") != "":
-		if m := os.Getenv("OLLAMA_MODEL"); m != "" { model = m }
-		baseURL := cfg.LLM.BaseURL
-		if baseURL == "" { baseURL = "http://localhost:11434" }
-		ollamaClient := missionengine.NewOllamaClient(model, baseURL, maxTokens)
-		newAgent = missionengine.NewGoalAgentWithBus(ollamaClient, bus)
-	default:
-		cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, model, maxTokens)
-		newAgent = missionengine.NewGoalAgentWithBus(cloudClient, bus)
-	}
-	if ga, ok := newAgent.(*missionengine.GoalAgent); ok {
-		ga.SetPlanTimeout(cfg.LLM.PlanTimeout)
-	}
-	missionEng.SetAgent(newAgent)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `","provider":"` + cfg.LLM.Provider + `"}`))
-	log.Printf("[Daemon] hot-reloaded: provider=%s model=%s, agent swapped", cfg.LLM.Provider, cfg.LLM.Model)
-	})
-	server := &http.Server{Addr: fmt.Sprintf("localhost:%d", cfg.Daemon.Port), Handler: mux}
-	go func() {
-		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13: HTTP on localhost:%d"}`, time.Now().Format(time.RFC3339), cfg.Daemon.Port)
-		if err := server.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf("HTTP: %v", err)
+		// B19: 跨 Provider 热加载——与 startup 逻辑一致
+		var newAgent missionengine.Agent
+		model := cfg.LLM.Model
+		if m := os.Getenv("GOALOS_LLM_MODEL"); m != "" {
+			model = m
 		}
-	}()
-
-	bus.Publish(events.Event{Type: events.TypeSystemStarted, Source: "daemon", Seq: 0,
-		Payload: map[string]interface{}{"pid": os.Getpid(), "port": cfg.Daemon.Port}})
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 14: SystemStarted"}`, time.Now().Format(time.RFC3339))
-	// SIGHUP 热加载配置（v0.1.0 UX1）
-	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGHUP)
-		for range sigCh {
-			configPath := home + "/.goalos/config/daemon.yaml"
-			if err := cfg.Reload(configPath); err != nil {
-				log.Printf("[Daemon] SIGHUP reload failed: %v", err)
-			} else {
-				// R-1058: 热重载参数经事件总线分发（与 HTTP reload 同路径）。
-				bus.Publish(events.Event{
-					Type:   events.TypeConfigReloaded,
-					Source: "daemon",
-					Payload: map[string]interface{}{
-						"approval_timeout_seconds": float64(cfg.Policy.ApprovalTimeout),
-						"token_ttl_seconds":        float64(cfg.Policy.TokenTTL),
-						"autonomy_level":           cfg.Daemon.AutonomyLevel,
-					},
-				})
-				log.Printf("[Daemon] SIGHUP reloaded: model=%s", cfg.LLM.Model)
+		switch {
+		case cfg.LLM.Provider == "ollama" || os.Getenv("OLLAMA_MODEL") != "":
+			if m := os.Getenv("OLLAMA_MODEL"); m != "" {
+				model = m
 			}
+			baseURL := cfg.LLM.BaseURL
+			if baseURL == "" {
+				baseURL = "http://localhost:11434"
+			}
+			ollamaClient := missionengine.NewOllamaClient(model, baseURL, maxTokens)
+			newAgent = missionengine.NewGoalAgentWithBus(ollamaClient, bus)
+		default:
+			cloudClient := missionengine.NewCloudLLMClient(cfg.LLM.BaseURL, apiKey, model, maxTokens)
+			newAgent = missionengine.NewGoalAgentWithBus(cloudClient, bus)
 		}
-	}()
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	<-ctx.Done()
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"Shutting down..."}`, time.Now().Format(time.RFC3339))
-	gov.Stop() // H18: 停止 auditFlushLoop + revokedTokensCleanup
-	bus.Shutdown()
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"EventBus stopped."}`, time.Now().Format(time.RFC3339))
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Daemon.ShutdownTimeout)
-	defer cancel()
-	api.SetShutdownHook(func() { cancel() })
-	server.Shutdown(shutdownCtx)
-	log.Printf(`{"level":"INFO","ts":"%s","msg":"GoalOS stopped."}`, time.Now().Format(time.RFC3339))
+		if ga, ok := newAgent.(*missionengine.GoalAgent); ok {
+			ga.SetPlanTimeout(cfg.LLM.PlanTimeout)
+		}
+		missionEng.SetAgent(newAgent)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"reloaded","model":"` + cfg.LLM.Model + `","provider":"` + cfg.LLM.Provider + `"}`))
+		log.Printf("[Daemon] hot-reloaded: provider=%s model=%s, agent swapped", cfg.LLM.Provider, cfg.LLM.Model)
+	})
+	return mux
+}
+
+// buildUDSMux 组装 UDS 治理面路由表（R-1378/R-1322）。
+// 契约：审批族端点 UDS-only——治理面不得暴露于 TCP；TCP 面（buildHTTPMux）
+// 不注册本组路由。CLI 连接 UDS 后须反验 daemon 身份（SO_PEERCRED+exe 白名单
+// +祖先链三闸准入 R-1284——转绿任务 7.20）。
+func buildUDSMux(api *daemon.Handler) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/approvals", api.HandleListApprovals)
+	mux.HandleFunc("/api/approvals/", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimPrefix(r.URL.Path, "/api/approvals/")
+		id = strings.Split(id, "/")[0]
+		r.SetPathValue("id", id)
+		if strings.HasSuffix(r.URL.Path, "/approve") {
+			api.HandleApprove(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/reject") {
+			api.HandleReject(w, r)
+		} else {
+			http.Error(w, `{"error":{"code":"INVALID_REQUEST"}}`, http.StatusNotFound)
+		}
+	})
+	return mux
 }
 
 func acquirePIDLock(path string) (*os.File, error) {

@@ -133,47 +133,85 @@ func (gr *GoalRunner) State() GoalStatus {
 	return gr.state
 }
 
-// savePipelineState 持久化 PipelineState 到 Snapshot。
-func (gr *GoalRunner) savePipelineState(ps *PipelineState) error {
+// savePipelineState 持久化 PipelineSnapshot 到 Snapshot。
+// S'-12 改名映射表：执行位置快照唯一类型=statestore.PipelineSnapshot——
+// 直接持久化（无跨包转换）。
+func (gr *GoalRunner) savePipelineState(ps *statestore.PipelineSnapshot) error {
 	state, err := gr.store.LoadState(gr.goal.ID)
 	if err != nil {
 		return fmt.Errorf("goalrunner: load state for snapshot: %w", err)
 	}
-	state.PipelineState = &statestore.PipelineState{
-		ResumePoint:      ps.ResumePoint,
-		ResumePrimitive:  string(ps.ResumePrimitive),
-		WaitReason:       ps.WaitReason,
-		TimeoutAt:        ps.TimeoutAt,
-		PendingActionIDs: ps.PendingActionIDs,
-	}
+	state.PipelineState = ps
 	if err := gr.store.SaveSnapshot(gr.goal.ID, state); err != nil {
 		return fmt.Errorf("goalrunner: save snapshot: %w", err)
 	}
+	// R-1376 双写契约可观测性：SaveSnapshot 以 LastAppliedSeq 命名快照文件，
+	// 同一 seq 重写同名文件——消费方（契约测试/恢复路径）经 LoadLatestSnapshot
+	// 读到的即是本次重写后的值。LastAppliedSeq 不在此递增（事件序号归
+	// statestore.Append 唯一分配，R-1393）。
+	log.Printf("[GoalRunner] goal=%s pipeline snapshot saved (wait_reason=%s timeout_at=%s)",
+		gr.goal.ID, ps.WaitReason, ps.TimeoutAt)
 	return nil
 }
 
 // waitForWakeup 等待外部唤醒事件。
 // 订阅对应事件类型，阻塞直到事件到达或超时。
 func (gr *GoalRunner) waitForWakeup(result *PipelineResult) events.Event {
-	eventType := wakeupEventForReason(result.WaitReason)
+	// R-1376 唤醒集闭合：订阅集并入拒绝族事件（非单一事件类型）
+	eventTypes := wakeupEventSetForReason(result.WaitReason)
 	ch := make(chan events.Event, 1)
 
-	subID := gr.bus.SubscribeForGoal(gr.goal.ID, eventType, func(evt events.Event) error {
-		ch <- evt
-		return nil
-	})
-	defer gr.bus.Unsubscribe(subID)
+	subIDs := make([]eventbus.SubscriptionID, 0, len(eventTypes))
+	for _, eventType := range eventTypes {
+		subID := gr.bus.SubscribeForGoal(gr.goal.ID, eventType, func(evt events.Event) error {
+			ch <- evt
+			return nil
+		})
+		subIDs = append(subIDs, subID)
+	}
+	defer func() {
+		for _, subID := range subIDs {
+			gr.bus.Unsubscribe(subID)
+		}
+	}()
 
-	// 超时处理：Wait 不是永久阻塞。超时→返回 TimeoutEvent
+	// 超时处理：Wait 不是永久阻塞。超时→返回 TimeoutEvent。
+	// R-1376 唤醒集闭合：订阅必须建立后才允许超时计时生效——time.After 在 select
+	// 求值时即创建计时器，若 goroutine 尚未完成 SubscribeForGoal 注册就已超时，
+	// 后到的唤醒事件会丢失（已订阅但无人接收）。故先建立订阅，再以订阅完成时刻
+	// 为基准计算剩余超时窗口。
 	timeout := 5 * time.Minute
 	if result.PipelineState != nil && result.PipelineState.TimeoutAt != "" {
 		if t, err := time.Parse(time.RFC3339, result.PipelineState.TimeoutAt); err == nil {
 			timeout = time.Until(t)
 		}
 	}
+	if timeout < 0 {
+		timeout = 0
+	}
 
 	select {
 	case evt := <-ch:
+		// R-1376/R-1379 wait_more 决策路径：UserDecisionReceived{decision:"wait_more"} 事件
+		// 投递 GoalRunner——双重写=延长 governance 计时器+重写 PipelineState.TimeoutAt
+		//（同一 approval_timeout 窗口）。
+		if evt.Type == events.TypeUserDecisionReceived {
+			// Event.Payload=map[string]interface{}（非 interface）——直接访问
+			if decision, ok := evt.Payload["decision"].(string); ok && decision == "wait_more" {
+				// 延长 PipelineState.TimeoutAt（同一 approval_timeout 窗口）
+				if result.PipelineState != nil && result.PipelineState.TimeoutAt != "" {
+					if t, err := time.Parse(time.RFC3339, result.PipelineState.TimeoutAt); err == nil {
+						result.PipelineState.TimeoutAt = t.Add(gr.pipelineRunner.approvalTimeout).Format(time.RFC3339)
+						// 双重写=延长+持久化（R-1376 双写契约——快照中 TimeoutAt 必须被重写）。
+						// 持久化失败必须暴露——静默吞错违反 check-error-swallow，且 R-1376
+						// "双写必须生效"要求失败可观测（写盘失败=契约未履行）。
+						if err := gr.savePipelineState(result.PipelineState); err != nil {
+							log.Printf("[GoalRunner] goal=%s wait_more snapshot persist failed: %v", gr.goal.ID, err)
+						}
+					}
+				}
+			}
+		}
 		return evt
 	case <-time.After(timeout):
 		log.Printf("[GoalRunner] goal=%s wait timeout after %v", gr.goal.ID, timeout)
@@ -262,16 +300,26 @@ func (gr *GoalRunner) publishGoalFailed(reason string) {
 	})
 }
 
-// wakeupEventForReason 返回 Wait 原因对应的唤醒事件类型。
-func wakeupEventForReason(reason string) string {
+// wakeupEventSetForReason — 唤醒集闭合（R-1376——拒绝族入唤醒集）。
+// 契约：waitForWakeup 订阅集并入拒绝族事件（ActionRejected/SecurityIncident/GoalNeedsReview/
+// ActionCancelled）——拒绝族事件发布后 waitForWakeup 在超时前被唤醒（非静默超时）。
+func wakeupEventSetForReason(reason string) []string {
 	switch reason {
 	case "approval":
-		return events.TypeUserApprovedAction
+		// 审批唤醒集=批准+拒绝族+wait_more 决策（R-1376 唤醒集闭合+R-1379 wait_more 投递）
+		return []string{
+			events.TypeUserApprovedAction,      // 批准
+			events.TypeActionRejected,          // 拒绝（Governance 拒绝）
+			events.TypeSecurityIncident,        // 安全事件（guard 族）
+			events.TypeGoalNeedsReview,         // 需要审查（GoalNeedsReview）
+			events.TypeActionCancelled,         // 取消（ActionCancelled）
+			events.TypeUserDecisionReceived,    // wait_more 决策（R-1379——wait_more 经事件投递 GoalRunner）
+		}
 	case "dependency":
-		return events.TypeActionCompleted
+		return []string{events.TypeActionCompleted}
 	case "resource":
-		return events.TypeResourceAvailable
+		return []string{events.TypeResourceAvailable}
 	default:
-		return events.TypeGoalResumed
+		return []string{events.TypeGoalResumed}
 	}
 }

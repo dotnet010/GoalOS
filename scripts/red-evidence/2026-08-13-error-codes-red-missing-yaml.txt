@@ -1,0 +1,4 @@
+=== 错误码单一数据源验证（R-1022/R-1118/R-1267/R-1300）===
+
+[0;31m❌[0m 数据源缺失: GoalOS/scripts/error-codes-source.yaml（R-1300 唯一维护侧）
+修复: 创建 error-codes-source.yaml（32 行 event_field_mapping: field/value/domain/severity）

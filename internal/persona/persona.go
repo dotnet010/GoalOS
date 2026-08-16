@@ -18,6 +18,19 @@ type Persona struct {
 	Render func(eventType string, payload map[string]interface{}) string
 }
 
+// rejectReason 提取否定语义（R-1400）：governance 用 reject_reason、
+// daemon 用 reason——两种既有载荷键均须读取，呈现方可区分
+// approval_timeout（系统客观超时）与 user_rejected（人类主观否定）。
+func rejectReason(payload map[string]interface{}) string {
+	if v, ok := payload["reason"].(string); ok && v != "" {
+		return v
+	}
+	if v, ok := payload["reject_reason"].(string); ok && v != "" {
+		return v
+	}
+	return ""
+}
+
 // Builtin 返回内置 Persona 列表。
 func Builtin() []Persona {
 	return []Persona{Concise, Warm, Minimal}
@@ -46,7 +59,16 @@ var Concise = Persona{
 		case "ActionApproved":
 			return "已批准。"
 		case "ActionRejected":
-			return "已拒绝。"
+			// R-1400: 否定语义必须显式区分——禁止对 approval_timeout 与
+			// user_rejected 渲染相同文本。
+			switch rejectReason(payload) {
+			case "approval_timeout":
+				return "已拒绝（审批超时：等待响应超时，系统自动拒绝）。"
+			case "user_rejected":
+				return "已拒绝（用户主动拒绝，方案需调整）。"
+			default:
+				return "已拒绝。"
+			}
 		default:
 			return ""
 		}
@@ -73,6 +95,16 @@ var Warm = Persona{
 			desc, _ := payload["action_description"].(string)
 			risk, _ := payload["risk_level"].(string)
 			return "需要你的决定：检测到高风险操作（" + risk + "）\n" + desc + "\n[批准] [拒绝]"
+		case "ActionRejected":
+			// R-1400: 否定语义显式区分（同 Concise 语义，温和措辞）
+			switch rejectReason(payload) {
+			case "approval_timeout":
+				return "这项操作已被拒绝（审批超时：等待响应超时，系统自动拒绝）。"
+			case "user_rejected":
+				return "这项操作已被拒绝（用户主动拒绝，方案需调整）。"
+			default:
+				return "已拒绝。"
+			}
 		default:
 			return ""
 		}
@@ -96,6 +128,16 @@ var Minimal = Persona{
 		case "ActionPendingApproval":
 			desc, _ := payload["action_description"].(string)
 			return "WARN: " + desc + " [approve/reject]"
+		case "ActionRejected":
+			// R-1400: 否定语义显式区分（极简形态——脚本可解析）
+			switch rejectReason(payload) {
+			case "approval_timeout":
+				return "REJECTED: approval_timeout"
+			case "user_rejected":
+				return "REJECTED: user_rejected"
+			default:
+				return "REJECTED"
+			}
 		default:
 			return ""
 		}
