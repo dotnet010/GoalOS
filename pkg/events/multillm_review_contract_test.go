@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -425,18 +426,22 @@ func TestContract_ReviewReport_FilePermission(t *testing.T) {
 	}
 
 	perm := info.Mode().Perm()
-	if perm != 0600 {
-		t.Errorf("TC-MLR-007 FAIL: file permission is %04o, want 0600", perm)
-	}
+	if runtime.GOOS != "windows" {
+		if perm != 0600 {
+			t.Errorf("TC-MLR-007 FAIL: file permission is %04o, want 0600", perm)
+		}
 
-	// [MUST_NOT] 父目录不可 0777（0700 限制）
-	dirInfo, _ := os.Stat(reviewDir)
-	dirPerm := dirInfo.Mode().Perm()
-	if dirPerm != 0700 {
-		t.Errorf("TC-MLR-007: review dir permission is %04o, want 0700", dirPerm)
+		// [MUST_NOT] 父目录不可 0777（0700 限制）
+		dirInfo, _ := os.Stat(reviewDir)
+		dirPerm := dirInfo.Mode().Perm()
+		if dirPerm != 0700 {
+			t.Errorf("TC-MLR-007: review dir permission is %04o, want 0700", dirPerm)
+		}
+		t.Logf("TC-MLR-007 PASS: file permission %04o, dir permission %04o", perm, dirPerm)
+	} else {
+		// Windows ACL 模型：POSIX 权限位不适用（DACL 承载——Windows 每日构建红出定位）
+		t.Logf("TC-MLR-007 SKIP(POSIX bits on Windows): file permission %04o", perm)
 	}
-
-	t.Logf("TC-MLR-007 PASS: file permission %04o, dir permission %04o", perm, dirPerm)
 }
 
 // ─── TC-MLR-008: CLI review 输出格式（R-849）─────────────────────────
