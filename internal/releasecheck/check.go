@@ -18,9 +18,9 @@ import (
 
 // CheckResult 是单次检查的结果。
 type CheckResult struct {
-	Name    string
-	Passed  bool
-	Detail  string
+	Name   string
+	Passed bool
+	Detail string
 }
 
 // RunAll 执行全部 5 项发布就绪检查。任一失败返回 error。
@@ -46,10 +46,10 @@ func RunAll(repoRoot, pluginsDir string) ([]CheckResult, error) {
 // GNU grep（exit status 2）。改纯 Go 递归扫描（跨平台行为一致，无外部依赖）。
 func checkSecrets(repoRoot string) CheckResult {
 	patterns := []string{
-		`ghp_[A-Za-z0-9]{36}`,       // GitHub PAT
-		`sk-ant-[A-Za-z0-9_-]{32,}`, // Anthropic
-		`sk-or-[A-Za-z0-9_-]{32,}`,  // OpenRouter
-		`sk-ws-[A-Za-z0-9_.-]{32,}`, // Alibaba Bailian
+		`ghp_[A-Za-z0-9]{36}`,                           // GitHub PAT
+		`sk-ant-[A-Za-z0-9_-]{32,}`,                     // Anthropic
+		`sk-or-[A-Za-z0-9_-]{32,}`,                      // OpenRouter
+		`sk-ws-[A-Za-z0-9_.-]{32,}`,                     // Alibaba Bailian
 		`x-api-key\s*[:=]\s*["\x27]?[A-Za-z0-9_-]{20,}`, // generic API key header
 	}
 	compiled := make([]*regexp.Regexp, 0, len(patterns))
@@ -120,7 +120,9 @@ func checkPluginSignatures(pluginsDir string) CheckResult {
 			return nil
 		}
 		data, err := os.ReadFile(path)
-		if err != nil { return nil }
+		if err != nil {
+			return nil
+		}
 		var m struct {
 			Signature string `json:"signature"`
 			Binary    string `json:"binary"`
