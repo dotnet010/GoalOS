@@ -80,7 +80,7 @@ func checkPort(port int) Result {
 	if port < 1 || port > 65535 {
 		return Result{Name: "端口检查", Passed: false,
 			Message: fmt.Sprintf("端口 %d 不在有效范围 (1-65535)", port),
-			Suggestion: fmt.Sprintf("修改 daemon.yaml 中 daemon.port 为有效值，如 18920")}
+			Suggestion: "修改 daemon.yaml 中 daemon.port 为有效值，如 18920"}
 	}
 	return Result{Name: "端口检查", Passed: true,
 		Message: fmt.Sprintf("端口 %d 有效", port)}
@@ -130,7 +130,7 @@ func checkPluginDir(dir string) Result {
 	if err != nil {
 		return Result{Name: "插件目录", Passed: false,
 			Message:    fmt.Sprintf("无法读取 %s: %v", dir, err),
-			Suggestion: fmt.Sprintf("确保 ~/.goalos/plugins/ 目录存在且可读")}
+			Suggestion: "确保 ~/.goalos/plugins/ 目录存在且可读"}
 	}
 	count := 0
 	for _, e := range entries {
@@ -191,7 +191,7 @@ func checkPluginSignatures(pluginsDir string) []Result {
 		results = append(results, Result{
 			Name:    fmt.Sprintf("插件签名 (%s)", name),
 			Passed:  false,
-			Message: fmt.Sprintf("签名过期。已自动更新"),
+			Message: "签名过期。已自动更新",
 			Suggestion: "",
 			CanAutoFix: true,
 			AutoFix: func() error {

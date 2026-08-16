@@ -22,16 +22,11 @@ func sanitizeChildProcess(cmd *exec.Cmd) {
 	}
 }
 
-// applySeccompToChild 已废弃（v0.1.0 会议 #63）。
-// seccomp 由子进程在 init 阶段通过 pkg/seccomp.Apply() 自加载。
-// 保留此函数以维持 executor_darwin.go 的接口兼容性。
-func applySeccompToChild(cmd *exec.Cmd, profile interface{}) {
-	// no-op: seccomp is self-applied by child process
-}
-
 // verifySeccompLoaded 验证子进程是否已加载 seccomp filter（v0.3.0 fix C9）。
 // 读取 /proc/<pid>/status，检查 Seccomp 字段：
-//   0 = disabled, 1 = strict, 2 = filter (SECCOMP_MODE_FILTER)
+//
+//	0 = disabled, 1 = strict, 2 = filter (SECCOMP_MODE_FILTER)
+//
 // 返回 nil 表示已加载，error 表示未加载或无法确认。
 func verifySeccompLoaded(pid int) error {
 	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))

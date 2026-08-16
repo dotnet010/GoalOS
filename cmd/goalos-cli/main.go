@@ -398,20 +398,6 @@ func statusText(s string) string {
 	}
 }
 
-// showGoalDetail 显示目标详细信息（R-838）。
-func showGoalDetail(c *client.Client, goalID string) {
-	goal, err := c.GetGoal(goalID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "错误: %v\n", err)
-		return
-	}
-	fmt.Printf("目标: %s\n", goal.Title)
-	fmt.Printf("状态: %s\n", statusText(goal.Status))
-	if goal.MultiLLMVerdict != "" {
-		fmt.Printf("MultiLLM: %s\n", goal.MultiLLMVerdict)
-	}
-}
-
 func printUsage() {
 	fmt.Println(`GoalOS CLI — 面向人类目标的命令行接口
 
