@@ -6,9 +6,7 @@
 // 闭环=drift 确认→statefs rollback（R-1366）→重跑。
 package drift
 
-import "errors"
-
-var ErrNotImplemented = errors.New("drift detector: not implemented (skeleton stage)")
+import "github.com/goalos/goalos/internal/skeleton"
 
 // DriftSignal — 漂移检测信号（两层检测输出）。
 type DriftSignal struct {
@@ -40,9 +38,9 @@ type Detector struct{}
 // ①确定性层（零误报硬契约——工具调用集 vs 目标声明集偏离+循环检测+预算异常+金丝雀信号复用）
 // ②语义层（ESN+CUSUM 统计遥测模式检测）。
 // 契约：确定性层触发=真偏离（误报=契约测试 FAIL）；语义层=71% @5%FP 基线只升级不裁决。
-func (d *Detector) Check(declared GoalDeclarationSet, invoked ToolCallSet) (*DriftSignal, error) {
+func (d *Detector) Check(declared GoalDeclarationSet, invoked ToolCallSet) (skeleton.Skeleton[*DriftSignal], error) {
 	// 骨架：两层检测实现归 5.13 完成态——确定性层零误报硬契约+语义层统计遥测。
-	// 骨架：两层检测实现归 5.13 完成态——确定性层零误报硬契约+语义层统计遥测。
-	// R-1468（发现 28）：骨架期不返回裁决类具体值——统一走 Skeleton 显式未实现 error。
-	return nil, ErrNotImplemented
+	// R-1468（发现 28）+R-1473（发现 35 先例核实）：骨架期=完整 Skeleton[*DriftSignal] 包装类型
+	//（携带方向标注+跟踪引用——非裸 sentinel 形态）。
+	return skeleton.NotImplemented[*DriftSignal](skeleton.FailClosed, "R-1468 §drift"), nil
 }
