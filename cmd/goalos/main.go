@@ -454,10 +454,18 @@ func main() {
 	})
 
 	mux := buildHTTPMux(api, sse, cfg, bus, missionEng, home)
-	server := &http.Server{Addr: fmt.Sprintf("localhost:%d", cfg.Daemon.Port), Handler: mux}
+	// 点火测试发现（2026-08-17）: TCP 端口占用必须同步大声失败——先 net.Listen
+	// 绑定，再启动 Serve goroutine 与 UDS 通道。此前 ListenAndServe 在 goroutine 内
+	// 异步 EADDRINUSE→log.Fatalf，进程在 UDS 监听器创建之后才死——残留
+	// daemon.sock 与 pid 文件（虽自愈，但启动序列不干净）。
+	tcpListener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", cfg.Daemon.Port))
+	if err != nil {
+		log.Fatalf("HTTP: %v（EADDRINUSE=大声失败，R-1378 同源）", err)
+	}
+	server := &http.Server{Handler: mux}
 	go func() {
 		log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 13: HTTP on localhost:%d"}`, time.Now().Format(time.RFC3339), cfg.Daemon.Port)
-		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		if err := server.Serve(tcpListener); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("HTTP: %v", err)
 		}
 	}()
