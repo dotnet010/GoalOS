@@ -11,8 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"runtime"
 	"strings"
 )
 
@@ -42,8 +40,6 @@ func RunAll(repoRoot, pluginsDir string) ([]CheckResult, error) {
 }
 
 // checkSecrets 敏感信息扫描。
-// v0.3.0 fix（Windows 每日构建红出）: 原实现依赖 GNU grep——Windows runner 无
-// GNU grep（exit status 2）。改纯 Go 递归扫描（跨平台行为一致，无外部依赖）。
 func checkSecrets(repoRoot string) CheckResult {
 	patterns := []string{
 		`ghp_[A-Za-z0-9]{36}`,       // GitHub PAT
@@ -52,45 +48,27 @@ func checkSecrets(repoRoot string) CheckResult {
 		`sk-ws-[A-Za-z0-9_.-]{32,}`, // Alibaba Bailian
 		`x-api-key\s*[:=]\s*["\x27]?[A-Za-z0-9_-]{20,}`, // generic API key header
 	}
-	compiled := make([]*regexp.Regexp, 0, len(patterns))
-	for _, p := range patterns {
-		compiled = append(compiled, regexp.MustCompile(p))
-	}
 
-	var hits []string
-	_ = filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
+	for _, pattern := range patterns {
+		cmd := exec.Command("grep", "-rn", pattern, repoRoot,
+			"--include=*.go", "--include=*.yaml", "--include=*.yml", "--include=*.json",
+		)
+		cmd.Env = append(os.Environ(), "HOME="+os.Getenv("HOME"))
+		out, err := cmd.Output()
 		if err != nil {
-			return nil // 不可读文件跳过——扫描是额外防线，不阻断
-		}
-		if info.IsDir() {
-			name := info.Name()
-			if name == ".git" || name == "node_modules" || name == "vendor" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		switch ext {
-		case ".go", ".yaml", ".yml", ".json":
-		default:
-			return nil
-		}
-		data, err := os.ReadFile(path)
-		if err != nil || len(data) > 1<<20 { // 跳过超大文件（1MB——误报源）
-			return nil
-		}
-		content := string(data)
-		for _, re := range compiled {
-			if loc := re.FindStringIndex(content); loc != nil {
-				hits = append(hits, fmt.Sprintf("%s: %s", path, content[max(0, loc[0]-40):min(len(content), loc[1]+40)]))
-				break
+			// grep exit 1 = no matches (not an error). exit > 1 = actual error.
+			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() > 1 {
+				return CheckResult{Name: "secrets-scan", Passed: false, Detail: fmt.Sprintf("grep failed: %v", err)}
 			}
 		}
-		return nil
-	})
-	if len(hits) > 0 {
-		return CheckResult{Name: "secrets-scan", Passed: false,
-			Detail: "检测到可能的密钥:\n" + strings.Join(hits, "\n")}
+		lines := strings.TrimSpace(string(out))
+		if lines != "" {
+			// 排除已知安全文件
+			if !strings.Contains(lines, ".git/") && !strings.Contains(lines, ".env") {
+				return CheckResult{Name: "secrets-scan", Passed: false,
+					Detail: "检测到可能的密钥:\n" + lines}
+			}
+		}
 	}
 	return CheckResult{Name: "secrets-scan", Passed: true, Detail: "无密钥泄漏"}
 }
@@ -130,10 +108,6 @@ func checkPluginSignatures(pluginsDir string) CheckResult {
 		}
 		binaryPath := filepath.Join(filepath.Dir(path), filepath.Base(m.Binary))
 		binaryData, err := os.ReadFile(binaryPath)
-		if err != nil && runtime.GOOS == "windows" {
-			// Windows 构建产物带 .exe 后缀（manifest 保持跨平台名）
-			binaryData, err = os.ReadFile(binaryPath + ".exe")
-		}
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("%s: binary not found: %s", filepath.Dir(path), m.Binary))
 			return nil
