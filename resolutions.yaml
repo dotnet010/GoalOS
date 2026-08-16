@@ -5999,3 +5999,19 @@ resolutions:
       - must_exist: "人机边界"
         in_file: 05软件架构文档.md
         reason: "05 §3.19 必须落 Skeleton[T] 人机边界注记（R-1472）"
+
+  R-1473:
+    desc: "发现 35——Skeleton[T] 合规检查 CI 机检化+先例核实(会议 #226): R-1468 合规检查落地为 go/analysis 规则(检测骨架函数是否返回规范 ErrNotImplemented 而非临时拼出的 fmt.Errorf 文本——CI 在写下第一个不合规文件时就拦住); 先例核实: guard_llm/refine_escape 发现 28/29 讨论已收尾(会议 #222 裁决=Skeleton[T] 统一+ErrNotImplemented 显式未实现 error——裸 ErrNotImplemented=已拍板形态非未确认中间形态); 四文件(fd_hygiene/secret_redline/process_tree/sandbox_doctor)统一改 ErrNotImplemented。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "ErrNotImplemented"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19 必须落 Skeleton[T] 合规检查 CI 机检化注记（R-1473）"
+
+  R-1474:
+    desc: "发现 36——R-1472 范围修正(会议 #226): 适用性判据显式化——命令是否隐含维持/延续有时限资源或触发状态变更? 是→骨架期伪装成功=正确性风险必须走 Skeleton[T]/ErrNotImplemented; 否(纯只读查询/展示)→适用 R-1472。按判据: handleDecision/handleRequirements=只读查询适用 R-1472; handleKeepAlive=状态维持不适用 R-1472——改走 ErrNotImplemented; handleConfirm/handleRetry=状态变更需重新核实(范围修正连带审查)。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.0/v0.3.0-Week1-8-开发计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "适用性判据"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19 必须落 R-1472 范围修正注记（R-1474）"
