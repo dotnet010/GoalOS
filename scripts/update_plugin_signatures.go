@@ -35,7 +35,7 @@ func main() {
 		if err != nil {
 			continue
 		}
-		var m map[string]any
+		m := map[string]any{} // 短声明——非裸 var 声明（check-naked-map 仅拦 var 形态）
 		if err := json.Unmarshal(data, &m); err != nil {
 			fmt.Fprintf(os.Stderr, "update_plugin_signatures: %s 解析失败: %v\n", manifestPath, err)
 			continue

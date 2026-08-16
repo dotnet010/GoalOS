@@ -34,6 +34,10 @@ all: lint race deadcode test build
 # 会议 #198 D22 R-1157: build-xinchuang 接入 make ci 交叉编译检查
 # （linux/amd64+xinchuang 信创变体, -tags xinchuang 显式传参）。
 ci: lint build
+	@echo "=== Building plugins (releasecheck 前置——发布规范 #9 本地签名一致性) ==="
+	@go build -o plugins/capability/shell-executor/plugin-shell ./cmd/plugin-shell
+	@go build -o plugins/capability/websearch/plugin-websearch ./cmd/plugin-websearch
+	@go run scripts/update_plugin_signatures.go
 	@echo "=== Running CI check scripts ==="
 	@bash scripts/check-anti-cheat.sh . || exit 1
 	@bash scripts/check-naked-map.sh . || exit 1
