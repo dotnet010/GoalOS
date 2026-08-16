@@ -24,8 +24,12 @@ jobs:
 
       - name: Build plugins (required for releasecheck)
         run: |
-          go build -o ./plugins/capability/shell-executor/plugin-shell ./cmd/plugin-shell
-          go build -o ./plugins/capability/websearch/plugin-websearch ./cmd/plugin-websearch
+          go build -o ./plugins/capability/shell-executor/plugin-shell.exe ./cmd/plugin-shell
+          go build -o ./plugins/capability/websearch/plugin-websearch.exe ./cmd/plugin-websearch
+
+      - name: List plugin dirs (diagnostic)
+        shell: pwsh
+        run: Get-ChildItem -Recurse plugins/capability | Select-Object FullName, Length
 
       - name: Update plugin signatures (Go 工具——跨平台，与 Linux 行为一致)
         run: go run scripts/update_plugin_signatures.go
