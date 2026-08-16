@@ -10,10 +10,12 @@ import (
 	"os"
 
 	"github.com/goalos/goalos/internal/analysis"
-	"golang.org/x/tools/go/analysis/singlechecker"
+	"golang.org/x/tools/go/analysis/multichecker"
 )
 
 func main() {
-	singlechecker.Main(analysis.NakedMapAnalyzer)
+	// 两个分析器：nakedmap（R-1461 方案 3）+ skeletoncompliance（R-1473）
+	// multichecker 同时运行两个分析器
+	multichecker.Main(analysis.NakedMapAnalyzer, analysis.SkeletonComplianceAnalyzer)
 	fmt.Fprintln(os.Stderr, "nakedmap analyzer exited")
 }
