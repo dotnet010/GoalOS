@@ -17,7 +17,7 @@ deadcode:
 	staticcheck ./...
 
 lint-full:
-	@which golangci-lint > /dev/null 2>&1 || (echo "install golangci-lint: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest" && exit 1)
+	@which golangci-lint > /dev/null 2>&1 || (echo "install golangci-lint: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2  # 钉版本：v2.13 起要求 Go >= 1.26；注意 v2 模块路径带 /v2" && exit 1)
 	golangci-lint run ./...
 
 all: lint race deadcode test build
