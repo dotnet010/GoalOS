@@ -13,7 +13,7 @@ lint:
 	go vet ./...
 
 deadcode:
-	@which staticcheck > /dev/null 2>&1 || (echo "install staticcheck: go install honnef.co/go/tools/cmd/staticcheck@latest" && exit 1)
+	@which staticcheck > /dev/null 2>&1 || (echo "install staticcheck: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0  # 钉版本：v0.8.0 起要求 Go >= 1.26" && exit 1)
 	staticcheck ./...
 
 lint-full:

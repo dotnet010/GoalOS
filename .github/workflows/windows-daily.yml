@@ -39,7 +39,8 @@ jobs:
 
       - name: Staticcheck
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
+          # 钉版本：v0.8.0 起要求 Go >= 1.26，与 go.mod 的 1.25.0 不兼容（GOTOOLCHAIN=local 不会自动升级）
+          go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
           staticcheck ./...
 
       - name: Test（Windows 适用子集——build-tag 分平台）
