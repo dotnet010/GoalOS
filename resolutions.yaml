@@ -7911,3 +7911,27 @@ resolutions:
       - must_exist: "R-1633"
         in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
         reason: "开发计划修改记录必须登记 R-1633"
+  R-1634:
+    desc: "分支策略修订——feat/fix 短命分支制度化(会议 #253——PM 提议采纳; 2026-08-17 Jobs 裁定『除 fix 补丁和 Features 外不建分支』的明确化与升级为标准实践): 命名=feat/<功能特征>、fix/<问题>-<方案关键词>(回看历史不需翻 commit body); 生命周期=main 切出→任务级提交(R-1633 节奏不变——分支不替代提交纪律, 错乱根因=提交纪律缺失非 main-only 本身, Ken 纠因写入决议)→合入前完整 make ci→--no-ff 合并(任务边界=审计单元)→合并后删除; 禁令不变: 不建长命集成分支(dev 族永久禁止); 并行会话隔离/任务边界物理化(diff main..feat/x=任务范围自证)/快速测试环=分支三价值; GIT-RULES 规则 4 同步修订。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1634"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1634"
+      - must_exist: "feat/<功能特征>"
+        in_file: 会议纪要.md
+        reason: "分支命名规约必须入会议纪要（R-1634）"
+  R-1635:
+    desc: "分支测试范围协议(会议 #253——PM『节省测试时间』的诚实化): 分支内快速环=go build ./...+go test -race ./internal/<受影响包>/...(受影响包宁宽勿窄含依赖反查, 定义不清=全量——Kees); 合入闸=完整 make ci 不降强度(快速环降迭代成本, 门禁强度一寸不让——Beck); windows-daily.yml 触发器扩展 feat/**/fix/**(Windows 面分支覆盖; Linux/mac 面=本地 make ci, 本仓库无 per-push Linux CI——历史结构本次不动)。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1635"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1635"
+  R-1636:
+    desc: "团队构成评审结论(会议 #253——PM 之问): 五层把关(Jobs 产品/Ken 架构/Brad+Russ 实现/Beck 测试/Meyer 契约——W1-2 评审四问题来自四角色视角实证角色分化真实价值)+内部顾问列席制+外部顾问团独立=合理, 无组织变更; 观察项两条登记: ①AI 扮演角色的视角趋同天花板(对冲=外部独立输入+会前对抗性实证核查, 不可消除只可对冲, PM 知情)②发布工程专责缺席(buildvcs 跑步机数周未被发现+releasecheck 裸 exit code=该角色存在性证明——v0.4.0 评估是否增设)。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1636"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1636"
