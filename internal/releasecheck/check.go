@@ -99,9 +99,17 @@ func checkSecrets(repoRoot string) CheckResult {
 func checkTestConfigNotInGit(repoRoot string) CheckResult {
 	cmd := exec.Command("git", "ls-files")
 	cmd.Dir = repoRoot
+	// R-1629 落地修复：并发构建期（go test ./... 多包并行+buildvcs 烙印触发 git 状态探测）
+	// 可选锁竞争导致 ls-files 间歇 exit 128——GIT_OPTIONAL_LOCKS=0 声明只读操作不取可选锁
+	// （git 官方为并发只读场景设计）；stderr 并入错误详情（裸 exit code 不可诊断——本次定位实证）。
+	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	out, err := cmd.Output()
 	if err != nil {
-		return CheckResult{Name: "test-config-git", Passed: false, Detail: fmt.Sprintf("git ls-files failed: %v", err)}
+		stderr := ""
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = strings.TrimSpace(string(ee.Stderr))
+		}
+		return CheckResult{Name: "test-config-git", Passed: false, Detail: fmt.Sprintf("git ls-files failed: %v (stderr: %s)", err, stderr)}
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		if strings.Contains(line, "daemon.test.yaml") {
