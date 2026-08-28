@@ -25,7 +25,7 @@ GoalOS 不是聊天机器人，不是 Workflow 引擎，不是 Agent 框架。�
 | **PipelineRunner** | 三原语管线：Check→Exec→Decide。Wait 为中间状态。状态从事件推导 |
 | **Flow 模板** | 同一类目标每次按相同标准流程执行——结果可预测。flow 无匹配=确认流程唯一路径（禁止静默回退，R-1368） |
 | **Multi-LLM 交叉验证** | 多 AI 模型（跨 Provider）独立审查产出。投票制裁决（R-844）。分歧时辩论轮次（R-860）。冷验证模式（R-858） |
-| **ReviewReport + 用户决策** | 结构化审查报告——含每个 Provider 的独立意见。Dashboard 审查面板 + CLI `goalos review`。用户决定：带反馈重试 / 接受结果 / 修改需求 |
+| **ReviewReport + 用户决策** | 结构化审查报告——含每个 Provider 的独立意见。CLI `goalos review` 呈现（审查交互唯一呈现=CLI——R-1333）。用户决定：带反馈重试 / 接受结果 / 修改需求 |
 | **验证金字塔** | auto_tests → cross_model_review → behavioral_tests。确定性验证是最终裁决 |
 | **新 Session 重做** | 执行失败时：新 Session 重试 1 次 → 人工介入。取消同 Session 循环重试（语义漂移防护） |
 | **PlanHash 防篡改** | SHA256(MissionGraph) 在规划时计算，执行全链路验证（R-859） |
@@ -110,12 +110,12 @@ multi_llm:
       model: qwen3.6-flash
       api_key: "sk-..."
       base_url: https://your-llm-api.com/v1
-      allowed_for: [L0,L1,L2,L3,L4,L5]
+      allowed_for: [R0,R1,R2,R3,R4,R5]
     - name: reviewer
       model: google/gemma-4-26b-a4b-it:free
       api_key: "your-openrouter-api-key"
       base_url: https://openrouter.ai/api/v1
-      allowed_for: [L0,L1,L2]
+      allowed_for: [R0,R1,R2]
 ```
 
 ### 交互通道

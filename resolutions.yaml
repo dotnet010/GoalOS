@@ -6015,3 +6015,1843 @@ resolutions:
       - must_exist: "适用性判据"
         in_file: 05软件架构文档.md
         reason: "05 §3.19 必须落 R-1472 范围修正注记（R-1474）"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #229: Runtime Boundary 两外部顾问方案评审 + v0.3.1 开发规划
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1475:
+    desc: "Runtime Boundary 基础框架选型(会议 #229): 采纳 claude-sonnet5 v4.0 四分级模型——隔离强度与部署拓扑两轴分离/契约只声明强度由 Resolver 选分级/T0-T3 单调递增; 摘取 gpt5.6-terra 三项独立贡献(旁路测试纪律/供应链 SBOM 待定问题/UI 展示实际 PlatformCapability); gpt5.6 远程优先(其 ADR-001)整体否决——与 v0.3.0 已验收本地 gVisor I4 后端(R-1078/R-1108/R-1430)方向冲突。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "隔离强度与部署拓扑两轴分离"
+        in_file: 会议纪要.md
+        reason: "会议 #229 必须落框架选型决议及两轴分离核心洞察（R-1475）"
+
+  R-1476:
+    desc: "ExecutionContract=既有 CapabilityToken+CompiledProfile 体系的运行时边界增强投影(会议 #229): 禁止平行权限模型; 增强四项——ProfileDigest 绑定(不一致默认拒绝+重新评估)/分钟级 ExpiresAt/SessionID 唯一绑定(Nonce 单会话消费, 会话内租约由会话凭据鉴权)/RequiresRealEnforcement 显式字段; 零值非法沿用 R-1106; Resolver 选择=Compile 期扩展(R-1012 运行时零二次判断兼容)非执行期动态决策。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "运行时边界增强投影"
+        in_file: 会议纪要.md
+        reason: "会议 #229 必须落契约=Token 增强投影决议（R-1476）"
+
+  R-1477:
+    desc: "分级术语映射唯一落点=00统一术语表(会议 #229): 外部词汇(T0-T3/ManagedLocal 族)禁止直接进基石文档; 统一映射既有隔离维 I2-I5 扩展——T0=新增协作档 I1/T1≈I2-I3/T2=I4-local/T3=I4-remote; 工程文档可用 T 族速记, 用户可见文本一律产品语义词(协作/受限/强隔离/远程)。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "分级术语映射唯一落点"
+        in_file: 会议纪要.md
+        reason: "会议 #229 必须落术语映射裁决（R-1477）"
+
+  R-1478:
+    desc: "v0.3.1 范围裁决 目标=Runtime(会议 #229): IN——①Runtime 核心层(契约投影/Resolver/R-1430 SPI 演进/ExecutionSession 状态机含升级=新会话挂同一工作区卷/07 事件冲突检查先行)②pluginrunner/sandbox 收敛为 Provider 实现(改架构位置不改安全承诺)③T2 三平台原型验证(P95<50ms@真实硬件 n>=100 仅数据收集)④CLI 隔离级别诚实呈现; OUT(Jobs+Meyer 双批准推迟登记 stub 清单)——T3 远程集群(v0.4.0 再评估)/HSM-KMS(v0.3.1 用 OS 钥匙串)/WorkloadIdentity 静态分析方法论/SBOM; T3 推迟正确性论证(Meyer 核实): 强隔离由既有 I4 本地后端承载安全承诺不降低=工作量妥协非正确性妥协。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, stub追踪清单.md]
+    verify:
+      - must_exist: "v0.3.1 范围裁决"
+        in_file: 会议纪要.md
+        reason: "会议 #229 必须落 v0.3.1 范围裁决（R-1478）"
+      - must_exist: "v0.3.1 范围裁决（R-1478/R-1483）"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划必须落范围裁决 IN/OUT（R-1478）"
+      - must_exist: "RT-D-01"
+        in_file: stub追踪清单.md
+        reason: "stub 清单必须登记四项推迟（R-1478）"
+
+  R-1479:
+    desc: "macOS Seatbelt 承诺语义精确化(会议 #229): 机制不动(保留 R-1353——v0.3.1 macOS 唯一本地强制路径); 06 矩阵 macOS 行从隐含等价 seccomp 的 MAC 改述为弃用 API 之上的纵深防御层(承诺上限=DAC+进程边界); 长期路径=Virtualization.framework 由 T2 原型数据裁决; 用户可见文档禁止笼统沙箱已启用表述。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "Seatbelt 承诺语义精确化"
+        in_file: 会议纪要.md
+        reason: "会议 #229 必须落 macOS Seatbelt 语义裁决（R-1479）"
+
+  R-1480:
+    desc: "密钥与会话凭据纪律(会议 #229): 会话密钥唯一通道=FD3/HANDLE_LIST 句柄继承前导帧(R-1105/R-1197/R-1261)永不现环境变量/命令行/日志/审计载荷; claude §10.1 环境变量携带管道名表述修正采纳(管道名非密钥可走环境变量, 密钥永不); 契约签发私钥 v0.3.1=OS 钥匙串后端(DPAPI/Keychain/信创机密服务), 接口抽象预留 HSM/KMS 企业后端; Ed25519 离线签名采纳, 验证侧纳入治理层既有 Token 职责扩展。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "密钥与会话凭据纪律"
+        in_file: 会议纪要.md
+        reason: "会议 #229 必须落密钥纪律决议（R-1480）"
+
+  R-1481:
+    desc: "Runtime 测试门槛清单入 12 清单(会议 #229): 八项——①直接系统调用旁路测试(内核/虚拟化边界拒绝断言, 代理拒绝不得误计为通过, 两顾问独立收敛)②T0 边界路由测试③契约重放测试(Nonce 单会话)④密钥轮换演练⑤热池快照跨会话残留测试(Linus——内存页清零断言+卷重新校验, 攻击测试)⑥平台适配矩阵(Win10/11 Pro/Home/信创两域内 CPU/macOS Intel+AS/cgroup v1 降级机)⑦延迟门槛(T0 P95<20ms/T1 P95<50ms 硬闸; T2 原型出数不设闸; T3 本版本不设)⑧延迟分段 instrumentation(Carmack); R-571 测试先行适用核心层全部 MUST; 环境纪律沿用(GOALOS_PLUGINS_DIR 空目录/Linux-only 指令级模拟+sudo 重试)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-测试计划.md]
+    verify:
+      - must_exist: "Runtime 测试门槛清单"
+        in_file: 会议纪要.md
+        reason: "会议 #229 必须落测试门槛决议（R-1481）"
+      - must_exist: "TC-RT-001"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划必须具名化 Runtime 测试门槛（R-1481）"
+
+  R-1482:
+    desc: "v0.3.1 开发计划四文档启动(会议 #229): 按 00 §5.1.1/§5.1.2 创建 开发计划/v0.3.1/, 四文档按撰写流程顺序产出不可并行; W0 三项强制——①Runtime STRIDE 威胁建模(Lipner: 契约签名链/会话密钥/热池快照残留/vsock 四攻击面, 产出写入 06)②概念对齐检查(各角色一句话定义 ExecutionTier/ExecutionContract/Provider/Resolver)③现有 executor/seccomp/Seatbelt/agentbox→Provider SPI 映射评估表(Carmack DA 问 2, W1 开工前置); 周制门禁沿用 R-1446; 阶段 5.5 交叉核验未通过不进开发。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 开发计划/v0.3.1/v0.3.1-顾问审计意见.md]
+    verify:
+      - must_exist: "四文档启动"
+        in_file: 会议纪要.md
+        reason: "会议 #229 必须落四文档启动决议（R-1482）"
+      - must_exist: "SPI 映射评估表"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划 W0 必须含映射评估表任务（R-1482③）"
+      - must_exist: "阶段 5.5 交叉核验"
+        in_file: 开发计划/v0.3.1/v0.3.1-顾问审计意见.md
+        reason: "顾问审计意见必须挂接交叉核验流程（R-1482）"
+
+  R-1483:
+    desc: "远程执行需求承接路径(PM 裁定, 2026-08-21): GoalOS=个人目标执行系统, 用户执行环境多为本地机器(可接受 runtime/sandbox/KVM/VM/docker), 大概率无远程执行环境; T3 远程集群目前不在考虑范围——远程执行需求由 agent 远程管理路径承接(远程机器部署 GoalOS agent 由本地侧管理), 不建设专用集群网关基础设施; R-1478 OUT 项(T3 推迟)的产品级补充论据, T3 从推迟待评估进一步明确为当前产品形态不做, 企业集群形态未来单独立项。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md]
+    verify:
+      - must_exist: "agent 远程管理路径承接"
+        in_file: 会议纪要.md
+        reason: "PM 裁定必须落远程执行承接路径（R-1483）"
+      - must_exist: "远程代理托管"
+        in_file: 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md
+        reason: "验收标准 AC-06 必须落远程承接路径（R-1483；R-1527 措辞分离后锚点同步）"
+
+  R-1484:
+    desc: "Runtime Boundary 设计内化前置(会议 #230): W0 增补任务 0.8——外部草案设计内容经 R-1477 术语映射后传播入九文档定稿(05 Runtime Boundary 章节含契约字段表/SPI 定稿/状态机/错误语义表/数据流; 06 macOS 语义+密钥纪律前置 R-1479/R-1480; 08 SPI 节演进含平台机制要点; 09 Runtime 族错误码; 12 TC-RT 族登记; 04 CLI 呈现规格定稿; 01 PRD 补 v0.3.1 用户价值节); W8-8.4 收窄为传播一致性复核; W0 完成判据追加: 00-12+四文档构成开发团队完整施工依据(零推断原则成立); 门禁=质量门非时间门, W0 必要时延长 W1 顺延。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "设计内化前置"
+        in_file: 会议纪要.md
+        reason: "会议 #230 必须落内化前置决议（R-1484）"
+      - must_exist: "设计内化九文档定稿（R-1484）"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划 W0 必须落 0.8 内化任务（R-1484）"
+
+  R-1485:
+    desc: "外部草案归档纪律(会议 #230): 开发文档/runtime设计/ 两份草案=外部输入参考材料; R-1484 传播完成且 CI 全绿前禁止以草案为施工依据(设计结论不在基石文档=设计不存在); 传播完成后移入废弃文档回收站归档保留追溯价值; 被否决内容(gpt5.6 ADR-001 远程优先/外部词汇 T0-T3/ManagedLocal 族)永远不得以原文形态进基石文档——R-1477 术语映射是唯一入口。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "外部草案归档纪律"
+        in_file: 会议纪要.md
+        reason: "会议 #230 必须落归档纪律决议（R-1485）"
+      - must_exist: "外部草案归档纪律"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划必须落归档纪律引用（R-1485）"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #230 W0 施工产出: Runtime Boundary 设计内化九文档落地
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1486:
+    desc: "00 术语表 Runtime 词条族(会议 #230 W0-0.2/0.5): 新增八条——执行分级(T 族速记: T0 协作档=I1 扩展/T1 受限档=I2-I3/T2 强隔离本地档=I4-local 原型/T3 强隔离远程档=I4-remote 本版本不做 R-1483)/产品语义词(协作/受限/强隔离/远程=用户可见唯一合法词汇)/ExecutionContract(CapabilityToken 增强投影)/Runtime Resolver/Provider(未实现不注册)/ExecutionSession(升级=新会话挂同卷)/热池/两轴模型。disposition: 生效"
+    files: [00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "ExecutionContract（执行契约"
+        in_file: 00统一术语表.md
+        reason: "00 必须落 ExecutionContract 词条（R-1486）"
+
+  R-1487:
+    desc: "05 新增 §X.6 Runtime Boundary 章(会议 #230 W0-0.8 核心): 两轴模型/执行分级表(T 族+I 族映射+延迟目标+v0.3.1 状态)/ExecutionContract 字段表(Go struct 级, 零值非法)/Resolver 决策表(Compile 期六行)/Provider SPI 定稿/ExecutionSession 状态机(升级=新会话挂同卷)/Provider 生命周期(降级第三态)/错误语义表九行/延迟目标与观测(分段 instrumentation 四段)/数据流。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "X.6 Runtime Boundary"
+        in_file: 05软件架构文档.md
+        reason: "05 必须落 Runtime Boundary 章节（R-1487）"
+
+  R-1488:
+    desc: "06 Runtime 安全三件套(会议 #230 W0-0.1/0.7): §1.3 macOS 行语义精确化(R-1479——弃用 API 之上的纵深防御层, 承诺上限=DAC+进程边界); 新增 §X.7 v0.3.1 Runtime STRIDE 四攻击面威胁矩阵(契约签名链/会话密钥分发/热池快照残留/vsock 通道——处置结论无空白); 新增 §X.8 Runtime 密钥管理纪律(R-1480——钥匙串后端/轮换重叠窗口/会话密钥前导帧唯一通道)。disposition: 生效"
+    files: [06安全模型文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "X.7 v0.3.1 Runtime STRIDE 威胁矩阵"
+        in_file: 06安全模型文档.md
+        reason: "06 必须落 Runtime STRIDE 四攻击面（R-1488）"
+
+  R-1489:
+    desc: "07 新增 §4.14 v0.3.1 Runtime 族事件 11 个(会议 #230 W0-0.4): 契约族(ContractIssued/ContractRejected)/解析族(RuntimeSelected/RuntimeSelectionRejected)/租约族(RuntimeAcquired/RuntimeAcquireFailed/PrecheckFailed/RuntimeReleased)/会话族(SessionEscalated)/Provider 族(ProviderDegraded/ProviderStateChanged); 冲突检查+近义分析声明(与既有事件零重名, Primitive 事件层不重叠); 密钥永不入事件。disposition: 生效"
+    files: [07事件注册表.md, 会议纪要.md]
+    verify:
+      - must_exist: "4.14 v0.3.1 Runtime 族事件"
+        in_file: 07事件注册表.md
+        reason: "07 必须落 Runtime 族事件 schema（R-1489）"
+
+  R-1490:
+    desc: "08 §19.10a SPI v2 演进(会议 #230 W0-0.8): 六方法→Prepare/Acquire/Precheck/Execute/Interrupt+Pause+Resume/State/Release+可选 Snapshottable 映射表(类型断言禁空实现); Handle.Start 冷热不区分语义; 未实现不注册+降级第三态纪律; 平台机制要点内化(Windows breakaway 防护/信创 cgroup v1 降级显式化/macOS Virtualization.framework 选型理由)。disposition: 生效"
+    files: [08沙箱隔离与进程通信规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "SPI v2 演进（R-1490"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 必须落 SPI v2 演进（R-1490）"
+
+  R-1491:
+    desc: "09 Runtime 族错误码(会议 #230 W0-0.8): §1 域表新增 RTM 运行时域; §2 新增七码——RTM-CONTRACT-F-001(契约校验失败)/RTM-CONTRACT-F-002(契约重放)/RTM-RESOLVE-F-001(无满足隔离要求, 严禁降档)/RTM-PROV-R-001(Provider 暂不可用)/RTM-PRECHECK-F-001(预检失败)/RTM-SESSION-I-001(会话自动升级)/RTM-PROV-W-001(Provider 降级运行)。disposition: 生效"
+    files: [09错误码知识库规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "RTM-CONTRACT-F-001"
+        in_file: 09错误码知识库规范.md
+        reason: "09 必须落 RTM 族错误码（R-1491）"
+
+  R-1492:
+    desc: "12/04/01 三文档传播(会议 #230 W0-0.8): 12 新增 F 节 TC-RT 族 19 个具名测试函数登记(E 节计数声明 126→145 同步修订); 04 新增 §14 Runtime 隔离级别呈现规格(产品语义词唯一合法/选定依据行/macOS 诚实语义/降级标注/JSON 字段); 01 新增 §20 v0.3.1 Runtime 用户价值节(快/诚实/不打扰+远程承接路径 R-1483+非目标)。disposition: 生效"
+    files: [12测试清单与规范.md, 04命令行界面设计规范.md, 01-prd产品需求文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "TC-RT-001a"
+        in_file: 12测试清单与规范.md
+        reason: "12 必须登记 TC-RT 族（R-1492）"
+      - must_exist: "Runtime 隔离级别呈现"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 必须落隔离级别呈现规格（R-1492）"
+      - must_exist: "Runtime 用户价值"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 必须落 v0.3.1 用户价值节（R-1492）"
+
+  R-1493:
+    desc: "W0-0.3/0.6 产出定稿(会议 #230): 开发计划附录 A=Provider SPI 映射评估表(逐方法: 现有代码在哪/缺口是什么——Brad/Russ 双签; 结论=无原理性阻抗失配, 最大新增面=注册表+状态机+Precheck+租约语义集中任务 3.2); 测试计划附录=延迟测量环境定义(真实硬件清单七环境/负载模型三档并发/n>=100/预热剔除 10/离群值不剔除单独归因/分段 instrumentation 四段)。disposition: 生效"
+    files: [开发计划/v0.3.1/v0.3.1-开发计划.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "Provider SPI 映射评估表"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划必须落映射评估表附录（R-1493）"
+      - must_exist: "延迟测量环境定义"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划必须落测量环境附录（R-1493）"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #232: v0.3.1 开发前概念层深度自检（W1 开工前强制闸口）
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1494:
+    desc: "Provider 命名分离(会议 #232, F-01): 00 术语表 Provider 词条改名 RuntimeProvider(运行时提供方)并补互斥注记(与 LLMProvider=模型提供方分离——09 GOV-LLM 族/05 Multi-LLM 既有用法); 05 §X.6 章首补注记本章 Provider=RuntimeProvider; 文档正文新内容一律 RuntimeProvider; 代码层 internal/runtime 包内类型名 Provider 保留(包作用域无歧义)。disposition: 生效"
+    files: [00统一术语表.md, 05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "RuntimeProvider（运行时提供方，R-1475/R-1494/R-1523）"
+        in_file: 00统一术语表.md
+        reason: "00 必须落 RuntimeProvider 词条（R-1494）"
+      - must_exist: "本章 Provider=RuntimeProvider"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6 必须落命名注记（R-1494）"
+
+  R-1495:
+    desc: "快照族收编第六义 VMSnapshot 热池镜像(会议 #232, F-02——R-1116 违规自查修复): 00 快照族词条五义五名扩为六义六名(新增 VMSnapshot=T2 热池实例虚拟机状态快照); 裸用点全修复——00 热池词条/05 §X.6.1+§X.6.5/06 §X.7(攻击面名+矩阵行+处置结论行)/08 §19.10a SPI v2 表两行/测试计划 TC-RT-040 描述; 代码接口名 Snapshottable/Snapshot/RestoreFrom 保留(代码标识符), 语义绑定=VMSnapshot。disposition: 生效"
+    files: [00统一术语表.md, 05软件架构文档.md, 06安全模型文档.md, 08沙箱隔离与进程通信规范.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "VMSnapshot（热池镜像，R-1495）"
+        in_file: 00统一术语表.md
+        reason: "00 快照族必须收编第六义（R-1495）"
+      - must_exist: "热池 VMSnapshot 恢复"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.1 必须落 VMSnapshot 定名（R-1495）"
+      - must_exist: "热池 VMSnapshot 残留"
+        in_file: 06安全模型文档.md
+        reason: "06 §X.7 攻击面必须落 VMSnapshot 定名（R-1495）"
+      - must_exist: "VMSnapshot 归还"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 SPI v2 表必须落 VMSnapshot 定名（R-1495）"
+      - must_exist: "热池 VMSnapshot 跨会话残留"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划 TC-RT-040 必须落 VMSnapshot 定名（R-1495）"
+
+  R-1496:
+    desc: "Session/ExecutionSession 概念边界(会议 #232, F-03): 00 Session 词条补边界注记(=Goal 级运行时隔离单元, 持有 LLM 连接/Context/Token 预算); ExecutionSession 词条补边界注记(=ExecutionContract 激活的执行会话, 持有租约/工作区卷引用/句柄状态; 一个 Goal Session 可含多个 ExecutionSession, 生命周期正交); 07 SessionEscalated 事件归属后者无需改名。disposition: 生效"
+    files: [00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "一个 Goal Session 可含多个 ExecutionSession"
+        in_file: 00统一术语表.md
+        reason: "00 必须落 Session/ExecutionSession 边界（R-1496）"
+
+  R-1497:
+    desc: "降级语义边界裁决(会议 #232, F-04): 契约 MinIsolation=硬地板——既有自动降级链 I5→I4→I3→I2(R-1078/R-1354, 机制层兜底)保留但只允许在 >=MinIsolation 范围内运作; 机制降级结果将低于地板时=拒绝(RuntimeSelectionRejected)+治理重新评估, 不静默降; v0.3.0 旧路径(无契约强度场景)维持既有语义; 05 §X.6.4 决策表第 6 行补边界注记+06 §1.3 I 族阶梯定义段补同义注记+00 执行分级词条补降级边界。disposition: 生效"
+    files: [05软件架构文档.md, 06安全模型文档.md, 00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "降级边界（R-1497/R-1512③"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.4 必须落降级边界注记（R-1497）"
+      - must_exist: "降级边界（R-1497/R-1512③"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 必须落降级边界注记（R-1497）"
+      - must_exist: "降级边界（R-1497）"
+        in_file: 00统一术语表.md
+        reason: "00 执行分级词条必须落降级边界（R-1497）"
+
+  R-1498:
+    desc: "Nonce 两义注记+T2/I4-local 精确化(会议 #232, F-05/F-06): 契约 Nonce(单会话消费防跨会话重放)≠IPC 握手 nonce_c/nonce_d(R-1197 通道级抗重放每次握手)——00 ExecutionContract 词条+05 §X.6.3 各补注记; T2 精确化: I4-local 含既有 gVisor 本地后端(systrap/KVM), T2 特指 I4 强度+本地拓扑+硬件虚拟化+热池形态——00 执行分级词条+05 §X.6.2 补注记。disposition: 生效"
+    files: [00统一术语表.md, 05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "Nonce 两义注记（R-1498）"
+        in_file: 00统一术语表.md
+        reason: "00 必须落 Nonce 两义注记（R-1498）"
+      - must_exist: "Nonce 两义注记（R-1498）"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.3 必须落 Nonce 两义注记（R-1498）"
+      - must_exist: "修订 R-1498 精确化措辞"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.2 必须落 T2 精确化注记（R-1498）"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #233: G 顾问 v0.3.1-1 开发计划反馈逐条审议
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1499:
+    desc: "ExecutionSession 升级语义定稿(会议 #233, G 顾问发现一): Action 级取消+重调度非断点恢复——①旧句柄进程树走优雅取消协议(CancelMessage→SIGTERM→2s→SIGKILL, 超时上限保持, 安全事件不允许无限拖延)②被中断 Action 标记 Cancelled③新会话挂同卷后 PipelineRunner 重新调度该 Action 从头执行(卷保留已完成产出物, 半成品经 workspace 清理纪律, 外部副作用经幂等键 client_request_id 去重)④禁止断点续跑协议(与 R-741 新 Session 重做哲学一致: Action 原语不可分)。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "升级信号与 Action 语义（R-1499"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.6 必须落升级语义（R-1499）"
+      - must_exist: "R-1499 三断言"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划 TC-RT-070 必须落升级三断言（R-1499）"
+
+  R-1500:
+    desc: "Provider SPI 并发模型显式声明(会议 #233, G 顾问发现二): 同步 Go 接口+ctx 取消/超时(Acquire 受 Deadline 约束); ExecutionSession 状态推进由会话自身 goroutine 驱动, Runtime 族事件仅观测/审计输出不作状态推进触发器; Event over Call 原则约束跨模块状态变更, Provider SPI=internal/runtime 模块内部调用不违反; Kernel/调度器不直接调用 SPI。disposition: 生效"
+    files: [05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "并发语义（R-1500"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.5 必须落 SPI 并发语义（R-1500）"
+      - must_exist: "并发语义（R-1500"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.10a 必须落 SPI 并发语义（R-1500）"
+
+  R-1501:
+    desc: "契约不过边界(会议 #233, G 顾问发现三): ExecutionContract 全文不下发 Plugin/沙箱内——契约验证只在 daemon 侧会话建立前一次完成; 通道即身份(会话建立时 FD3 通道与 SessionID 绑定, 每条消息 HMAC 通道认证即继承会话权限上下文); 消息层不存在逐条验签; 授权凭证下发给不可信沙箱侧=制造伪造面, 禁止。disposition: 生效"
+    files: [05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "契约边界（R-1501"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.3 必须落契约边界段（R-1501）"
+      - must_exist: "契约边界（R-1501"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.10a 必须落契约边界注记（R-1501）"
+
+  R-1502:
+    desc: "TC-RT-060 延迟门槛计时口径定稿(会议 #233, G 顾问发现四): 起点=Resolver 触发 Acquire 时刻, 终点=Provider Start 就绪(可接受首个 Execute); 治理签发/契约验证/Resolver 决策纳入分段归因观测不设硬闸(分段六段); AC-01 措辞精确化(执行环境建立不成为用户可感知的新瓶颈; 端到端含 LLM 规划秒级=既有特征不在门槛范围)。disposition: 生效"
+    files: [05软件架构文档.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md, 会议纪要.md]
+    verify:
+      - must_exist: "门槛计时口径（R-1502"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.9 必须落计时口径（R-1502）"
+      - must_exist: "计时口径（R-1502）"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划 TC-RT-060 必须落计时口径（R-1502）"
+      - must_exist: "不成为用户可感知的新瓶颈"
+        in_file: 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md
+        reason: "验收标准 AC-01 必须落措辞精确化（R-1502）"
+
+  R-1503:
+    desc: "钥匙串离线语义(会议 #233, G 顾问发现五): 禁止断网降级为临时内存私钥(安全红线——先断网再伪造路径不可接受, 签发服务不可用=显式失败); KeystoreBackend 可用性探测入 Prepare 期 fail-fast; DPAPI 域依赖边界(域漫游+密码变更后首次解密)登记 06 已知限制; TC-RT-061 离线验证含签发+验签全链路。修订注记（R-1583——会议 #245）：TC-RT-061 行「钥匙串签发」措辞改「secrets.key keyring 签发」（R-1505 收窄同名歧义消除），锚点括号同步放宽。disposition: 生效"
+    files: [06安全模型文档.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "离线语义（R-1503"
+        in_file: 06安全模型文档.md
+        reason: "06 §X.8 必须落离线语义（R-1503）"
+      - must_exist: "离线跑通（R-1503"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划 TC-RT-061 必须落钥匙串全链路（R-1503）"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #234: GK 顾问 v0.3.1-1 反馈逐条审议（承重墙加固）
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1504:
+    desc: "ExecutionSession 粒度钉死(会议 #234, GK 存在论问题 1): 与 Action 1:1(契约绑 action_id)+与沙箱进程组 1:1; 会话内 Execute 可重复=Action 内多次工具调用; 一个 Goal Session 顺序持有 N 个 ExecutionSession; 热池=跨会话实例复用(归还≠销毁); 升级=Action 级(R-1499 语义)。disposition: 生效"
+    files: [05软件架构文档.md, 00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "粒度钉死（R-1504"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.6 必须落粒度钉死（R-1504）"
+      - must_exist: "粒度钉死（R-1504）"
+        in_file: 00统一术语表.md
+        reason: "00 ExecutionSession 词条必须落粒度钉死（R-1504）"
+
+  R-1505:
+    desc: "Contract=CapabilityToken v2 扩展(会议 #234, GK 存在论问题 2——修订 R-1476/R-1480): 同一对象同一签发同一验证链非平行模型, 删除「增强投影」措辞; 算法保持 HS256+secrets.key keyring 复用 R-1389 既有轮换; Ed25519+OS 钥匙串降级为预留方向(T2/T3 产品化触发跨进程验签需求时作为 keyring 第二算法代际引入——本版本跨进程验签需求不存在, T3 不做 R-1483/T2 仅原型); 「信创机密服务」虚构名删除(信创=secrets.key 文件后端既有纪律); KeystoreBackend 仅骨架预留(Skeleton[T] ErrNotImplemented); TC-RT-030/031 收窄为 keyring 轮换+密钥纪律; R-1503 离线语义适配 keyring(DPAPI 域依赖条目消除, HS256 文件 keyring 纯本地离线天然成立)。disposition: 生效"
+    files: [05软件架构文档.md, 06安全模型文档.md, 00统一术语表.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "密钥体系裁决（R-1505"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.3 必须落密钥体系裁决（R-1505）"
+      - must_exist: "R-1505 收窄"
+        in_file: 06安全模型文档.md
+        reason: "06 §X.8 必须落收窄（R-1505）"
+      - must_exist: "CapabilityToken v2 扩展"
+        in_file: 00统一术语表.md
+        reason: "00 ExecutionContract 词条必须落 Token v2（R-1505）"
+      - must_exist: "R-1505 收窄"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划 TC-RT-030 必须落 keyring 收窄（R-1505）"
+
+  R-1506:
+    desc: "I 族阶梯唯一定义(会议 #234, GK 存在论问题 3——修订 R-1354 的 I4 部分): 按边界类型单维——I0=无隔离/I1=进程边界+资源限制/I2=OS 原生强制单面(syscall 过滤族或文件系统禁闭族任一, 诚实标注覆盖面)/I3=双面齐备/I4=独立内核边界(gVisor 用户态内核/Windows Sandbox/HV 微虚拟机——信创 systrap 可达)/I5=一次性执行环境; 金丝雀移出阶梯(数据面检测归五支柱); 代理网络移出阶梯; macOS Seatbelt=I2 唯一值。disposition: 生效"
+    files: [06安全模型文档.md, 00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "阶梯定义（R-1506"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 必须落阶梯唯一定义（R-1506）"
+      - must_exist: "阶梯唯一定义（R-1506"
+        in_file: 00统一术语表.md
+        reason: "00 I0-I5 词条必须落阶梯唯一定义（R-1506）"
+
+  R-1507:
+    desc: "签发决策表+T0 诚实标注+NFR 主承诺(会议 #234, GK P0-1/P0-2): RequiresRealEnforcement/MinIsolation 计算规则唯一权威=06 §5 决策表(认证且受限能力且不产子进程→false/I1; shell/生成代码/未认证→true/I2; 网络出站或敏感路径写→true/I3; R>=4 或策略显式声明→true/I4); T0 协作档 v0.3.1 仅测试夹具可达(GoalAgent 需任意 shell); NFR 主承诺=受限档 P95<50ms, 协作档 20ms=若可达则测(Jobs 产品裁决: 亮点数字不挂不可达分支)。disposition: 生效"
+    files: [06安全模型文档.md, 05软件架构文档.md, 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md, 01-prd产品需求文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "签发决策表（R-1507"
+        in_file: 06安全模型文档.md
+        reason: "06 §5 必须落签发决策表（R-1507）"
+      - must_exist: "NFR 主承诺（R-1507"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.9 必须落主承诺修订（R-1507）"
+      - must_exist: "主承诺=受限档 P95<50ms"
+        in_file: 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md
+        reason: "验收标准 AC-01 必须落主承诺修订（R-1507）"
+      - must_exist: "受限档 P95<50ms"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §20.1 必须落主承诺修订（R-1507）"
+
+  R-1508:
+    desc: "WorkloadIdentity 最小规范(会议 #234, GK P0-2): 名单载体=daemon.yaml 人工审核配置块(trusted_workloads: [{publisher_key, artifact_hash, expires_at}]); 认证键值=(发布者密钥,制品哈希)二元组版本更新即重新审核; v0.3.1 GoalAgent 不在名单(T0 死路径诚实标注); 过期=名单版本管理。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "WorkloadIdentity 最小规范（R-1508）"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.3 必须落 WorkloadIdentity 最小规范（R-1508）"
+
+  R-1509:
+    desc: "升级信号生产者定稿(会议 #234, GK P0-3): 生产者=能力代理层检测(Plugin 能力请求超契约声明集——该请求已被代理拒绝无在途危险动作)+治理 Risk 重评入口; 07 新增 EscalationSignaled 事件(core); 时序=信号→升级评估→治理重签→新会话挂同卷; 重签失败=任务失败(RTM-RESOLVE-F-001 族); 旧会话 Release 失败=强制销毁+事件留痕; 05 §X.6.6 补两迁移行。disposition: 生效"
+    files: [07事件注册表.md, 05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "EscalationSignaled（会话族——R-1509"
+        in_file: 07事件注册表.md
+        reason: "07 §4.14 必须落 EscalationSignaled（R-1509）"
+      - must_exist: "升级信号生产者（R-1509"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.6 必须落信号生产者（R-1509）"
+
+  R-1510:
+    desc: "凭据时序四句(会议 #234, GK P0-4): Nonce 消费点=会话建立; 会话凭据派生点=会话建立时 daemon 内存派生——daemon 内存态永不跨 FD3; Acquire 鉴权对象=首次 VerifiedContract/后续内存凭据; FD3 职责边界=仅 plugin 会话密钥分发(R-1197)——Acquire 是 runtime 模块内部调用不跨 FD3, 无环。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "凭据时序四句（R-1510"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.3 必须落凭据时序（R-1510）"
+
+  R-1511:
+    desc: "调用链与 SPI 唯一化(会议 #234, GK P0-5/P0-6): sandbox.Execute=既有入口被 Provider.Execute 适配(禁止新调用点); IsolationBackend=Provider 内部实现细节非第三套 SPI(08 注记); 05 §X.6.5 补 Interrupt 入接口+HandleState/ProviderState/ExecutionTier 枚举全值+LeaseRequest/RuntimePlan/ProviderCapability/ExecuteRequest/ExecuteResult/SnapshotRef/VerifiedContract 全量 Go 类型定义(VerifiedContract=导出类型+非导出字段+同包构造); Conformance 八类→TC-RT 映射表; 10 指南补 internal/runtime(包布局+依赖方向+并发所有权三行)。disposition: 生效"
+    files: [05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 10模块实现指南.md, 会议纪要.md]
+    verify:
+      - must_exist: "SPI 支撑类型全量定义（R-1511"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.5 必须落类型全量定义（R-1511）"
+      - must_exist: "定位注记（R-1511"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.10a 必须落 IsolationBackend 定位注记（R-1511）"
+      - must_exist: "VerifiedContract / Nonce 消费表"
+        in_file: 10模块实现指南.md
+        reason: "10 §2 并发所有权必须落 runtime 行（R-1511）"
+
+  R-1512:
+    desc: "P1 族清理(会议 #234, GK P1-1~P1-5): ①04 §14.1 示例去工程词+TC-RT-100 grep 范围=人类可读通道(events export JSON=机器接口保留工程枚举); ②「解析期」术语替代「Compile 期 Resolver」(R-1012 语义不变——每会话解析一次冻结, Execute 路径零判断; Compile=TOML→CompiledProfile 既有占用); ③双路径关闭(修订 R-1497 措辞: v0.3.1 起所有执行走契约硬地板, 无旧路径旁路); ④产品词收窄=协作/受限两词本版本呈现(强隔离/远程词汇保留但标注本版本不可达 CLI 不呈现); ⑤残骸五项——07 §4.14 layer 全归 core/05 §X.6.7 Provider 生命周期收窄(下载/安装态=供应链预留不实现)/CanonicalVersion 同步入 W8/09 §2 模板 category 对齐代码定稿 Security(validation_error 系文档漂移)+RTM 两条目随之改/00 错误码域表补 GOV+RTM/01 §13 补 Runtime Boundary 映射行。disposition: 生效"
+    files: [04命令行界面设计规范.md, 09错误码知识库规范.md, 00统一术语表.md, 05软件架构文档.md, 01-prd产品需求文档.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "grep 断言范围定稿（R-1512①"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §14.3 必须落 grep 范围定稿（R-1512①）"
+      - must_exist: "R-1512⑤ 会议 #234 对齐修正"
+        in_file: 09错误码知识库规范.md
+        reason: "09 §2 模板必须落 category 对齐（R-1512⑤）"
+      - must_exist: "术语纪律（R-1512②）"
+        in_file: 00统一术语表.md
+        reason: "00 Resolver 词条必须落解析期术语（R-1512②）"
+      - must_exist: "双路径关闭（R-1512③"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.4 必须落双路径关闭（R-1512③）"
+      - must_exist: "Runtime Boundary（v0.3.1——快/诚实/不打扰）"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §13 必须落 Runtime 映射行（R-1512⑤）"
+      - must_exist: "CanonicalVersion 同步 v0.3.1"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划 W8 必须落 CanonicalVersion 同步任务（R-1512⑤）"
+
+  R-1513:
+    desc: "AC-05 离线语义精确化(会议 #234, GK 需求层漂移): 承诺范围=执行阶段离线可用(已规划目标断网照常执行, 协作/受限档全路径无远程依赖); 配合本地 LLM(Ollama)时含规划在内全链路离线; Goal 创建的 LLM 规划需联网或本地模型——诚实标注。disposition: 生效"
+    files: [开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md, 01-prd产品需求文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "执行阶段离线可用"
+        in_file: 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md
+        reason: "验收标准 AC-05 必须落离线精确化（R-1513）"
+      - must_exist: "执行阶段离线可用"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §20 必须落离线语义（R-1513）"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #235: C 顾问 v0.3.1-1 反馈逐条审议（开发可执行性元层）
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1514:
+    desc: "概念关系闭包(会议 #235, C 顾问议题 D): 00 术语表新增「概念关系闭包」节——State/Event/Decision/Policy/Profile/Capability/Artifact/RuntimeProvider/ExecutionSession/Observation/Provenance 等概念对关系矩阵, 每对一句话可判定(State=Event 流投影/Decision=Event 一种可撤销/Policy=输入非 State/Observation 非事实 WAL 唯一事实源等)。disposition: 生效"
+    files: [00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "概念关系闭包（R-1514"
+        in_file: 00统一术语表.md
+        reason: "00 必须落概念关系闭包节（R-1514）"
+
+  R-1515:
+    desc: "取消协议异常分支矩阵(会议 #235, C 顾问议题 E): 08 §3.3 补八分支——cancelling 超时(链内已定义)/无视 SIGTERM(2s 后 SIGKILL)/fork 子进程(pgid 级 SIGKILL R-957)/网络残留(作业对象级联/namespace 销毁)/Provider 崩溃(实例销毁不归还热池)/WAL 写失败(fail-closed)/快照失败(T2 实例销毁)/主机重启(WAL 重放 R-1093)。disposition: 生效"
+    files: [08沙箱隔离与进程通信规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "取消异常分支矩阵（R-1515"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §3.3 必须落取消异常分支矩阵（R-1515）"
+
+  R-1516:
+    desc: "模糊词机检(会议 #235, C 顾问 Zero Interpretation 收编): check-deprecated.sh 扩展模糊词警示模式族(尽可能/原则上/必要时/适当处理/根据需要/合理重试/视情况而定)——警示档只警告不计 FAIL, W1 末评估误报率后决定是否升硬闸; 06 内核 CVE 处「必要时禁后端」精确化改写为「命中即禁后端」。disposition: 生效"
+    files: [06安全模型文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "命中即禁后端"
+        in_file: 06安全模型文档.md
+        reason: "06 必须落模糊词精确化（R-1516）"
+
+  R-1517:
+    desc: "「已落地≠已验收」语义注记(会议 #235, C 顾问「已处理虚假安全感」警告收编): 架构会议规范 §4.2 状态表补注记——已落地=文档写入+CI 绿; 验收=周验收/整体 review 通过(R-1446 门禁); 二者拆开, 不新增状态分层(防流程官僚化)。disposition: 生效"
+    files: [架构会议规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "已落地≠已验收"
+        in_file: 架构会议规范.md
+        reason: "规范 §4.2 必须落语义注记（R-1517）"
+
+  R-1518:
+    desc: "开发可执行性审计八维度收编(会议 #235, C 顾问 Development Readiness Audit): 架构会议规范 §5.5 交叉核验补八维 Closure 映射注记(Concept/Requirement/Contract/Behavior/Security/Product/Test/Implementation)——不新建流程, 四组配对核查时按八维提问。disposition: 生效"
+    files: [架构会议规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "八维 Closure 映射注记（R-1518"
+        in_file: 架构会议规范.md
+        reason: "规范 §5.5 必须落八维映射注记（R-1518）"
+
+  R-1519:
+    desc: "R-1429 字段级补全+Artifact 最小注记(会议 #235, C 顾问议题 A): request_hash 作用对象=规范化 JSON(键排序+无意义字段剔除 canonical 表示非 raw body); policy_version 不入 hash 本身作为并列记录字段; 同 hash 不同 version=视为不同请求需重新决策; 05 §7.2 Artifact 最小世界模型注记(删除后 provenance 成立=WAL 事件留存不随文件删除; 同 digest=同内容但身份=路径+元数据组合; 完整协议 v0.5.0 候选不变)。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "字段级补全（R-1519"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.5 必须落 canonical 规则（R-1519）"
+      - must_exist: "Artifact 最小世界模型注记（R-1519"
+        in_file: 05软件架构文档.md
+        reason: "05 §7.2 必须落 Artifact 注记（R-1519）"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #236: K 顾问 v0.3.1-1 反馈逐条审议（实锤级行号引用）
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1520:
+    desc: "TokenClaims→ExecutionContract v2 逐字段映射表(会议 #236, K 顾问 D1): 05 §X.6.3 落缝合表——goal_id/action_id 保留, capability/scope 保留(CompiledProfile 引用形态), ttl→ExpiresAt(更名+分钟级收窄), issuer→IssuerKeyID(更名=keyring kid), HS256 签名保持(R-1505), 新增五字段(ProfileDigest/SessionID/Nonce/RequiresRealEnforcement/MinIsolation); 06 §4/05 §6 HS256 条款补指针注记不删文本。disposition: 生效"
+    files: [05软件架构文档.md, 06安全模型文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "逐字段映射表（R-1520"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.3 必须落字段映射表（R-1520）"
+      - must_exist: "R-1520：Token 即 ExecutionContract v2 同一对象"
+        in_file: 06安全模型文档.md
+        reason: "06 §4 必须落同一对象注记（R-1520）"
+
+  R-1521:
+    desc: "决策表补 I4 生产路径+T2 定义放宽(会议 #236, K 顾问 P0-2——修订 R-1498 措辞): 决策表行=MinIsolation=I4 且本机 I4 后端可用(gVisor/Windows Sandbox/热池微虚拟机)→T2; I4 本机全不可用→拒绝(R-1483); T2=I4 强度+本地拓扑(热池=延迟优化形态非档位定义, 非热池形态延迟按实测诚实标注不承诺 50ms); R-1478 正确性论证在决策表闭环; 06 §1.3 macOS 可达矩阵补 T2 原型注记; 00 执行分级词条同步。disposition: 生效"
+    files: [05软件架构文档.md, 06安全模型文档.md, 00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "T2 定义定稿（R-1521"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.2 必须落 T2 定义放宽（R-1521）"
+      - must_exist: "T2 原型路径（Virtualization.framework——R-1521 注记"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 macOS 矩阵必须补原型注记（R-1521）"
+      - must_exist: "R-1521"
+        in_file: 00统一术语表.md
+        reason: "00 执行分级词条必须同步 T2 定义（R-1521）"
+
+  R-1522:
+    desc: "实体关系矩阵显式化(会议 #236, K 顾问 P0-3): 05 §X.6.6 补矩阵——1 Goal:N GoalSession; 1 GoalSession:N ExecutionSession; 1 ExecutionSession:1 Action:1 RuntimeHandle; 1 Action:N Execute 同会话; 1 Action:1 Acquire(首次)+N(续租/升级重建); N ExecutionSession:1 Workspace 卷。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "实体关系矩阵（R-1522"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.6 必须落实体关系矩阵（R-1522）"
+
+  R-1523:
+    desc: "SPI 唯一权威+08 更名(会议 #236, K 顾问 P0-4): 接口定稿唯一权威=05 §X.6.5; 08 §19.10a=接入原则+Conformance 权威+平台机制要点; 08 正文两处 SandboxProvider→RuntimeProvider 更名(R-1494 漏扫修复); 00 RuntimeProvider 词条权威指针修正; 计划附录 A State(ctx) 行参照系修正(08§19.10a→05 §X.6.5)。disposition: 生效"
+    files: [08沙箱隔离与进程通信规范.md, 00统一术语表.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "RuntimeProvider SPI 六方法语义映射"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.10a 必须完成更名（R-1523）"
+      - must_exist: "R-1523"
+        in_file: 00统一术语表.md
+        reason: "00 RuntimeProvider 词条必须修正权威指针（R-1523）"
+      - must_exist: "SPI 权威参照系（R-1523"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "计划附录 A 必须修正参照系（R-1523）"
+
+  R-1524:
+    desc: "MinIsolation 策略载体+同名两义(会议 #236, K 顾问 P0-7): 06 §5 签发决策表=内置默认策略(不依赖配置文件可运行); policies.yaml 覆盖 schema 注记(允许覆盖 R 阈值行, 安全底线行=shell/生成代码→true 不可覆盖); 同名两义注记——契约 MinIsolation=签发值 vs 08 §11.5 profile MinIsolation=配置层下限, 合并=max(下限只能收紧不能放松, R-1459 兼容)。disposition: 生效"
+    files: [06安全模型文档.md, 08沙箱隔离与进程通信规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "策略载体（R-1524"
+        in_file: 06安全模型文档.md
+        reason: "06 §5 必须落策略载体（R-1524）"
+      - must_exist: "同名两义注记（R-1524"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §11.5 必须落同名两义注记（R-1524）"
+
+  R-1525:
+    desc: "契约过期/吊销对进行中会话语义(会议 #236, K 顾问 P1-3): 过期=对进行中会话无影响(会话建立时已验证+内存态会话凭据鉴权, 分钟级时效约束的是新会话建立); 吊销=复用既有 TokenRevoked→SIGSTOP 挂起链(R-1245 内核强制), 治理重评后决定恢复或终止; 05 §X.6.8 错误语义表补两行。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "契约过期（进行中会话）"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.8 必须落过期/吊销两行（R-1525）"
+
+  R-1526:
+    desc: "延迟预算分解+门槛口径对齐 NFR 纪律(会议 #236, K 顾问 P1-4): T0/T1 分段=进程 spawn/通道握手/契约验证/工作区挂载四段(热池恢复段仅适用 T2), 各段预算 W8 真实硬件标定; 门槛口径与 01 §17.4 纪律对齐——标定前=目标值, W8 标定通过转硬闸, 标定不通过回会重裁不硬撑数字; Windows CreateProcess 10-50ms 物理成本属标定要回答的问题不预设结论。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "预算分解与门槛口径（R-1526"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.9 必须落预算分解（R-1526）"
+
+  R-1527:
+    desc: "P2 族修复(会议 #236, K 顾问 P2-2~P2-7): X.6.2 表格断裂修复(T2 精确化段落移出表格); 05 §X.6.4 selection_reason 决策行→人类句子映射表(CLI 数据源=映射结果非行号); 00 产品语义词词条补 JSON 机器值枚举(cooperative/constrained/hardened_local/hardened_remote——三方映射唯一权威); 「远程」两义分离——R-1483 承接路径措辞改「远程代理托管」(01 §20.2/验收标准 AC-06/00); P1-6 热池清零措辞按 TC-RT-040 断言口径重写(00 热池词条); P2-7 macOS 死角随 R-1521 关闭。disposition: 生效"
+    files: [05软件架构文档.md, 00统一术语表.md, 01-prd产品需求文档.md, 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md, 会议纪要.md]
+    verify:
+      - must_exist: "selection_reason 映射表（R-1527"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.4 必须落 selection_reason 映射表（R-1527）"
+      - must_exist: "cooperative/constrained/hardened_local/hardened_remote"
+        in_file: 00统一术语表.md
+        reason: "00 产品语义词词条必须落 JSON 机器值枚举（R-1527）"
+      - must_exist: "远程代理托管"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §20.2 必须落远程两义分离（R-1527）"
+      - must_exist: "远程代理托管"
+        in_file: 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md
+        reason: "验收标准 AC-06 必须落远程两义分离（R-1527）"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #237: D 顾问 v0.3.1-1 反馈逐条审议（五顾问收官）
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1528:
+    desc: "T0 准入判定显式化+已实现判定(会议 #237, D 顾问 2.1/2.2): T0 准入=签发时静态判定(治理层按 06 §5 签发决策表计算 RequiresRealEnforcement, 依据=WorkloadIdentity 名单+契约声明能力集); 运行时违规(产子进程/直接系统调用)=升级信号(R-1509)非 T0 失败; 「已实现」判定=Conformance 八类契约测试全绿(R-1430 接入前置硬闸), 骨架 Provider 不注册——无循环定义。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "T0 准入判定（R-1528"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.4 必须落 T0 准入判定（R-1528）"
+      - must_exist: "判定（R-1528——会议 #237，D 顾问 2.2 关闭）"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.7 必须落已实现判定（R-1528）"
+
+  R-1529:
+    desc: "升级工作区卷一致性注记(会议 #237, D 顾问 2.3): 卷内不存在半完整文件状态——写路径纪律=write-to-temp+rename(R-1065 原子写, .tmp 中间态永不被当完成品); 升级取消窗口含提交/回滚中间态(R-1107); 新会话挂载前=卷重新校验+.tmp 中间态清理+校验事件留痕, 校验失败=升级中止回滚。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "工作区卷一致性（R-1529"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.6 必须落卷一致性注记（R-1529）"
+
+  R-1530:
+    desc: "TC-RT-040 拆分(会议 #237, D 顾问 5.2/7.3——采纳其 8.3 建议): 040a=RestoreFrom 前内存清零被调用(机制断言不依赖完整热池, W3-4 先红)/040b=新会话挂载前卷重新校验+.tmp 清理被调用(W3-4 先红)/040c=完整跨会话残留攻击测试(W7, 数据收集性质); 12 清单 F 表 19→21 计数同步(总 145→147); 测试计划同步修订。disposition: 生效"
+    files: [12测试清单与规范.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "TC-RT-040a"
+        in_file: 12测试清单与规范.md
+        reason: "12 F 表必须落 TC-RT-040 拆分（R-1530）"
+      - must_exist: "TC-RT-040c"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划必须落 TC-RT-040 拆分（R-1530）"
+
+  R-1531:
+    desc: "KeystoreBackend 预留契约现定不实现(会议 #237, D 顾问 7.2): 四方法骨架(Sign/Verify/Rotate/Available——Skeleton[T] ErrNotImplemented)+错误语义(Unavailable→Prepare 期 fail-fast/SigningFailed→任务拒绝)+密钥版本(kid 代际复用 R-1389)+轮换触发(TTL 窗口复用 R-1389); HSM/KMS 企业后端接入时实现本契约(RT-D-02); Resolver 远程分支=决策表 T3 行既有预留。disposition: 生效"
+    files: [06安全模型文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "KeystoreBackend 预留契约（R-1531"
+        in_file: 06安全模型文档.md
+        reason: "06 §X.8 必须落 KeystoreBackend 预留契约（R-1531）"
+
+  R-1532:
+    desc: "脱水版定位声明+macOS 弃用 API 具名清单(会议 #237, D 顾问 6.2/4.2): D 顾问审阅对象含脱水版(其引用=脱水版 header 原文——决议追溯缺失是脱水版设计特性非主文档缺陷, 主文档 R 追溯齐全; 邀请 D 复审主文档); 06 §1.3 补 macOS 弃用 API 具名清单(sandbox-exec/Seatbelt=Apple 已弃用无可替代 MAC 等价物, 承诺上限=DAC+进程边界 R-1479——标签必须有工程事实支撑); 04 §14.2 macOS 行补指针。disposition: 生效"
+    files: [06安全模型文档.md, 04命令行界面设计规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "macOS 弃用 API 具名清单（R-1532"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 必须落弃用 API 具名清单（R-1532）"
+      - must_exist: "弃用组件具名清单=06 §1.3（R-1532）"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §14.2 必须落具名清单指针（R-1532）"
+
+  R-1533:
+    desc: "产品哲学注记——用户不选档(会议 #237, D 顾问 3.1, Jobs 裁决): 用户只说目标(§0.2), 选级别=系统按治理决策表(06 §5)的自动职责; 「这次任务请用强隔离」的正确表达=在目标里声明敏感性(治理 Risk 评估升级); 档位是工程概念产品层永不暴露; 01 §20.1 补注记; stub 清单补 RT-D-05(远程代理托管信任模型——D 顾问 3.2 三问登记为未来立项设计输入)。disposition: 生效"
+    files: [01-prd产品需求文档.md, stub追踪清单.md, 会议纪要.md]
+    verify:
+      - must_exist: "用户不选档"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §20.1 必须落产品哲学注记（R-1533）"
+      - must_exist: "RT-D-05"
+        in_file: stub追踪清单.md
+        reason: "stub 清单必须落 RT-D-05（R-1533）"
+
+  R-1534:
+    desc: "一致性总检修复批(会议 #238——PM 指令全文档逐行交叉比对): 残留 9 处修复(stub RT-D-02 信创机密服务→keyring/RT-D-01+验收标准+开发计划 agent 远程管理→远程代理托管/开发计划增强投影三处→Token v2/05 §X.1 SandboxProvider 更名注记/05 §X.6.10+开发计划 3.1 Compile 期→解析期)+编号可解析性修复(测试计划 TC-RT-001a/b/c 拆三行/开发计划 TC 列压缩写法全展开/7.2→TC-RT-040c/3.2+3.3 补 040a/040b)+08 §19.8 macOS 原型指针注记+验收标准 HSM 行 keyring 残留修正; 流程裁决——修订既有概念时落地前必须 grep 全库该概念全部出现点(一致性清单 #10 执行强化)。disposition: 生效"
+    files: [stub追踪清单.md, 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "远程需求由远程代理托管路径承接（R-1527）"
+        in_file: stub追踪清单.md
+        reason: "stub RT-D-01 行必须同步远程代理托管（R-1534）"
+      - must_exist: "TC-RT-001b"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划必须拆出 TC-RT-001b 独立 token（R-1534）"
+      - must_exist: "RuntimeProvider SPI 首批实现（原 SandboxProvider 定名随 R-1494/R-1523 更名）"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.1 必须落更名注记（R-1534）"
+      - must_exist: "T2 原型路径=Virtualization.framework（R-1521"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.8 macOS 行必须落原型指针（R-1534）"
+
+  R-1535:
+    desc: "定义完备性两缺口收口(会议 #238 增补场——PM 质询驱动实证核查): 05 §X.6.5 补 WorkspaceRef 类型定义(VolumeID/MountPath/PersistAcrossEscalation——清单 #19 提及未定义缺口); §X.6.6 补句柄↔会话状态映射段(已计划/解析中=无句柄; 准备中/预检中=Acquired→Ready; 运行中=Running; 暂停=Paused; 收尾中=Released/Destroyed; 已完成/失败=无句柄——句柄生命周期严格包含于会话生命周期内, 清单 #14 缺口)。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "type WorkspaceRef"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.5 必须落 WorkspaceRef 定义（R-1535）"
+      - must_exist: "句柄↔会话状态映射（R-1535"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.6 必须落状态映射段（R-1535）"
+
+  R-1536:
+    desc: "v0.3.1 开发计划重制 第二版 v0.3.1-2(会议 #239——PM 指令): 实证核查增量补丁六轮后计划正文仅引用 61 决议中 17 条→重制——W0 已完成产出保留引用(会议 #231 验收); W1-W8 施工任务全量重排(每任务=决议来源+TC 挂接+验收标准三要素); 新增决议→任务映射全表(61 条逐条落点: 施工任务/文档已落地/流程纪律/推迟登记/修订关系五类); TC-RT 23 具名先红时点随任务表一次定稿; 编号机械一致性(计划↔测试计划↔12 清单)为重制验收闸口。disposition: 生效"
+    files: [开发计划/v0.3.1/v0.3.1-开发计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "决议→任务映射全表（R-1475~R-1536"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "重制计划必须含决议→任务映射全表（R-1536）"
+
+  R-1537:
+    desc: "Publish 位置显式论证(会议 #240, G 顾问发现 1 部分采纳): WAL Commit(append+fsync)=真相成立点; EventBus Publish 于其后立即合法——订阅者副作用有 WAL 真相支撑; 投影=bbolt 滞后副作用(失败从水位重放重建不回滚 WAL); G 的「投影 Commit 后才 Publish」不采纳并记录理由(可重建缓存不升为阻塞点); 00 Two-Phase Commit 词条+05 §3.19.5 各补论证句。disposition: 生效"
+    files: [00统一术语表.md, 05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "Publish 位置显式论证（R-1537"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.5 必须落 Publish 位置论证（R-1537）"
+
+  R-1538:
+    desc: "EventBus 核心层 handler 超时监控(会议 #240, G 顾问发现 2 部分采纳): 核心层 handler 执行超 1ms→发布 InvariantViolated(module=eventbus, severity=WARN, expected=handler_lt_1ms)——Fail-fast with dignity=记录+信号, 不 panic(局部慢不升级为全局崩溃); 采纳强制执法精神, 不采纳 panic 方案。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "超时监控（R-1538"
+        in_file: 05软件架构文档.md
+        reason: "05 EventBus 节必须落超时监控（R-1538）"
+
+  R-1539:
+    desc: "状态矩阵注记+G 点名组合核对(会议 #240, G 顾问发现 3): 05 §3.2 矩阵补注记——外部参照矩阵 Fatal/Security 列=本矩阵 CategorizedError 路由列(Security/Fatal→ESCALATE 人工介入不走 NeedsReview); G 点名组合核对(NeedsReview+Cancel=R-1220 链覆盖; Paused+Fatal=恢复评估后按错误路由); G 发现 5 哲学维持(ESCALATE 人工介入, 不自动 Failed 熔断——产品哲学); 发现 4(IPC 密钥注入)零缺口记录在案(FD3 前导帧+句柄继承既有)。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "矩阵注记（R-1539"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.2 必须落矩阵注记（R-1539）"
+
+  R-1540:
+    desc: "引用空气修复(会议 #241, C 顾问一.3——实锤): 三处「00 §5.1.2」引用(验收标准签发行/测试计划签发行/开发计划十三节)改为「架构会议规范 §5.1.2」——00=架构会议规范文档编号 vs 00统一术语表文件名含 00, 两个 00 不同文档, 门禁流程权威出处引用空气=门禁悬空; 00 术语表尾部死表(版本历史 v1.0-v4.0 与开头修改记录重复)删除。disposition: 生效"
+    files: [开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "架构会议规范 §5.1.2 Step 5"
+        in_file: 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md
+        reason: "验收标准签发行必须指向正确权威（R-1540）"
+
+  R-1541:
+    desc: "两轴模型措辞精确化(会议 #241, C 顾问二): 00 执行分级词条「强度单调递增」修正——档位编号=呈现与决策顺序非强度严格单调(T0 与 T1/T2/T3 不同轴=协作 vs 强制; T2=T3 同强度异拓扑)。disposition: 生效"
+    files: [00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "非强度严格单调"
+        in_file: 00统一术语表.md
+        reason: "00 执行分级词条必须落措辞精确化（R-1541）"
+
+  R-1542:
+    desc: "CLI 呈现恢复三档(会议 #241, C 顾问三.1+三.2——修订 R-1512④): 前提修正——T2 生产路径=既有 I4 后端真实可达(R≥4→MinIsolation=I4 真实触发, GK 轮收窄前提错误); 呈现协作/受限/强隔离三档, 远程不呈现(T3 不做); 04 §14「T2 仅原型」错误表述修正(T2=既有 I4 生产路径+热池形态原型); 验收标准 AC-02 三档措辞保持不动; 测试计划 TC-RT-100 同步三档。disposition: 生效"
+    files: [04命令行界面设计规范.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "强隔离档仅在探测到 I4 后端时呈现"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §14 必须落修订后呈现档位（R-1542 经 R-1599 再修订——前提证伪）"
+      - must_exist: "强隔离档仅在探测到 I4 后端时呈现"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划 TC-RT-100 必须同步修订后呈现档位（R-1542 经 R-1599 再修订）"
+
+  R-1543:
+    desc: "Ed25519/HS256 矛盾修复+HSM 残留+引用统一(会议 #241, C 顾问四——全部实锤): 05 §X.6.10 数据流图「Ed25519 钥匙串」→HS256+secrets.key keyring(R-1505 修订漏点); 06 §X.7 STRIDE 契约签名链「Ed25519 验签」→HS256(同漏点); 01 §20.3 HSM 行「操作系统钥匙串」→secrets.key keyring(R-1534 修验收标准时漏 PRD); 05 egressproxy 启动序列引用统一 §2.2; 流程强化——修订类决议落地后必须重跑残留扫描脚本验证零残留(机器收口)。disposition: 生效"
+    files: [05软件架构文档.md, 06安全模型文档.md, 01-prd产品需求文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "签发 ExecutionContract（HS256"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.10 必须落 HS256（R-1543）"
+      - must_exist: "HS256 验签（secrets.key keyring"
+        in_file: 06安全模型文档.md
+        reason: "06 §X.7 必须落 HS256（R-1543）"
+      - must_exist: "secrets.key keyring 保护，HS256"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §20.3 必须落 keyring（R-1543）"
+
+  R-1544:
+    desc: "macOS I2 能力落差裁决(会议 #241, C 顾问五——真实且重要): 05 §X.6.4 Resolver 第 3 行改写「本平台实际达成的 IsolationLevel≥MinIsolation 且已验证」(C 建议采纳); 新增第 3b 行——平台实际达成<MinIsolation(如 macOS I2 平台遇 I3 需求)=治理升级(人工审批显式降级——用户知情同意非静默降)或拒绝; 04 §14 macOS 行补能力落差诚实文案(本平台最高保护级别=受限 I2, 任务需更强保护时的用户可见表述); 硬地板防静默降, 人工知情降级不违反。disposition: 生效"
+    files: [05软件架构文档.md, 04命令行界面设计规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "本平台实际达成的 IsolationLevel≥MinIsolation"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.4 第 3 行必须改写（R-1544）"
+      - must_exist: "平台能力落差诚实文案（R-1544"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §14 必须落 macOS 落差文案（R-1544）"
+
+  R-1545:
+    desc: "一致性重读提前(会议 #241, C 顾问六——采纳): 05 §X.6 全文一致性重读(Brad/Russ 双人平行审计)提前至 W1 开工前执行(门禁补充)——补丁摞补丁风险已实锤(本轮三处矛盾实证); W8 保留与实现终态的核对; 开发计划 W1 门禁补注+8.5 行收窄为终态核对。disposition: 生效"
+    files: [开发计划/v0.3.1/v0.3.1-开发计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "W1 开工门禁补充（R-1545"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划必须落重读提前（R-1545）"
+
+  R-1546:
+    desc: "措辞废除/方案降级类决议 DoD 增补(会议 #242, K 顾问 N1 元观察采纳): 此类决议完成定义必须包含「废弃模式已登记机检」——check-deprecated.sh 模式族登记+resolutions.yaml 附 must_not_exist 锚点, 无登记=决议未闭环; Ed25519 契约签发上下文限定模式登记(区分合法插件二进制签名用途); 架构会议规范 §4.2 补注记。disposition: 生效"
+    files: [架构会议规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "措辞废除/方案降级类决议 DoD 增补（R-1546"
+        in_file: 架构会议规范.md
+        reason: "规范 §4.2 必须落 DoD 增补（R-1546）"
+
+  R-1547:
+    desc: "签发决策表权威锚点修正(会议 #242, K 顾问 N2——实锤): 决策表物理位置=06 §1.3, 五处引用(00×2/01×1/05×2)全指 06 §5→统一改 06 §1.3; 权威锚点存在性机检扩展方向登记(本版本不新造脚本)。disposition: 生效"
+    files: [00统一术语表.md, 01-prd产品需求文档.md, 05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "治理策略（06 §1.3 签发决策表）"
+        in_file: 00统一术语表.md
+        reason: "00 必须落锚点修正（R-1547）"
+      - must_exist: "签发决策表权威=06 §1.3"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.4 必须落锚点修正（R-1547）"
+
+  R-1548:
+    desc: "词汇纪律两处残留修复(会议 #242, K 顾问 N4+N5): 04 §14.3 JSON 示例 reason 改「contract requires native enforcement; verified」+显式豁免声明(--json 输出=机器消费接口不在 TC-RT 词汇断言范围); 07 §4.14 selection_reason 注释精确化(决策表命中行标识=机器值, 人类可读呈现经 05 §X.6.4 映射表转换)。disposition: 生效"
+    files: [04命令行界面设计规范.md, 07事件注册表.md, 会议纪要.md]
+    verify:
+      - must_exist: "contract requires native enforcement; verified"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §14.3 示例必须去工程词（R-1548）"
+      - must_exist: "决策表命中行标识（机器值"
+        in_file: 07事件注册表.md
+        reason: "07 §4.14 注释必须精确化（R-1548）"
+
+  R-1549:
+    desc: "trusted_workloads 审核机制补全(会议 #243, D 顾问 1.1——部分实锤采纳): 字段格式约束(publisher_key/artifact_hash=64字符小写hex; expires_at=ISO8601可空); daemon 启动校验四规则(格式非法/条目重复=拒绝启动+错误日志); 运行时匹配(首载计算 SHA-256 缓存; 失败/过期=决策表行 2 路径); artifact_hash 对象=工作负载主二进制; publisher_key 角色=身份标签/审计分组(v0.3.1 不验签, 验签=预留方向); v0.3.1 仅静态哈希比对; 留痕=RuntimeSelected 行 2(不新增事件类型/Goal 状态字段)。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "WorkloadIdentity 审核机制（R-1549"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.3 必须落审核机制（R-1549）"
+
+  R-1550:
+    desc: "决策表行 2 呈现警告样式(会议 #243, D 顾问 1.2——部分误报补呈现强度): R-1527 映射表行 2 文案已诚实(认证缺失或已过期); 04 §14 钉死行 2 命中时依据行以警告样式呈现(前缀「注意：」)——认证配置错误=异常状态, 不以普通依据行视觉伪装。disposition: 生效"
+    files: [04命令行界面设计规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "行 2 命中时依据行以警告样式呈现（R-1550"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §14 必须落行 2 警告样式（R-1550）"
+
+  R-1551:
+    desc: "--sensitive 类显式敏感标记 v0.3.1 不引入(会议 #243, D 顾问 1.3——不采纳记录在案): 用户纠正途径=MissionGraph 确认+goalos insert --requirement(既有); 治理 Risk 四维评分已覆盖敏感性信号技术维度; 用户不选档产品哲学(R-1533)不开「用户表达安全偏好」产品门; 敏感性→MinIsolation 显式联动=未来方向(v0.3.x 后续评估); 01 §20.1 注记。disposition: 生效"
+    files: [01-prd产品需求文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "敏感性→MinIsolation 显式联动=未来方向（R-1551"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §20.1 必须落敏感性注记（R-1551）"
+
+  R-1552:
+    desc: "TC-RT-061 范围边界注明(会议 #243, D 顾问 2.1——部分采纳): 断网测试范围=无网络依赖; 密钥文件 0600 断言=TestSecretsKey_Permissions_0600 既有覆盖(R-1383); 权限异常拒绝启动=06 既有纪律; 密钥文件损坏/权限异常不在 TC-RT-061 范围——测试计划行补边界句+指针, 不新增测试。disposition: 生效"
+    files: [开发计划/v0.3.1/v0.3.1-测试计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "TC-RT-061 范围边界（R-1552"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划必须落范围边界（R-1552）"
+
+  R-1553:
+    desc: "04 补 MissionGraph 确认 Test Manifest 展开呈现规格(会议 #243, D 顾问 2.2——实锤): 05 §3.3 已有「用户可展开 CompletionCriteria 查看 AI 生成测试清单」定义但 04 无呈现规格; 04 §4.1 确认界面补「测试清单 (N 项, 输入 t 展开)」行+逐条测试名与一句话意图+source: AI-generated 标注随清单呈现; 不展开直接确认=合法(审查=权利非义务), 入口必须存在。disposition: 生效"
+    files: [04命令行界面设计规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "测试清单展开（R-1553"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §4.1 必须落 Test Manifest 展开（R-1553）"
+
+  R-1554:
+    desc: "依据映射表实现纪律(会议 #243, D 顾问 3.1): selection_reason 映射表唯一权威=05 §X.6.4 表格; 实现=CLI 内嵌常量(禁止配置文件——配置即漂移面); 语言=中文(v0.3.1 范围, i18n 不在本版本); 决策表新增/变更行=决策表与映射表同一决议同修(防漂移, 类比 R-1179 公式纪律)。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "映射表实现纪律（R-1554"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.4 必须落映射表实现纪律（R-1554）"
+
+  R-1555:
+    desc: "EscalationSignaled CLI 呈现修订(会议 #243, D 顾问 3.2——实锤): 07 payload signal_source/signal_detail 齐备但 04 §14.2 文案未呈现原因; 文案钉死=signal_source 两枚举固定产品文案(capability_proxy→「检测到任务请求超出已声明的能力范围」; risk_reeval→「系统重评估上调了风险等级」)+档位变化; signal_detail 技术细节不进产品层, 进 goal log --json(机器消费面)。disposition: 生效"
+    files: [04命令行界面设计规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "检测到任务请求超出已声明的能力范围"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §14.2 必须落升级原因文案（R-1555）"
+
+  R-1556:
+    desc: "TC-RT-040a/040b 断言载体精确化(会议 #243, D 顾问 4.1/5.2——表述缺口采纳): 断言载体=测试内 Snapshottable 夹具 Provider(测试代码实现接口, 非生产热池 Provider)——「不依赖完整热池」本意=不依赖 W7 生产热池 Provider; 接口类型 W3 任务 3.2 落地, 夹具可编译, 先红成立(红因=清零原语未实现); 排期 W3-4 不变; 12 清单+测试计划注记。disposition: 生效"
+    files: [12测试清单与规范.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "断言载体=测试内 Snapshottable 夹具 Provider（R-1556"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须落断言载体精确化（R-1556）"
+
+  R-1557:
+    desc: "TC-RT-031 三子句精确化(会议 #243, D 顾问 4.2/6.5——实锤采纳, 不拆编号): a)0600 复用 TestSecretsKey_Permissions_0600 指针不重复建设; b)内存清零=keyring 密钥材料内存明文用毕清零(测试内断言); c)env 隔离=密钥材料不经环境变量/命令行参数传递子进程, 构造侧断言(PluginRunner env 白名单单测; /proc 事后读取 darwin 不可用弃用); 06 §X.8「不落盘」口径精确化=「除 secrets.key 唯一载体外不持久化」; 计数 147 不变。disposition: 生效"
+    files: [12测试清单与规范.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 06安全模型文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "除 secrets.key 唯一载体外"
+        in_file: 06安全模型文档.md
+        reason: "06 §X.8 必须落口径精确化（R-1557）"
+
+  R-1558:
+    desc: "概念单点化映射表登记(会议 #243, D 顾问 5.1——纪律显式化): 05 §X.6 开头登记——ExecutionContract 可编码形态唯一权威=05 §X.6.3; ExecutionSession 状态机唯一权威=05 §X.6.6; Resolver 决策表唯一权威=05 §X.6.4; RuntimeProvider SPI 唯一权威=05 §X.6.5; 其他文档只指针引用, 禁止字段级/方法签名级复述(00 一句话概念定义=术语表角色, 合规); 违反项在 W8.4 传播一致性复核清除。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "概念单点化映射表（R-1558"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6 必须落概念单点化映射表（R-1558）"
+
+  R-1559:
+    desc: "05 §X.6.7 交叉引用修正(会议 #244, R-1545 一致性重读 Brad 镜头发现 F1——实锤): 「失败路径事件全覆盖」指针 §X.6.9(延迟目标与观测)→§X.6.8(错误语义表)。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "失败路径事件全覆盖（§X.6.8）"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.7 指针必须指向错误语义表（R-1559）"
+
+  R-1560:
+    desc: "升级双事件语义厘清(会议 #244, R-1545 一致性重读 Brad+Russ 镜头发现 F2): EscalationSignaled=风险升级信号检测(触发升级评估, R-1509); SessionEscalated=升级完成(新会话挂同卷建立); CLI 实时提示触发=SessionEscalated(含 from_tier/to_tier 支撑档位变化文案); 提示原因字段=SessionEscalated.escalation_signal——取值与 EscalationSignaled.signal_source 同枚举(capability_proxy|risk_reeval), 信号分类随升级链传递; 05 §X.6.8 错误表升级行事件链显式化。disposition: 生效"
+    files: [05软件架构文档.md, 04命令行界面设计规范.md, 07事件注册表.md, 会议纪要.md]
+    verify:
+      - must_exist: "信号分类随升级链传递（R-1560"
+        in_file: 07事件注册表.md
+        reason: "07 §4.14 SessionEscalated.escalation_signal 必须钉枚举来源（R-1560）"
+      - must_exist: "SessionEscalated.escalation_signal"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §14.2 升级原因字段必须指向 SessionEscalated.escalation_signal（R-1560）"
+
+  R-1561:
+    desc: "05 §X.6.3 WorkloadIdentity 认证键值厘清(会议 #244, R-1545 一致性重读 Brad 镜头发现 F4): R-1508 二元组=审计生命周期身份(版本更新即重新审核); v0.3.1 运行时验证值=artifact_hash 静态比对(R-1549), publisher_key 不参与运行时验证——两表述不矛盾但需显式缝合, 防读者误解「认证键值=二元组同时验签」。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "认证键值厘清（R-1561"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.3 必须落认证键值厘清（R-1561）"
+
+  R-1562:
+    desc: "一致性重读扫尾三注记(会议 #244, R-1545): ①selection_reason 映射表补行 3b 呈现路径注记(3b=治理升级/拒绝分支, 呈现走审批流+04 §14 macOS 落差文案, 不经映射表); ②§X.6.2 延迟目标列补权威指针=§X.6.9(NFR 单一权威, 口径 R-1502/R-1507); ③§X.6.6 升级旧会话 Release 失败事件族厘清——复用租约族失败事件(RuntimeAcquireFailed 族 error_code 携带销毁/清理 RTM 码), 不新增事件类型, 与 07 §4.14 EscalationSignaled 触发注记「事件留痕」对齐。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "一致性重读扫尾（R-1562"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6 必须落三扫尾注记（R-1562）"
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #245: 开发前概念层深度自检（2026-08-27）——机检基线 6 脚本+八路人工域审计 82 发现
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1563:
+    desc: "验证体系概念簇统一(会议 #245, 域A/G+主持人发现): 00 ArbitrationPolicy 双定义(00:500/511 字段互异且含已删除的 weight/risk_override)合并为单一条目按 05 附录 C.1 现行(裁决规则不可配置=S-20 四规则唯一合成, 仅 provider_minimum+timeout 执行参数); 00 VerificationPrecedence 按 R-1177 重写(三级强度层级 行为层>cross_model>auto_tests, 否决权语义; SemanticMetaVerification v0.4.0 挂起注记; SeverityWeightedMajority 加权链废弃); 00 accept_criteria 补 v0.1.0 三字段(behavioral_tests/cross_model_review/benchmark_assertions)同步 05 §3.10; 05 §9 Verify 调用链 step5 强度方向修正(原写 auto_tests>cross_model>behavioral_tests 与 R-1177 反转); 01 §4 三阶验证补 accept_criteria 路由指针=05 §3.10。disposition: 生效"
+    files: [00统一术语表.md, 05软件架构文档.md, 01-prd产品需求文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "R-1563 单点化"
+        in_file: 00统一术语表.md
+        reason: "00 ArbitrationPolicy 单点化（R-1563）"
+      - must_exist: "R-1563 重写"
+        in_file: 00统一术语表.md
+        reason: "00 VerificationPrecedence 按 R-1177 重写（R-1563）"
+      - must_not_exist: "SeverityWeightedMajority → AutoTest"
+        in_file: 00统一术语表.md
+        reason: "旧加权裁决链必须从概念源头清除（R-1563）"
+      - must_exist: "R-1563 修正原方向反转表述"
+        in_file: 05软件架构文档.md
+        reason: "05 §9 step5 强度方向修正（R-1563）"
+      - must_exist: "accept_criteria 七字段与验收路由细则"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §4 补路由指针（R-1563）"
+
+  R-1564:
+    desc: "05 提及未定义类型补全(会议 #245, 域A A-05——零推断原则/检查清单 19): CapabilityEngine 接口定义入 05 §6(Check/Issue/Verify/Revoke/ResolveCapabilities 五方法); PageTable 类型定义入 05 §7.1(Entries/Index/Version 结构+行为契约——索引 MUST NOT 作为事实源)。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "CapabilityEngine 接口定义（R-1564"
+        in_file: 05软件架构文档.md
+        reason: "05 §6 必须落 CapabilityEngine 接口定义（R-1564）"
+      - must_exist: "PageTable 类型定义（R-1564"
+        in_file: 05软件架构文档.md
+        reason: "05 §7.1 必须落 PageTable 类型定义（R-1564）"
+
+  R-1565:
+    desc: "GoalAnchor 产品层承接(会议 #245, 域A A-03): 01 §13 映射表补行(可靠性机制→05 §3.7——用户价值=长任务不跑偏)+01 §17.2 核心变更表补行。机制不变更。disposition: 生效"
+    files: [01-prd产品需求文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "GoalAnchor——R-1565 承接"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §13 必须落 GoalAnchor 映射行（R-1565）"
+
+  R-1566:
+    desc: "05 §6 Token 签发段现代化(会议 #245, 域B B-1/B-9/B-2): 删「类 JWT Token/TTL=action.timeout×2」旧表述→签发 ExecutionContract v2(CapabilityToken v2 同一对象, 字段缝合=§X.6.3; HS256+secrets.key keyring R-1505; TTL=policy.token_ttl 默认 300s 单一配置来源 R-1059/R-1361); 00 Capability Token 词条字段集同步 06 §4(capability/scope/ttl/issuer/iat)。disposition: 生效"
+    files: [05软件架构文档.md, 00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_not_exist: "TTL=action.timeout"
+        in_file: 05软件架构文档.md
+        reason: "05 §6 旧 TTL 公式必须清除（R-1566）"
+      - must_exist: "R-1566 修正原"
+        in_file: 05软件架构文档.md
+        reason: "05 §6 Token 签发段现代化（R-1566）"
+      - must_exist: "唯一字段权威=05 §X.6.3"
+        in_file: 00统一术语表.md
+        reason: "00 Capability Token 字段集权威=X.6.3（R-1566 同步目标经 R-1606/B-1 改定——三处互斥清算）"
+
+  R-1567:
+    desc: "06 密钥两类显式缝合(会议 #245, 域B B-5): §6 首段补密钥分类(主密钥=secrets.enc 保护钥, macOS/Windows=OS Keychain 优先回退文件 R-1360/R-1387; 签名密钥族=secrets.key keyring 唯一载体 R-1505/R-1557——§X.8 不引入 OS 钥匙串的适用范围=签名密钥族, 不约束主密钥); §X.8 补适用范围注记+互指。机制零变更, 纯语义缝合。disposition: 生效"
+    files: [06安全模型文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "密钥两类显式分类（R-1567"
+        in_file: 06安全模型文档.md
+        reason: "06 §6 必须落密钥两类分类（R-1567）"
+      - must_exist: "适用范围注记（R-1567"
+        in_file: 06安全模型文档.md
+        reason: "06 §X.8 必须落适用范围注记（R-1567）"
+
+  R-1568:
+    desc: "信封字段口径澄清(会议 #245, 域C C-1/C-10): 计数口径=13 核心字段+2 可选标识(mission_id/action_id 可空不计入 13); 05 A.7 标注两可选项+口径注记; layer=事件类型注册期路由分类(core/side_effect, 07 §3/§5 声明), Go 内存路由属性, 非 WAL 信封持久化字段不入 A.7——05 §3.6 措辞对齐。disposition: 生效"
+    files: [07事件注册表.md, 05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "R-1568 口径澄清"
+        in_file: 07事件注册表.md
+        reason: "07 §3 必须落计数口径澄清（R-1568）"
+      - must_exist: "R-1568 定位澄清"
+        in_file: 07事件注册表.md
+        reason: "07 §3 必须落 layer 定位澄清（R-1568）"
+      - must_exist: "layer 定位（R-1568"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.6 必须落 layer 定位（R-1568）"
+      - must_exist: "可选标识 1/2"
+        in_file: 05软件架构文档.md
+        reason: "05 A.7 必须标注可选项（R-1568）"
+
+  R-1569:
+    desc: "05 §X.6 成功路径事件语义承接(会议 #245, 域C C-4——07 §4.14 注册的 ContractIssued/RuntimeAcquired/RuntimeReleased 在 05 全文零命中, RuntimeSelected 未入事件-场景表): §X.6.6 补事件-场景映射表(ContractIssued=签发成功留痕/RuntimeSelected=解析决策留痕/RuntimeAcquired=Acquire 返回句柄含热池两形态/RuntimeReleased=归还成功); 失败族已由 §X.6.8 承接; 不新增事件类型。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "Runtime 族成功路径事件-场景映射（R-1569"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.6 必须落成功路径事件映射（R-1569）"
+
+  R-1570:
+    desc: "审批端点族与命令形态统一(会议 #245, 域E E-1/E-2/E-4——全库唯一 P0): 07 UserDecisionReceived 触发重写=端点族 POST /api/approvals/{id}/approve|reject|wait_more 无 body(R-1323/R-1379; {id}=approval_id; 幂等=delete-in-lock; 原单端点 decision+body client_request_id 幂等表述废除——client_request_id 保留为 CLI 通用命令幂等, decision 路径幂等=delete-in-lock 分层厘清); 命令形态=goalos approve|reject <goal_id> [--action](CLI 侧 id=goal_id, daemon 解析唯一待批→approval_id); 05 §2.2 原「goalos approval approve」形态对齐; 04 端点映射 goal status 的 /status 后缀删除(GET /api/goals/:id)。disposition: 生效"
+    files: [07事件注册表.md, 05软件架构文档.md, 04命令行界面设计规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "R-1570 重写"
+        in_file: 07事件注册表.md
+        reason: "07 UserDecisionReceived 触发必须重写为端点族（R-1570）"
+      - must_not_exist: "POST /api/goals/{id}/actions/{action_id}/decision"
+        in_file: 07事件注册表.md
+        reason: "07 旧单端点 decision 表述必须废除（R-1570）"
+      - must_exist: "R-1570 对齐 R-1323"
+        in_file: 05软件架构文档.md
+        reason: "05 §2.2 审批命令形态对齐（R-1570）"
+      - must_exist: "R-1570 修正——原 /status 后缀"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 端点映射 /status 后缀删除（R-1570）"
+
+  R-1571:
+    desc: "级别尺度命名纪律(会议 #245, 域D D-1/D-2/D-5/D-6/D-7): 正文禁裸「N 级」指称平台/隔离级别——必须带尺度名(PlatformTier N 级/IsolationLevel IN, 00 Level 尺度对照=权威); 08 §19.3 注记 macOS=PlatformTier 3 级+IsolationLevel=I2 唯一值分注; 08 §19.3 矩阵 Landlock 自 syscall 拦截列移至 FS 隔离列(Landlock=FS 访问控制族, Kees 机制确认); 08 §19.8「R-1003 三级」→「IsolationLevel=I2」; 00 平台支持三级词条补互指注记; 06 §1.3 macOS 行 PATH 代理补「约定级」; 06 §1.3 两套列名区分按 D-DOC-03 随任务 1.19 落地同一纪律。disposition: 生效"
+    files: [08沙箱隔离与进程通信规范.md, 00统一术语表.md, 06安全模型文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "尺度命名纪律 R-1571"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.3 注记必须落尺度分注（R-1571）"
+      - must_not_exist: "macOS=Seatbelt 3 级"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.3 尺度混写必须清除（R-1571）"
+      - must_not_exist: "（R-1003 三级）"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.8 旧级别表述必须清除（R-1571）"
+      - must_exist: "尺度互指注记（R-1571"
+        in_file: 00统一术语表.md
+        reason: "00 平台支持三级词条必须落互指注记（R-1571）"
+      - must_exist: "R-1571 标注对齐"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 PATH 代理约定级标注（R-1571）"
+
+  R-1572:
+    desc: "category 权威=Security 全量传播+机检(会议 #245, 域F F-9/域C C-9): 09 §2 十三处条目 category 属性+§2 分类表 validation_error→Security(R-1512⑤ 替代 R-1144/R-1159 改名方向——对齐代码 internal/errorcategory ErrorSecurity 定稿, v3.10 规则③已验证=定稿非遗留); 10 §4.2 类型定义 ErrorValidation→ErrorSecurity+权威声明改写; 轴区分注记: category 轴(四值封闭)≠error_type 轴(validation_error 枚举值合法保留, 09:477/yaml); 机检=本 must_not_exist 锚点(R-1546 DoD)+check-error-codes.sh category 列校验 stub S-245-02。disposition: 生效"
+    files: [09错误码知识库规范.md, 10模块实现指南.md, 会议纪要.md]
+    verify:
+      - must_exist: "R-1572 对齐 R-1512⑤"
+        in_file: 09错误码知识库规范.md
+        reason: "09 必须落 category=Security 传播（R-1572）"
+      - must_not_exist: "category=validation_error"
+        in_file: 09错误码知识库规范.md
+        reason: "09 category 位置 validation_error 必须清零（R-1572）"
+      - must_not_exist: "{validation_error,"
+        in_file: 09错误码知识库规范.md
+        reason: "09 条目三属性元组 category 位 validation_error 必须清零（R-1572）"
+      - must_not_exist: "ErrorValidation"
+        in_file: 10模块实现指南.md
+        reason: "10 §4.2 类型定义必须对齐 ErrorSecurity（R-1572）"
+      - must_exist: "轴区分注记（R-1572"
+        in_file: 09错误码知识库规范.md
+        reason: "09 必须落两轴区分注记（R-1572）"
+
+  R-1573:
+    desc: "07/09 计数与映射精确化(会议 #245, 域C C-5/C-6/C-7/C-8): 07 §4.14 计数声明 11→12(R-1509 补注册后未同步); 09 §2.5 计数文案 32→39(error_type 14+failure_type 7+reason 13+reject_reason 5; 非错误映射惯例行=completed/state_changed——daemon_stopping 有码移出惯例列); 09 wait_timeout 注释改「Wait 条件(dependency/resource)超时」(原注误指 approval_timeout——approval 超时=独立路径, 05 TimeoutKind 五值); 09 §2.5 补 reason=execution_timeout 映射行(07 GoalFailed 枚举——与 PluginProcessTerminated.reason=timeout 同义不同字段两值保留); error-codes-source.yaml 同步首改(R-1118 顺序)。disposition: 生效"
+    files: [09错误码知识库规范.md, 07事件注册表.md, 会议纪要.md]
+    verify:
+      - must_exist: "39 值"
+        in_file: 09错误码知识库规范.md
+        reason: "09 §2.5 计数必须修正为 39（R-1573）"
+      - must_exist: "R-1573 修正——原注"
+        in_file: 09错误码知识库规范.md
+        reason: "09 wait_timeout 注释修正（R-1573）"
+      - must_exist: "execution_timeout"
+        in_file: 09错误码知识库规范.md
+        reason: "09 §2.5 必须补 execution_timeout 映射（R-1573）"
+      - must_exist: "本节 12 个事件名"
+        in_file: 07事件注册表.md
+        reason: "07 §4.14 计数修正（R-1573）"
+
+  R-1574:
+    desc: "07 节号重排(会议 #245, 域C C-2——双 §3/双 §5 引用歧义): 第二「# 3. 版本与兼容性规则」→「## 3.1 版本与兼容性规则」(基本结构附属); 第二「# 5. v0.1.0 PipelineRunner 内部事件」→「## 5.1」; 全库「07 §3/§5」指针核对零影响(05:3625 等指基本结构=第一 §3 不动)。disposition: 生效"
+    files: [07事件注册表.md, 会议纪要.md]
+    verify:
+      - must_exist: "## 3.1 版本与兼容性规则（R-1574"
+        in_file: 07事件注册表.md
+        reason: "07 节号重排必须落地（R-1574）"
+      - must_exist: "## 5.1 v0.1.0 PipelineRunner 内部事件（不对外发布）（R-1574"
+        in_file: 07事件注册表.md
+        reason: "07 节号重排必须落地（R-1574）"
+
+  R-1575:
+    desc: "01 产品层同步批次(会议 #245, 域E E-3/E-5/E-9/E-10/E-11/E-12/域B B-8): §20.1「协作/受限两词」→协作/受限/强隔离三档(R-1542 同步); §11 events export→「导出事件逻辑投影」(R-1330); §11 补调整与需求+系统与运维命令族需求来源(运维可观测性——daemon/system/skill/doctor/error explain/metrics/login+adjust --task); §17.9 MULTI_LLM_DIVERGENCE 文案以 09 为准(「多个模型的验证结论存在分歧，需要人工裁定。」); §5 exec 分层策略补「Exec Monitor 口径——Run 模式」限定。disposition: 生效"
+    files: [01-prd产品需求文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "协作/受限两档可用"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §20.1 呈现档位同步（R-1575——档位表述后经 R-1599/R-1617 再修订，锚点同步更新）"
+      - must_exist: "导出事件逻辑投影"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §11 导出口径修正（R-1575）"
+      - must_exist: "R-1575 需求来源补录"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §11 命令族需求来源补录（R-1575）"
+      - must_exist: "R-1575 对齐 09 用户话术单一权威"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §17.9 文案对齐 09（R-1575）"
+
+  R-1576:
+    desc: "04/05 端点契约互齐(会议 #245, 域E E-6/E-7/E-8/C-3/E-13): 05 W1 端点总表补 confirm/retry/requirements/budget/cache/rebuild/security/rotate-key 六端点+落地状态注记(规划端点——当前 main.go 未注册, 随 C-API-01 对账落地 W3-4 后移除注记); 04 review accept/refine 补 --action 选项(端点 action 级, 省略=daemon 解析唯一审查对象)+retry 补 --from-failed-action 选项; 05 §2.2 SSE 补心跳指针(15s/45s 数值权威=07 §4.13); 04 §9 补退出码→错误分类映射指针(权威=09 §2 三属性)。disposition: 生效"
+    files: [05软件架构文档.md, 04命令行界面设计规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "端点落地状态注记（R-1576"
+        in_file: 05软件架构文档.md
+        reason: "05 端点总表必须落六规划端点+注记（R-1576）"
+      - must_exist: "心跳与判死（R-1576 补指针"
+        in_file: 05软件架构文档.md
+        reason: "05 §2.2 SSE 心跳指针（R-1576）"
+      - must_exist: "R-1576 补选项"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 retry --from-failed-action 选项（R-1576）"
+      - must_exist: "退出码→错误分类映射指针（R-1576"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §9 映射指针（R-1576）"
+
+  R-1577:
+    desc: "工作区文档群合规清扫(会议 #245, 域F F-1~F-5/F-7/F-8/F-13/F-15/F-16): 用户手册全面重写对齐 04(CLI 唯一软件入口 R-1123——删浏览器/localhost:18920 入口与 §4.6 Web UI 节; 命令体系 v0.2.0 子命令格式; R0-R5; 审批 CLI 呈现; 补修改记录表 v0.3.1); README/README_zh 删 Dashboard 审查面板表述(审查唯一呈现=CLI R-1333)+allowed_for 示例 L0-L5→R0-R5(R-1114); RELEASE.md 加历史发布说明注记+L0-L5→R0-R5+Dashboard+SSE→CLI+SSE+快速开始改 CLI 状态查看; 发布规范 L1/L3→R1/R3+开发规范.md 引用改指 11安全开发流程规范.md+内部文档清单同步+补修改记录表 v2.5; 验收规范 Phase 2「L2 contract_test」→「契约测试(金字塔第 2 层)」+补修改记录表 v3.1。disposition: 生效"
+    files: [用户手册.md, 发布规范.md, 验收规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "R-1577"
+        in_file: 用户手册.md
+        reason: "用户手册修改记录必须引用（R-1577）"
+      - must_not_exist: "Watcher 弹窗"
+        in_file: 用户手册.md
+        reason: "用户手册废弃范式必须清零（R-1577）"
+      - must_exist: "R-1577"
+        in_file: 发布规范.md
+        reason: "发布规范修改记录必须引用（R-1577）"
+      - must_exist: "R-1577"
+        in_file: 验收规范.md
+        reason: "验收规范修改记录必须引用（R-1577）"
+
+  R-1578:
+    desc: "测试规范.md 角色裁决(会议 #245, 域F F-6——保留非归档): 本文件=测试哲学与规则权威(Beck 五规则/反空壳约束 R-1061/mock 策略/CI 分层); 具名登记与唯一计数基准=12 测试清单与规范(≥115 旧基线废止); 工程纪律摘要=11 §5; 头部现代化(适用范围 v0.3.x)+L1-L6 全量改金字塔第 N 层(R-1114)+角色边界声明+补修改记录表 v2.2。disposition: 生效"
+    files: [测试规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "角色边界（R-1578"
+        in_file: 测试规范.md
+        reason: "测试规范必须落角色边界声明（R-1578）"
+      - must_not_exist: "合计 ≥ 115"
+        in_file: 测试规范.md
+        reason: "旧计数基线必须废止（R-1578）"
+
+  R-1579:
+    desc: "工程文档精确化批次(会议 #245, 域D D-3/D-4 并入 05 指针+域F F-10/F-14+域G G-7/G-8/G-10/G-11/G-12/域B B-7): 10 包布局 daemon 行 Dashboard 字样删除(改 R-1122 指针)+egressproxy/internal/runtime 标注「规划未实现」(Skeleton 纪律)+§8 egressproxy 字段同步(proxy_chunk 删除 R-1349+补 type/client_request_id/body·body_ref); 12 E 节计数推导 +19→+21/145→147 与头部一致化(R-1530 增量注记)+C 节 TestStatus_V1_ThreeFieldShape 注记(端点现行=/api/system/status, 改名随 C-API-01=stub S-245-03); 11 §2 反例表 RecoveryPipeline 行补「已废除仅作反例」标注; 05:2978/3373 AUTO_FIX/REPLAN 补「已废除」前缀; 05:3086 v2 预留命名去废弃术语 Capability Controller→「独立 Capability Token 管理子组件(命名待定)」; 架构会议规范七标准表第 4 条示例换现行(approval_max_extensions)。disposition: 生效"
+    files: [10模块实现指南.md, 12测试清单与规范.md, 11安全开发流程规范.md, 05软件架构文档.md, 架构会议规范.md, 会议纪要.md]
+    verify:
+      - must_exist: "规划未实现——R-1579 标注"
+        in_file: 10模块实现指南.md
+        reason: "10 包布局未实现标注（R-1579）"
+      - must_not_exist: "proxy_chunk"
+        in_file: 10模块实现指南.md
+        reason: "10 proxy_chunk 残留必须清除（R-1579/R-1349）"
+      - must_exist: "R-1579 修正"
+        in_file: 12测试清单与规范.md
+        reason: "12 E 节计数推导修正（R-1579）"
+      - must_exist: "R-1579 标注"
+        in_file: 11安全开发流程规范.md
+        reason: "11 反例标注（R-1579）"
+      - must_not_exist: "Capability Controller"
+        in_file: 05软件架构文档.md
+        reason: "05 废弃术语复活必须清除（R-1579）"
+      - must_exist: "R-1579 换用现行示例"
+        in_file: 架构会议规范.md
+        reason: "会议规范示例更新（R-1579）"
+
+  R-1580:
+    desc: "00 术语表内部治理批次(会议 #245, 域G G-1~G-5/G-15/G-16/G-17+M-4): NeedsReview 旧条目删除(并入任务生命周期节); Workspace 路径表改指针(权威=Primitive 体系节); CompletionCriteria 安全模型节删重(权威=Agent 体系节); Plugin 单点化(Plugin 体系节=权威, 架构层/Skill 体系指针化); Persona 原则 #9 补指针; Policy/Risk/Audit Engine 补极简词条; Local UI Server 词条对齐 R-1123/R-1378(daemon API=CLI 后端, UDS+TCP 仅 /metrics); Multi-LLM 写法统一(概念名 Multi-LLM, 事件/字段 snake_case 不变); 概念关系闭包引用五词条补录(Decision/Policy/Artifact/Observation/Provenance 一句话+指针); /v1/status→/api/system/status(R-1321 残留清除)。disposition: 生效"
+    files: [00统一术语表.md, 会议纪要.md]
+    verify:
+      - must_exist: "R-1580 单点化"
+        in_file: 00统一术语表.md
+        reason: "00 单点化修订必须落地（R-1580）"
+      - must_exist: "R-1580 补录"
+        in_file: 00统一术语表.md
+        reason: "00 闭包引用词条补录（R-1580）"
+      - must_not_exist: "GET /v1/status"
+        in_file: 00统一术语表.md
+        reason: "00 正文 /v1 残留必须清除（R-1580/R-1321）"
+
+  R-1581:
+    desc: "glossary.yaml 重生成(会议 #245, 域G G-6——派生文件失信: 头指已改名 GLOSSARY.md/2026-06-29/18 术语/含 Dashboard): export-glossary-yaml.sh 变量名非法修复(00统一术语表→GLOSSARY_MD, bash 标识符禁数字开头——2026-08-14 文档改名后脚本即损坏, 佐证漂移时点)+set -e 末行短路修复; 以 00 v9.41 重跑生成(110 术语, 零废弃词); 引用方核对(check-schema-consistency.sh=废弃登记 R-1267 不受影响); 新鲜度纪律=00 修改记录变更时同批重跑(人工触发, 自动接线评估=未来方向)。派生文件不计 layer-1(无修改记录机制)。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1581"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1581"
+
+  R-1582:
+    desc: "check-deprecated.sh 正文提取契约修复+扩扫(会议 #245, 域G G-13+域H H-3 机检面): body_start 契约缺陷实证(第二个 `---` 后一行=正文起点, 10:68 Dashboard 残留位于前置区漏扫 CI 绿); 修复=frontmatter→修改记录表→正文三段式(修改记录表结束后首个分隔线为正文起点); 核查 check-resolution-propagation.sh 同契约函数同源缺陷; 扫描范围扩 开发计划/v*/(活动计划文档适用语义冻结——v0.3.1-测试计划 L1-L6 漏检实证); 修复后全库复扫登记。脚本变更=stub S-245-01(W1-2)+check-error-codes.sh category 列校验=S-245-02(W1-2)。disposition: 生效"
+    files: [stub追踪清单.md, 会议纪要.md]
+    verify:
+      - must_exist: "S-245-01"
+        in_file: stub追踪清单.md
+        reason: "stub 清单必须登记 S-245-01（R-1582）"
+      - must_exist: "S-245-02"
+        in_file: stub追踪清单.md
+        reason: "stub 清单必须登记 S-245-02（R-1582/R-1572 机检）"
+
+  R-1583:
+    desc: "v0.3.1 计划文档群修正(会议 #245, 域H H-1/H-2/H-3/H-5/H-7): 顾问审计意见 v1.1(D 顾问 0.3.1-2 第二轮十条处置登记 R-1549~R-1558——会议 #243 落地序列第 3 步补执行+会议 #244 W1 门禁四条登记 R-1559~R-1562+P2 计数 ×2→×3 修正); 预期目标 v1.4/v1.5 行与开发计划 v2.1/v2.2 行补依据列(修改记录可追溯性); 测试计划 §二 L1-L6→金字塔第 1-6 层(R-1114 语义冻结在计划文档补执行)+TC-RT-061「钥匙串」→secrets.key keyring(R-1505 收窄同名歧义消除)。disposition: 生效"
+    files: [开发计划/v0.3.1/v0.3.1-顾问审计意见.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 开发计划/v0.3.1/v0.3.1-预期目标与验收标准.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 会议纪要.md]
+    verify:
+      - must_exist: "R-1583 补登"
+        in_file: 开发计划/v0.3.1/v0.3.1-顾问审计意见.md
+        reason: "顾问审计意见必须落 D 二轮+#244 登记（R-1583）"
+      - must_not_exist: "（L1-L6）"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "测试计划 L 命名族必须清除（R-1583/R-1114）"
+      - must_exist: "secrets.key keyring 签发"
+        in_file: 开发计划/v0.3.1/v0.3.1-测试计划.md
+        reason: "TC-RT-061 措辞修正（R-1583）"
+
+  R-1584:
+    desc: "治理闸口缝合句——历史疑点②闭合(会议 #245, 域H H-4+域B B-6/B-10): 01 §5 补「Approval Engine=Governance 五引擎内部的条件子步骤——所有 Action 必经 Governance 整体裁决, Approval 仅在策略/风险要求时被调用, 不存在绕行路径」; 05 §9 流程图补同义注记; 06 §3 补审批延长机制承接条目(wait_more/approval_max_extensions/extensions_used/approval_extensions_exhausted 指针化不复述数值——延长不放宽风险裁决); 05 §3.1 补 extensions_used 投影语义(事件流聚合推导, 不持久化独立字段)。disposition: 生效"
+    files: [01-prd产品需求文档.md, 05软件架构文档.md, 06安全模型文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "缝合注记（R-1584"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §5 治理闸口缝合句（R-1584）"
+      - must_exist: "缝合注记 R-1584"
+        in_file: 05软件架构文档.md
+        reason: "05 §9 流程图缝合注记（R-1584）"
+      - must_exist: "审批延长机制承接（R-1584"
+        in_file: 06安全模型文档.md
+        reason: "06 §3 审批延长承接（R-1584）"
+      - must_exist: "extensions_used 投影语义（R-1584"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 extensions_used 投影语义（R-1584）"
+
+  R-1585:
+    desc: "入口表述现行化(会议 #245, 主持人 M-2/M-3): 05 §9 流程图「任意通道: Telegram/CLI/Web UI」→「入口=goalos CLI(唯一软件入口 R-1123; Telegram 延后 v0.3.1 R-1110; Web UI 随原型 v0.5.0 重开发 R-1122)」; 05 ADR-007 同步。disposition: 生效"
+    files: [05软件架构文档.md, 会议纪要.md]
+    verify:
+      - must_exist: "R-1585 现行化"
+        in_file: 05软件架构文档.md
+        reason: "05 入口表述现行化（R-1585）"
+
+  R-1586:
+    desc: "开发日志补录(会议 #245, 域F F-12——开发日志止于会议 #227/2026-08-16): 补录两条——2026-08-21~23 v0.3.1 W0 规划周期(会议 #228~#244, R-1475~R-1562)+2026-08-27 本次会议(#245, R-1563~R-1587)。派生记录不计 layer-1(开发日志无修改记录表机制)。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1586"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1586"
+
+  R-1587:
+    desc: "待检查事项.md 处置(会议 #245, 域H 第二部分——三疑点验证): ①Kernel 边界已闭合(05 §2.2 四组件+§9 执行流闭环); ②Governance 语义随 R-1584 闭合; ③Capability 归属已统一 Capability Engine(00:260/06:227/05:3134, 残留 05:3086 随 R-1579 清除); 文件加闭环注记归档至 废弃文档回收站/待检查事项-20260618-已闭环.md(§6.3 临时文档生命周期——历史输入材料非基石文档)。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1587"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1587"
+
+  R-1588:
+    desc: "T2 原型范围维持+SPI 方法集归属注记(会议 #246, D 顾问 0.3.1-3 议题一/5.1/六——「T2=幽灵负担, SPI v2 砍至四方法, T2/T3/热池移出版本」不采纳记录在案): 实证反驳——SPI 方法集=v0.3.0 既有能力收敛挂接(Pause/Resume=R-1245 内核挂起, Interrupt=R-1107 优雅取消)+T0 准入所需(Precheck=R-1528), 热池专属仅 Snapshottable 一项且归任务 7.1 非 W3-4; W7 含 040c 攻击测试安全产出; T2 出数=v0.4.0 立项数据需求非发布承诺。落地=开发计划任务 3.2 补方法集归属注记防误读。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 开发计划/v0.3.1/v0.3.1-顾问审计意见.md]
+    verify:
+      - must_exist: "方法集归属注记"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "任务 3.2 必须含 SPI 方法集归属注记（R-1588）"
+      - must_exist: "R-1588"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1588"
+
+  R-1589:
+    desc: "RuntimeSelected payload 补 matched_workload(会议 #246, D 顾问 1.2/5.2——publisher_key「僵尸字段删除或标废弃」不采纳=重复议题(#243 R-1549 已裁决保留), 但「审计分组角色无实际读取点」实证成立→部分采纳): 07 §4.14 RuntimeSelected 增 matched_workload 可选字段(MINOR 兼容)——名单命中=名单条目 publisher_key 短码前 8 字符, 非名单路径省略; publisher_key 身份标签角色获实际读取点(05 §X.6.3 注记——声明的角色必须有实际读取点); TC-RT-010 增断言不增编号(测试计划+12 清单, 计数 23/147 不变)。disposition: 生效"
+    files: [会议纪要.md, 07事件注册表.md, 05软件架构文档.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "matched_workload: string"
+        in_file: 07事件注册表.md
+        reason: "07 §4.14 RuntimeSelected 必须落 matched_workload 字段（R-1589）"
+      - must_exist: "身份标签读取点"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.3 必须落身份标签读取点注记（R-1589）"
+      - must_exist: "R-1589"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1589"
+
+  R-1590:
+    desc: "解析期×热重载生效边界钉死(会议 #246, D 顾问 2.1/5.3——Resolver×ConfigReloaded 交互未定义缺口真实; 「沿用 Session 原始契约」形态不采纳——契约=Action 级(R-1504), 未派发 Action 无原契约可沿用): 策略生效边界=ExecutionSession 创建点(=Action 派发点)——①未派发 Action 按派发时生效策略解析; ②已运行会话冻结不变(解析期一次冻结 R-1012 语义延伸); ③重规划→新 MissionGraph 版本→后续 Action 按各自派发时策略解析; ④每次解析=RuntimeSelected 留痕(审计链完整)。落 05 §X.6.4+10 §8 热重载四步链补指针。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 10模块实现指南.md]
+    verify:
+      - must_exist: "解析期×热重载生效边界"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.4 必须落解析期×热重载生效边界（R-1590）"
+      - must_exist: "R-1590 指针"
+        in_file: 10模块实现指南.md
+        reason: "10 §8 必须落 R-1590 指针（R-1590）"
+      - must_exist: "R-1590"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1590"
+
+  R-1591:
+    desc: "TC-RT-040a/040b 移期 W3→W7(会议 #246, D 顾问 3.1/5.4 自循环质问实证采纳——W3-4 无热池恢复路径生产调用方, 测试内夹具断言无约束对象=自循环风险): 移期 W7 与 040c 同窗口(Snapshottable 生产实现存在, 断言有真实约束对象); 不采纳删除/降级(K-1 攻击面机制约束不降级); TC 计数 23/147 不变。四处同步=开发计划 §四目标行/任务 3.2/3.3/7.1/§九映射+12 清单 F 节+测试计划行。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "R-1591 移期"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划 §九 映射必须落 R-1591 移期（R-1591）"
+      - must_exist: "W7（R-1591"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 F 节 040a/b 行必须移期 W7（R-1591）"
+      - must_exist: "R-1591"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1591"
+
+  R-1592:
+    desc: "D3-WAL-01 stub 登记(会议 #246, D 顾问 4.1/5.5——指向错位(storage doctor=v0.3.0 已交付)但缺口真实: tail scrub 周期验证(R-1037 词条声明)代码零命中=历史承诺漏登记): tail scrub 周期验证实现+WAL 损坏注入夹具(三形态=比特翻转/截断/hash chain 断裂, CTR-WAL-CORRUPT-F-003 触发路径覆盖)推迟 v0.4.0 评估——Jobs/Meyer 当场双批准(§0.4 零推迟原则例外程序), v0.4.0 计划会议第一项议程; 恢复路径已有覆盖(TestRecoverCorruptedEvents/TestWALHashChain_GenesisAndLink)。disposition: 生效（推迟登记）"
+    files: [会议纪要.md, stub追踪清单.md, 开发计划/v0.3.1/v0.3.1-顾问审计意见.md]
+    verify:
+      - must_exist: "D3-WAL-01"
+        in_file: stub追踪清单.md
+        reason: "stub 清单三-J 节必须登记 D3-WAL-01（R-1592）"
+      - must_exist: "R-1592"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1592"
+
+  R-1593:
+    desc: "回滚脏工作区语义诚实化+C-PLAT-09 设计输入登记(会议 #247, G 顾问 1.1/建议 1——实锤): 「标记为脏/重新执行覆盖」=声明级不变量无机制承载(代码零命中)——05 回滚段补诚实注记; 覆盖语义精确化=同名产物替换写不保证删除多余产物; G 遮蔽方案(per-Action 隔离目录+Completed 合并)不立项, 登记 C-PLAT-09 设计输入+可组合性三质问(顺序 Action 产物可见性/删除语义/同名冲突裁决); v0.3.1 不扩范围。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, stub追踪清单.md]
+    verify:
+      - must_exist: "脏标记机制诚实注记"
+        in_file: 05软件架构文档.md
+        reason: "05 回滚段必须落脏标记诚实注记（R-1593）"
+      - must_exist: "R-1593"
+        in_file: stub追踪清单.md
+        reason: "C-PLAT-09 行必须登记 G 遮蔽方案设计输入（R-1593）"
+      - must_exist: "R-1593"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1593"
+
+  R-1594:
+    desc: "等待条件→唤醒事件映射表权威化+post_exec 唤醒集修正(会议 #247, G 顾问 1.2——精确机制误报记录在案(Publish=同步栈内投递于 WAL commit 后, 运行时无 bbolt 投影层), 真缺口采纳): 05 §3.3 补权威映射表(approval 六事件 R-1376/R-1379 现行/post_exec=ActionCompleted+ActionFailed+ActionCancelled+GoalResumed——原落 default 仅 GoalResumed=Async Action 完成无法唤醒缺陷/dependency=ActionCompleted 预留无生产者/resource=ResourceAvailable/default=GoalResumed)+订阅时序不变量(订阅先于 Wait 状态可见); 代码对齐+先红契约测试入 scheduler 修正包(v0.3.1 W3-4, 范围扩 Jobs+Meyer 双批准); 12 清单 G 节登记。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 12测试清单与规范.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "等待条件→唤醒事件映射表"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.3 必须落等待条件→唤醒事件映射表（R-1594）"
+      - must_exist: "TestWakeupSet_PostExec_CompletionWakes"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 G 节必须登记 post_exec 唤醒契约测试（R-1594）"
+      - must_exist: "R-1594"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1594"
+
+  R-1595:
+    desc: "S-20 投票合成函数修订四规则→五规则——TIMEOUT 独立化(会议 #247, G 顾问 2.1/建议 2——规格层雪崩成立采纳, 按 Kees 加固形态; 修订 R-659/R-1331/R-1162/R-1227/R-1250, 旧编号保留追溯): 票值枚举补 TIMEOUT(超时≠逻辑否定); 超时重试 1 次(退避 5s 计入预算); 有效票=非 TIMEOUT 票; 有效票≥2 全 PASS→PASS(TIMEOUT>0 附 degraded=true 诚实呈现); 含 FAIL 非全 FAIL→DIVERGENCE 不变; 全 FAIL→FAIL; 有效票<2→NeedsReview(verification_quorum_unmet——07 reason 五值第五值); 07 MultiLLMVerificationCompleted v1.2(vote 枚举+degraded+vote_distribution.timeout); 00/05/09 同步; 代码对齐(multillm Combine——现行空票过滤与规格不符=遗留未对齐)入 scheduler 修正包 W3-4。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 07事件注册表.md, 00统一术语表.md, 09错误码知识库规范.md, 12测试清单与规范.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "verification_quorum_unmet"
+        in_file: 07事件注册表.md
+        reason: "07 GoalNeedsReview reason 必须补第五值（R-1595）"
+      - must_exist: "S-20 五规则"
+        in_file: 00统一术语表.md
+        reason: "00 ArbitrationPolicy 词条必须同步五规则（R-1595）"
+      - must_exist: "TestMultiLLM_Synthesis_TimeoutQuorum"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 G 节必须登记合成函数契约测试（R-1595）"
+      - must_exist: "R-1595"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1595"
+
+  R-1596:
+    desc: "generic-v1 残留三处清扫(会议 #247, G 顾问 2.2——双路径矛盾=误读记录在案(现行单一路径 R-1368/R-1222, generic-v1=failHints 显式用户选项), 根源=我方三处残留误导外部读者): 05 R347 旧句替代标注+schema 降级字段删除+伪代码改无匹配确认链; 删除类字段入 must_not_exist 机检(R-1546 DoD); 代码侧 grep 实证无实现残留。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_not_exist: "fallback_flow"
+        in_file: 05软件架构文档.md
+        reason: "05 降级字段与伪代码必须清除（R-1596/R-1546 机检化）"
+      - must_exist: "R-1596"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1596"
+
+  R-1597:
+    desc: "CompletionContract 版本链与合并算法定稿(会议 #247, G 顾问议题三——实锤): RequirementAdded→重规划→新版本(status=Revised, version+1, supersedes=旧版本 id 线性链); 已 Frozen 用户审批约束=继承锚点只增不减(缺任一=契约违规 fail-closed; 合并结果经 Governance Policy 重校验); AcceptanceCriteria=旧集继承+新增条款带来源标记(source=requirement_id); MustHave=并集; 含新验收条款→用户确认(R-1248 链), 风险级变化→重新审批(07 既有); CompletionContractRecorded payload 补 supersedes(07 MINOR); 实现现状诚实标注(事件无消费者+CLI 骨架)登记 stub S-247-01(下次版本规划会议议程, 与 C-API-01 同批)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 07事件注册表.md, 00统一术语表.md, stub追踪清单.md]
+    verify:
+      - must_exist: "继承锚点"
+        in_file: 05软件架构文档.md
+        reason: "05 GoalContract 生命周期段必须落合并规则（R-1597）"
+      - must_exist: "supersedes"
+        in_file: 07事件注册表.md
+        reason: "07 CompletionContractRecorded payload 必须补 supersedes（R-1597）"
+      - must_exist: "S-247-01"
+        in_file: stub追踪清单.md
+        reason: "stub 三-K 节必须登记 S-247-01（R-1597）"
+      - must_exist: "R-1597"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1597"
+
+  R-1598:
+    desc: "EventBus 投递保证分层口径+审计真相锚定(会议 #247, G 顾问四/建议 3——背压规格缺失实锤采纳, 「丢弃违反 100% 审计」误报记录在案(审计不经副作用层), 三选一框架不采纳(副作用层无真相职责, Disk-backed=过度工程)): 05 §3.2 修订——核心层同步=进程内无损(At-Least-Once 收窄为核心层)/副作用层=Best-Effort 有界 100+溢出丢弃非关键+WARN 日志+丢弃计数器入 doctor/status; 审计证据唯一权威=events.jsonl WAL(同步 fsync), audit.log=派生投影(ring buffer 1000 覆盖窗口诚实标注+可 WAL 重放重建); AuditLogWritten 标预留未接线(07); TC-EB-009 既有契约保持。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 07事件注册表.md]
+    verify:
+      - must_exist: "分层口径"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.2 必须落投递保证分层口径（R-1598）"
+      - must_exist: "预留未接线"
+        in_file: 07事件注册表.md
+        reason: "07 AuditLogWritten 必须标预留未接线（R-1598）"
+      - must_exist: "R-1598"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1598"
+
+  R-1599:
+    desc: "T2 生产路径虚假声明清算(会议 #248, K 顾问 A-1/D-6/G-4 实锤——修订 R-1542, 前提证伪): 实证 gVisor 骨架 Execute 未实现/无 Windows Sandbox 实现/无探测字段(backend_gvisor.go+detect.go), 「既有 I4 后端」声明虚假。05 §X.6.2 T2 行删「既有」改「生产路径未就绪(I4 后端未实现, v0.4.0 评估立项)」; 决策表行 4 删「既有」+注记「v0.3.1 永不命中=诚实降级行 5/6」; TC-RT-100 呈现收窄=两档可用+强隔离档仅探测到 I4 后端时呈现(探测不到=不呈现=无死呈现); AC-03 文本不动(升级=T0→受限档真实覆盖, TC-RT-070); I4 后端立项与 T2 产品化入 v0.4.0 评估(W7 出数报告=评估输入, gVisor 骨架补全登记设计输入)。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md, 05软件架构文档.md, 开发计划/v0.3.1/v0.3.1-测试计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "生产路径未就绪"
+        in_file: 05软件架构文档.md
+        reason: "05 T2 行必须删除「既有」虚假声明（R-1599）"
+      - must_exist: "强隔离档仅在探测到 I4 后端时呈现"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 §14 必须落呈现收窄（R-1599）"
+      - must_exist: "R-1599"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 TC-RT-100 行必须挂 R-1599（R-1599）"
+      - must_exist: "R-1599"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1599"
+
+  R-1600:
+    desc: "AC-01 标定失败预案预登记(会议 #248, K 顾问 A-2/C-7 实锤): 预案=主承诺分平台化(Linux/信创 P95<50ms 硬承诺+Windows 实测值诚实呈现并标注物理成本); 01 §17.4 补「标定完成前发布闸口不含数值承诺」; 开发计划 W8 延迟门槛标定行同步(回会重裁降级为备案非唯一出路); 不改变先标定承诺, 消除「标定失败=流程悬空」。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "标定完成前发布闸口不含数值承诺"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §17.4 必须落闸口豁免句（R-1600）"
+      - must_exist: "R-1600"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划 W8 标定行必须落预案（R-1600）"
+      - must_exist: "R-1600"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1600"
+
+  R-1601:
+    desc: "Resolver 硬地板纵深防御(会议 #248, K 顾问 A-3 部分实锤——行 1 缺显式检查实锤, 行 3b 指控=误报记录在案): 06 §1.3 明文签发不变量「RequiresRealEnforcement=false ⇒ MinIsolation≤I1」+契约测试断言; 05 §X.6.4 决策表行 1 补显式条件「且 MinIsolation≤I1」——解析层 fail-closed 不信任上游隐式一致性(实证: 06 签发决策表唯一产 RRE=false 的行同时给 I1, 危险组合不可构造但未成文)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "签发不变量"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 必须落签发不变量（R-1601）"
+      - must_exist: "R-1601"
+        in_file: 05软件架构文档.md
+        reason: "05 决策表行 1 必须补显式条件（R-1601）"
+      - must_exist: "R-1601"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1601"
+
+  R-1602:
+    desc: "MinIsolation=I5 显式处置(会议 #248, K 顾问 A-4 部分实锤——I5 推迟声明存在于 06/01/C-PLAT-10, 决策表缺显式注记): 05 §X.6.4 行 6 补注记「I5→RuntimeSelectionRejected(reason=i5_not_implemented——I5 实现推迟 v0.4.0, C-PLAT-10)」; reason 入 07 Precondition+09 RTM-RESOLVE-F-001 触发条件注册。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 07事件注册表.md, 09错误码知识库规范.md]
+    verify:
+      - must_exist: "i5_not_implemented"
+        in_file: 07事件注册表.md
+        reason: "07 RuntimeSelectionRejected 必须落 I5 显式处置（R-1602）"
+      - must_exist: "i5_not_implemented"
+        in_file: 09错误码知识库规范.md
+        reason: "09 RTM-RESOLVE-F-001 必须落 I5 显式处置（R-1602）"
+      - must_exist: "R-1602"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1602"
+
+  R-1603:
+    desc: "wait_more 上限结局取 01/06 版(会议 #248, K 顾问 A-5 实锤): 第 4 次 wait_more(extensions_used>=上限)→拒绝并返回 approval_extensions_exhausted(GOV-APX-F-001)即时返回, 计时器继续, 超时后 ActionRejected(approval_timeout)——上限!=立即拒绝 Action, 审批必须终结由超时兜底; 07「上限后强制裁决」句改齐; approval_extensions_exhausted 从 07 ActionFailed.error_type 枚举移除(错注册——上限拒绝不产生 ActionFailed); K 的「同时是 ActionRejected reason」=误报记录在案(不在 reject_reason 十一值)。disposition: 生效"
+    files: [会议纪要.md, 07事件注册表.md, 09错误码知识库规范.md]
+    verify:
+      - must_exist: "R-1603"
+        in_file: 07事件注册表.md
+        reason: "07 wait_more 段必须改齐 01/06 版（R-1603）"
+      - must_exist: "R-1603"
+        in_file: 09错误码知识库规范.md
+        reason: "09 §2.5 错注册行移除必须登记（R-1603）"
+      - must_exist: "R-1603"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1603"
+
+  R-1604:
+    desc: "R5 双路径消歧(会议 #248, K 顾问 A-6 死锁实锤): 06 主规则修订——R5 自动拒绝不进审批; Guard suspicious 临时提升例外=强制人工审批; 判定依据=risk_level_pre 既有字段(零 schema 变更, 不引 K 建议的新枚举 native_r5/escalated_r5)——risk_level=R5 且 risk_level_pre<R5=升级来源→人工; risk_level_pre=R5=原生→AUTO-REJECT; 07 suspicious 段同步注记; 代码现状=guard 三值映射骨架无 R5 路由, 实现随 guard 实装窗口。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, 07事件注册表.md]
+    verify:
+      - must_exist: "R-1604"
+        in_file: 06安全模型文档.md
+        reason: "06 R5 双路径消歧必须落地（R-1604）"
+      - must_exist: "R-1604"
+        in_file: 07事件注册表.md
+        reason: "07 suspicious 段必须落消歧注记（R-1604）"
+      - must_exist: "R-1604"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1604"
+
+  R-1605:
+    desc: "CLI 非交互审批挂起语义钉死(会议 #248, K 顾问 A-7 实锤): non-interactive 遇审批挂起=立即退出+新增退出码 126=审批待批 PENDING(stderr 指向 goalos goal status 轮询——CI 可区分并稍后重入); 125 收窄=仅审批已拒绝终态; 「审批不可跳过」不变(安全底线); 04 退出码表/场景表/映射表三处同步; client.go 补 ExitCodeApprovalPending=126(实现随 CLI 实装窗口)。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md]
+    verify:
+      - must_exist: "126=审批待批"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 退出码表必须落 126 拆分（R-1605）"
+      - must_exist: "R-1605"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1605"
+
+  R-1606:
+    desc: "00 权威自身清算 B 类批(会议 #248, K 顾问 B-1~B-8——实锤 4/部分 2/误报 2): B-1 Token 字段集以 05 §X.6.3 ExecutionContract v2 为准回改 00 两词条(绑定语义=验证层经 R-1520 映射表查表成文化); B-2 00 decision 删 retry 改两值+07 user_rejected 产生源修正(MultiLLMUserDecided 无 reject 值引用误植); B-3 00 金丝雀三层取 D51 版回改(假凭据/workspace 外哨兵/敏感文件陷阱); B-4 00/01/06 STRIDE secrets.enc 全改 secrets.key keyring+一次性迁移件标注; B-5 05 §3.1 struct 执行 R-1255 回改(PipelineSnapshot)+05/10 枚举名对齐代码现行(PipelinePhase); B-6 08 MXC 层名去 T 前缀(BaseContainer/AppContainer)+「T2 原型期」统一「热池原型(W7)」+00 命名纪律注记; B-7/B-8 误报记录在案(session_id 正交 00 已有定义/CanonicalVersion 0.1.3 与代码一致)。disposition: 生效"
+    files: [会议纪要.md, 00统一术语表.md, 01-prd产品需求文档.md, 05软件架构文档.md, 06安全模型文档.md, 07事件注册表.md, 08沙箱隔离与进程通信规范.md, 10模块实现指南.md]
+    verify:
+      - must_exist: "R-1606"
+        in_file: 00统一术语表.md
+        reason: "00 B 类清算必须落地（R-1606）"
+      - must_exist: "type PipelineSnapshot struct"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.1 struct 必须回改 PipelineSnapshot（R-1606/R-1255）"
+      - must_exist: "R-1606"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1606"
+
+  R-1607:
+    desc: "01 PRD 裂缝修复 C 类批(会议 #248, K 顾问 C-1~C-7——实锤 4/部分 1/误报 1): C-1 01 §9 改全局 WAL 表述(以 R-1328 决议为准); 代码 per-goal 现状=遗留欠债登记 stub S-248-01(物理布局迁移+迁移工具+存量处置条款, v0.4.0 评估, Jobs/Meyer 当场双批准); C-2 随 R-1599; C-3 01 NFR 基准平台改 Windows 第一优先级三平台分列; C-4 01 停止条件字段引用改 CompletionContract.must_have_artifacts; C-5 confirm 守卫枚举集={flow_template_missing, user_rejected}+守卫数据源=GoalNeedsReview 投影(UserConfirmed payload 不变); C-6 误报记录在案(工作区独立文件链接有效); C-7 随 R-1600 落。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, stub追踪清单.md]
+    verify:
+      - must_exist: "S-248-01"
+        in_file: stub追踪清单.md
+        reason: "stub 三-L 节必须登记 S-248-01（R-1607）"
+      - must_exist: "R-1607"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 C 类修复必须落地（R-1607）"
+      - must_exist: "R-1607"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1607"
+
+  R-1608:
+    desc: "D 类 21 条致命清算(会议 #248, K 顾问 D-1~D-21 全实锤——裁定唯一现行文本, 物理删除败方): 施工核心本轮落地——D-5 状态机版 Start→Precheck(§X.6.10 数据流改序+SPI Execute 收窄仅 Running 态, 预检闸门不可架空)+D-13 SPI 四类型占位桩诚实标注(字段全量=任务 3.2 验收标准 W3-4, 枚举显式赋值从 1 开始); 裁定表: D-1 取代码现行行格式(json+crc32+version)/D-2 Run 新签名伪代码重写/D-3 全局 WAL(随 C-1)/D-4 单写者循环+outbox 无独立队列版/D-7 NeedsReview 唯一去向/D-8 WARN=继续+通知(与 R-1595 一致)/D-9 refine 不回 Draft/D-10 Governance 唯一计时/D-11 低层 FAIL 终局+高层可降级覆盖/D-14~16 归 04/D-17 示例删除/D-18 timeout_ms 归一/D-19 RTM 残缺码立即修其余入专项/D-20 07 总表程序重生成+迁移表补齐/D-21 648→756; 其余 15 条随清算专项(R-1609)排期。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "R-1608"
+        in_file: 05软件架构文档.md
+        reason: "05 D-5/D-13 必须落地（R-1608）"
+      - must_exist: "D-13 补全"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划任务 3.2 必须落 D-13 验收补全（R-1608）"
+      - must_exist: "R-1608"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1608"
+
+  R-1609:
+    desc: "文档清算专项登记(会议 #248, K 顾问 E 类 55 条+F 类 50 条+D 类余量 15 条): 登记 stub S-248-02——分册 owner 制(00=Meyer/01=PM+Jobs/04=Brad/05=Ken+Russ/06=Kees/07=Meyer/08=Russ/09=Meyer); 执行窗=v0.3.1 W1-W2 与开发并行; 纪律=裁定唯一现行文本+物理删除败方+修改记录登记(K 指控「补丁摞补丁」根因治理); 完成判据=12 机检全绿+清算表全勾+脱水版重生成复审; W2 末未清零→升级会议裁决。工作量妥协显式声明(不堵 W1 开工——施工核心条目已单独立项 R-1599/R-1608; Jobs/Meyer 当场双批准)。disposition: 生效（工作量妥协——显式理由+双批准）"
+    files: [会议纪要.md, stub追踪清单.md]
+    verify:
+      - must_exist: "S-248-02"
+        in_file: stub追踪清单.md
+        reason: "stub 三-L 节必须登记清算专项（R-1609）"
+      - must_exist: "R-1609"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1609"
+
+  R-1610:
+    desc: "脱水交付规范修订(会议 #248, K 顾问 F-1 族+关门清单 1/6 实锤——我方流程事故): 脱水定义改=只去修改记录表/文档版本头/会议过程描述; 保留全部决议编号引用(编号=技术内容出处语义非版本信息)/关联需求字段/节号引用; 行号指针转节号引用或标注「行号基于完整版」; 脱水脚本入 开发文档/tooling/ 纳管(移出 /tmp); 重生成后对脱水版跑机检(交付物纳管——K 关门清单 6 采纳); F-1 族损伤随重生成消除; 脱水版=派生产物不计 layer-1(无修改记录表机制)。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1610"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1610"
+
+  R-1611:
+    desc: "Zero Structured Storage 定义重写(会议 #249, CG 顾问 P0-1b 实锤——00:347「不链接任何数据库引擎」与 bbolt=statefs 唯一载体字面互斥, 无缝合): 新定义=不引入独立数据库服务(无外部 DBMS 进程/无网络存储协议/无专门运维角色); File-Native≠No Embedded Storage Engine——bbolt=内嵌 KV 库静态链接进 daemon 单二进制=File-Native 原则合法承载形态; 00 词条重写+05 §3.19.5 补缝合指针。disposition: 生效"
+    files: [会议纪要.md, 00统一术语表.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "不引入独立数据库服务"
+        in_file: 00统一术语表.md
+        reason: "00 Zero Structured Storage 词条必须重写（R-1611）"
+      - must_exist: "R-1611"
+        in_file: 05软件架构文档.md
+        reason: "05 §3.19.5 必须落缝合指针（R-1611）"
+      - must_exist: "R-1611"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1611"
+
+  R-1612:
+    desc: "04 rollback 语义修订(会议 #249, CG 顾问 P0-2 实锤——04:96「文件级版本回滚, 物理文件恢复」与 05 现行状态级定义冲突, 代码无 rollback 命令分支): 04 改状态级定义(回滚对象=GoalState+执行结果投影; workspace 文件不回滚, 回滚区间产物标记为脏、重新执行覆盖——与 05 §3.1 对齐; 文件级回滚=C-PLAT-09 推迟 v0.4.0, R-1035 修订)+「实现状态=规划中(命令在册未实现)」诚实标注; 04:144 restore 注释语义缝合。disposition: 生效"
+    files: [会议纪要.md, 04命令行界面设计规范.md]
+    verify:
+      - must_exist: "实现状态=规划中"
+        in_file: 04命令行界面设计规范.md
+        reason: "04 rollback 必须落状态级定义+诚实标注（R-1612）"
+      - must_exist: "R-1612"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1612"
+
+  R-1613:
+    desc: "CompletionContract 存在论钉死(会议 #249, CG 顾问 P0-3 实锤——领域对象/渲染物/事件载荷三义共存; 07:256 声称的 pkg/events CompletionContract struct 代码不存在): CompletionContract=领域对象(系统第一公民; 身份=contract_id+version+goal_id+supersedes 链——R-1597 版本链); CompletionCriteria=机器可读验收核(⊂Contract); Persona 渲染=呈现层投影(不改对象本体——01「不需要额外后端 struct」=不另建渲染专用 struct, 措辞缝合); CompletionContractRecorded=持久化事件(载荷=契约快照线格式——07 修正=载荷主体 CompletionCriteria 现行+契约元数据); 05:3072 struct 标注=领域对象概念模型。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 05软件架构文档.md, 07事件注册表.md]
+    verify:
+      - must_exist: "存在论钉死"
+        in_file: 05软件架构文档.md
+        reason: "05 CompletionContract 段必须落存在论钉死（R-1613）"
+      - must_exist: "R-1613"
+        in_file: 07事件注册表.md
+        reason: "07 CompletionContractRecorded 载荷必须修正（R-1613）"
+      - must_exist: "R-1613"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1613"
+
+  R-1614:
+    desc: "Commit Point 旧句物理删除(会议 #249, CG 顾问 P0-4 实锤——00:587 同词条并列「Commit Point = Event Commit ∩ StateFS Commit(两者落盘才对外可见)」与 R-1175 修订): 00 词条改「Commit Point=逻辑 Commit=WAL append+fsync 完成(R-1175 定稿); bbolt=滞后投影, 其失败不回滚 WAL, 恢复从 WAL reconcile」; 旧句物理删除(crash 语义两模型不可并存)。disposition: 生效"
+    files: [会议纪要.md, 00统一术语表.md]
+    verify:
+      - must_exist: "R-1614"
+        in_file: 00统一术语表.md
+        reason: "00 Commit Point 词条必须落唯一定义（R-1614）"
+      - must_exist: "R-1614"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1614"
+
+  R-1615:
+    desc: "08 §19.10a 旧 SPI 降格+权威循环拆解(会议 #249, CG 顾问 P0-5 实锤——旧六方法表规范语气+05:5181「方法级语义权威=08」与 08:1632「接口定稿权威=05 §X.6.5」互指成环): 08 旧六方法表改「历史 SPI(v0.3.0——已演进, 禁止新实现引用; Create/Dispose/Inspect 已废除)」+演进映射表保留; 权威重申 R-1523(接口定稿=05 §X.6.5; 08 §19.10a=接入原则+Conformance); 05:5181 措辞同步; Create/Dispose/Inspect 入 must_not_exist 机检(R-1546 DoD——禁新实现引用)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "历史 SPI"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §19.10a 旧表必须降格（R-1615）"
+      - must_exist: "R-1615"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.5 权威措辞必须修正（R-1615）"
+      - must_exist: "R-1615"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1615"
+
+  R-1616:
+    desc: "50ms 语义三分法(会议 #249, CG 顾问 P1-1 部分实锤——R-1600 两分已落, 三分未闭合): Product SLA=产品承诺=受限档 P95<50ms@Linux/信创(标定通过转硬闸); Engineering Target=工程目标=Windows 同值努力+协作档 20ms 若可达则测(不达不构成违约); Release Gate=发布闸=标定完成前不含数值承诺(R-1600 既有); SLA 保守/Target 激进/Gate 机械; 01 §17.4+开发计划 W8 标定行同步。disposition: 生效"
+    files: [会议纪要.md, 01-prd产品需求文档.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "语义三分"
+        in_file: 01-prd产品需求文档.md
+        reason: "01 §17.4 必须落 50ms 三分（R-1616）"
+      - must_exist: "R-1616"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划 W8 标定行必须落三分（R-1616）"
+      - must_exist: "R-1616"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1616"
+
+  R-1617:
+    desc: "档位措辞同步批(会议 #249, CG 顾问 P1-2——前提已被 R-1599 改向记录在案, 残留=三处措辞): 开发计划任务 5.5「产品语义词两档」改「两档可用+强隔离档仅 I4 探测呈现(R-1599)+依据行」; 00 产品语义词词条/01 诚实原则段/00 执行分级词条 T2 段(「既有 gVisor systrap」声明删除——R-1599 同步)三处对齐。disposition: 生效"
+    files: [会议纪要.md, 00统一术语表.md, 01-prd产品需求文档.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "R-1617"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划任务 5.5 措辞必须同步（R-1617）"
+      - must_exist: "R-1617"
+        in_file: 00统一术语表.md
+        reason: "00 产品语义词/执行分级词条必须同步（R-1617）"
+      - must_exist: "R-1617"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1617"
+
+  R-1618:
+    desc: "risk_reeval 触发集合封闭(会议 #249, CG 顾问 P1-3 实锤——仅「治理 Risk 重评入口」之名, 触发集完全未定义): 封闭五值——①能力代理层上报声明集外能力请求(转介)②金丝雀触发/SecurityIncident/guard verdict 变化(新证据事件)③配置热重载改 risk 策略④RequirementAdded 重规划后风险级重算⑤Provider 降级事件(实际隔离能力变化); 集合外不触发; signal_detail=触发值(审计可回放); 06 §治理链 Risk Engine 步+07 EscalationSignaled Precondition 落。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, 07事件注册表.md]
+    verify:
+      - must_exist: "触发集合封闭五值"
+        in_file: 06安全模型文档.md
+        reason: "06 Risk 重评触发集必须封闭（R-1618）"
+      - must_exist: "R-1618"
+        in_file: 07事件注册表.md
+        reason: "07 EscalationSignaled 必须落触发集（R-1618）"
+      - must_exist: "R-1618"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1618"
+
+  R-1619:
+    desc: "WorkloadIdentity 信任语义重述(会议 #249, CG 顾问 P1-4 实锤——机制=本地白名单(artifact_hash 手工登记), 无签名验证无发行者信任锚, 「认证」语言强度超载): T0 信任=本机管理员显式登记白名单的管理员信任决策; 「认证工作负载」→「名单登记工作负载」(06 签发决策表行 1/04 §14 行 2/05 §X.6.4 映射表行 1/00 执行分级词条 T0 段四处同步); publisher_key=审计身份标签不参与运行时验证(R-1589 闭环); 签名验证=未来方向(RT-D-03 族)。disposition: 生效"
+    files: [会议纪要.md, 00统一术语表.md, 04命令行界面设计规范.md, 05软件架构文档.md, 06安全模型文档.md]
+    verify:
+      - must_exist: "名单登记工作负载"
+        in_file: 06安全模型文档.md
+        reason: "06 签发决策表行 1 措辞必须收窄（R-1619）"
+      - must_exist: "R-1619"
+        in_file: 00统一术语表.md
+        reason: "00 T0 词条必须落信任声明（R-1619）"
+      - must_exist: "R-1619"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1619"
+
+  R-1620:
+    desc: "SPI 方法级行为契约表(会议 #249, CG 顾问 P1-5 实锤): 八方法逐格钉死——Start 仅 Acquired(Ready 重复=ErrInvalidState)/Precheck 前置 Ready+幂等重验/Execute 仅 Running(R-1608 已定)/Interrupt Running 可调+child 已退出=成功+其余=ErrInvalidState/Pause 仅 Running(不幂等)/Resume 仅 Paused/Release 任意态+二次幂等成功+后调用=ErrHandleReleased/State 全态(Released 返回值非错误); 入 05 §X.6.5+08 §19.10a Conformance 断言源(映射 Execute 行同步仅 Running)+TC-RT-090 族断言(任务 3.2 追加不增编号); ErrInvalidState/ErrHandleReleased 入 09 RTM 族(随任务 3.2 注册)。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, 08沙箱隔离与进程通信规范.md, 09错误码知识库规范.md]
+    verify:
+      - must_exist: "SPI 方法级行为契约表"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.5 必须落方法级契约表（R-1620）"
+      - must_exist: "ErrInvalidState"
+        in_file: 09错误码知识库规范.md
+        reason: "09 RTM 族必须落错误值注记（R-1620）"
+      - must_exist: "R-1620"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1620"
+
+  R-1621:
+    desc: "状态代数实现缺口登记(会议 #249, CG 顾问状态代数议题实锤——文档「12 规则/组合穷举」vs 代码 state_algebra.go 4 约束+GoalPhase 缺 Planned/NeedsReview/Cancelled 三值): 不迁就实现收窄规范(状态代数=治理正确性核心); 05 注记现状诚实+「648」算术错误修正为 756(9×7×4×3——D-21 联动); 规则补全+枚举补齐+契约测试从规则生成组合(生成器穷举)并入清算专项 S-248-02 追加清单。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md, stub追踪清单.md]
+    verify:
+      - must_exist: "R-1621"
+        in_file: 05软件架构文档.md
+        reason: "05 状态代数段必须落诚实注记（R-1621）"
+      - must_exist: "R-1621"
+        in_file: stub追踪清单.md
+        reason: "stub 专项必须追加状态代数缺口（R-1621）"
+      - must_exist: "R-1621"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1621"
+
+  R-1622:
+    desc: "快照/密钥术语收口批(会议 #249, CG 顾问 P2-1/P2-2 实锤): 00:349 StateSnapshot 词条重写(=StateStore 投影快照; 物理载体=bbolt; state.json=遗留载体名=S-248-01 迁移对象; 05 六处 state.json 残留入专项); 00:539 Secret Vault 词条重写(主密钥=OS Keychain 优先+文件兜底; 签名密钥族=secrets.key keyring 唯一载体——R-1567 分类入术语); 00:88/01:67/05:497「OS Keychain 做密钥」第一性文本改「平台密钥设施做密钥(主密钥=OS Keychain 优先; 签名密钥=secrets.key keyring)」——第一性原则文本变更经 Jobs 批准(语义保持, 载体精确化)。disposition: 生效"
+    files: [会议纪要.md, 00统一术语表.md, 01-prd产品需求文档.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "R-1622"
+        in_file: 00统一术语表.md
+        reason: "00 快照/密钥词条必须收口（R-1622）"
+      - must_exist: "平台密钥设施做密钥"
+        in_file: 05软件架构文档.md
+        reason: "05 第一性文本必须精确化（R-1622）"
+      - must_exist: "R-1622"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1622"
+
+  R-1623:
+    desc: "陌生读者走查登记(会议 #249, CG 顾问陌生开发者实验建议——成本受控形态采纳): v0.3.1 W8 传播一致性复核行增补「陌生读者走查」环节——未参与 X.6 设计的成员仅凭文档复述 ExecutionContract→Resolver→Provider→ExecutionSession→升级→恢复实现路径, 提问点=规格缺口登记入会议; 真外部人员实验=v0.4.0 评估。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "陌生读者走查"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划 W8 复核行必须落走查环节（R-1623）"
+      - must_exist: "R-1623"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1623"
+
+  R-1624:
+    desc: "规划端点族排期(会议 #250 版本规划会议, PM 指令——依赖序钉死, 范围扩 Jobs/Meyer 双批准): 任务 5.7=C-API-01 端点响应形状定稿(六规划端点 schema+错误形状+退出码映射对齐 04 §9 含 126; R-1379 承诺重订入周制门禁——原期限 v0.3.0 W3-4 过期); S-245-03=TestStatus_System_ThreeFieldShape 先红 W5/转绿 W5-6(随 5.7——形状先行测试随形状); 计划行 5.8=S-247-01(RequirementAdded 消费链接线+CLI insert --requirement 实装+CompletionContract 版本链实现——规格=R-1597/R-1613/07 supersedes 零新设计; TC=TestRequirementAdded_ConsumerChain+TestCompletionContract_VersionChain 先红 W5-6/转绿 W6); 顺序=5.5→5.7→5.8(W5-6 窗口); S-247-01 从推迟登记转施工任务。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 12测试清单与规范.md, stub追踪清单.md]
+    verify:
+      - must_exist: "R-1624"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划必须落任务 5.7/5.8（R-1624）"
+      - must_exist: "TestCompletionContract_VersionChain"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 G 节必须落 5.8 两行（R-1624）"
+      - must_exist: "已转施工=计划任务表行 5.8"
+        in_file: stub追踪清单.md
+        reason: "stub S-247-01 行必须转施工（R-1624）"
+      - must_exist: "R-1624"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1624"
+
+  R-1625:
+    desc: "scheduler 修正包正式编号(会议 #250, PM 指令——修正包正式编号): 任务 3.5=post_exec 唤醒集修正(goalrunner.go 对齐 05 §3.3 等待条件→唤醒事件映射表; 先红 W3 周一/转绿 W3-4; TC=TestWakeupSet_PostExec_CompletionWakes)+任务 3.6=MultiLLM 合成函数五规则对齐(Combine 重写 TIMEOUT 票/quorum≥2/degraded/verification_quorum_unmet; 同窗口; TC=TestMultiLLM_Synthesis_TimeoutQuorum); 既有编号 3.1~3.4 不动追加顺延; §四 注记转任务表行+§九 补充映射+12 清单 G 节任务号同步。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "R-1625"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划必须落任务 3.5/3.6（R-1625）"
+      - must_exist: "任务 3.5"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 G 节任务号必须编号化（R-1625）"
+      - must_exist: "R-1625"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1625"
+
+  R-1626:
+    desc: "§八 决议→任务映射全表扩展(会议 #250, PM 指令——任务映射全表扩展): R-1537~R-1623 共 87 条五类归位延续 v2.0 格式——F-A 施工任务(R-1588→3.2/R-1591→3.3+7.1/R-1594→3.5/R-1595→3.6/R-1599→5.5/R-1600+R-1616→8.1/R-1608→3.2/R-1620→3.2/R-1623→8.4/R-1624→5.7+5.8)/F-B 文档已落地(会议 #240~#249 文档修订族)/F-C 流程纪律(R-1546/R-1582/R-1586/R-1609/R-1610/R-1621)/F-D 推迟登记(R-1592→D3-WAL-01/R-1607→S-248-01/R-1597→S-247-01 转 F-A 标注/R-1627→v0.4.0 族)/F-E 修订关系(R-1542→R-1599/R-1566→R-1606/R-1255→R-1606/R-659 族→R-1595/R-1512④→R-1542→R-1599/R-1368→R-1596/R-1035→R-1612/R-1175→R-1614)。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "F. 扩展批"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划 §八 必须落扩展批（R-1626）"
+      - must_exist: "R-1626"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1626"
+
+  R-1627:
+    desc: "v0.4.0 评估族打包范围确认(会议 #250, Jobs/Meyer 双批准——清单钉死不扩不缩): D3-WAL-01(第一项议程)/S-248-01 全局 WAL 迁移/C-PLAT-09 文件级回滚(含 G 遮蔽方案设计输入+三质问)/C-PLAT-10 I5/RT-D-02~05(HSM-KMS/WorkloadIdentity 方法论/SBOM/远程代理信任模型)/I4 后端立项(方向=gVisor 骨架补全先行——一次立项覆盖 Linux+信创, 骨架已有物理载体; Windows Sandbox/裸机 KVM 随 W7 出数报告裁第二批, 数据不支持则回会重裁)/T2 产品化形态(W7 出数后裁)。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1627"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1627"
+
+  R-1628:
+    desc: "W1-2 评审裁决包(会议 #251——W1/W2 开发完成审计, PM 十点指令): ①07 §4.14 ContractRejected reject_reason 五值→六值补 invalid_fields(v2 必填字段零值/格式非法——签名有效但字段畸形≠签名无效, MINOR; 09 RTM-CONTRACT-F-001 映射既有条目; contract.go checkRequiredFields 改载); ②TC-RT-010 补「认证缺失」空 hash 用例=G 节 TestRuntime_T0Boundary_UnauthenticatedRoutesRow2; ③12 清单 TC-RT-020 行补注记(租约面全量断言=任务 3.2 Acquire 落地后回归)+开发计划 3.1 注记(MinIsolation 比较随 typed IsolationLevel 落地, 与 D-13 枚举赋值同批); ④W1-2 评审通过——Jobs 签字进入 W3。会前对抗性核查: 11 个测试引用函数全部存在于生产代码/新代码零空壳返回/骨架登记齐(statefs/gVisor/ProviderRegistry 均带诚实标注)/12 事件注册计数一致/Load→Validate 两入口/开发日志在位——零虚假绿。disposition: 生效"
+    files: [会议纪要.md, 07事件注册表.md, 09错误码知识库规范.md, 12测试清单与规范.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "invalid_fields"
+        in_file: 07事件注册表.md
+        reason: "07 reject_reason 必须补 invalid_fields（R-1628）"
+      - must_exist: "TestRuntime_T0Boundary_UnauthenticatedRoutesRow2"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 G 节必须补未认证用例行（R-1628）"
+      - must_exist: "R-1628"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划任务 3.1 必须落评审注记（R-1628）"
+      - must_exist: "R-1628"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1628"

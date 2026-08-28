@@ -25,7 +25,7 @@ Any feature that does not directly serve this chain should be removed.
 | **PipelineRunner** | 3-primitive pipeline: Check→Exec→Decide. Wait is intermediate state. State projected from events |
 | **Flow Templates** | Same goal type follows the same standard process — predictable results. Unknown flow → confirmation flow only (no silent fallback, R-1368) |
 | **Multi-LLM Verification** | Multiple AI models (cross-Provider) independently review output. Voting-based verdict (R-844). Debate round on divergence (R-860). Cold review mode (R-858) |
-| **ReviewReport + User Decision** | Structured review reports with per-Provider reasoning. Dashboard review panel + CLI `goalos review`. User decides: retry / accept / refine |
+| **ReviewReport + User Decision** | Structured review reports with per-Provider reasoning. CLI `goalos review` (reviews are CLI-only — R-1333). User decides: retry / accept / refine |
 | **Verification Pyramid** | auto_tests → cross_model_review → behavioral_tests. Deterministic verification is the final authority |
 | **New Session Redo** | On failure: fresh session retry (1×) → human handoff. No same-session retry loop (Semantic Drift protection) |
 | **PlanHash Tamper Detection** | SHA256(MissionGraph) computed at plan time, verified throughout execution (R-859) |
@@ -110,12 +110,12 @@ multi_llm:
       model: qwen3.6-flash
       api_key: "sk-..."
       base_url: https://your-llm-api.com/v1
-      allowed_for: [L0,L1,L2,L3,L4,L5]
+      allowed_for: [R0,R1,R2,R3,R4,R5]
     - name: reviewer
       model: google/gemma-4-26b-a4b-it:free
       api_key: "your-openrouter-api-key"
       base_url: https://openrouter.ai/api/v1
-      allowed_for: [L0,L1,L2]
+      allowed_for: [R0,R1,R2]
 ```
 
 ### Interaction Channels
