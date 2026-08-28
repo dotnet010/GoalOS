@@ -66,6 +66,9 @@ type Verdict struct {
 // ③含 FAIL 非全 FAIL→DIVERGENCE（分歧→人工裁定——04 review 三命令链接收）
 // ④含 WARN 无 FAIL→WARN
 // ⑤全 PASS→PASS（含 TIMEOUT 票则 Degraded=true——覆盖降低诚实呈现，04 §14 依据行）
+// 输入契约（R-1640⑥——会议 #255 P6，Meyer 边界裁决）：票值归一化=采集层责任
+// （multillm_verifier.go 两处调用点把空票转为 TIMEOUT）；Combine 信任已归一化输入，
+// 不重复防御——跨层重复校验=语义分叉风险源。
 func (vc *VerdictCombiner) Combine(votes []ProviderVote) *Verdict {
 	v := &Verdict{Votes: votes}
 	if len(votes) == 0 {

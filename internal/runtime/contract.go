@@ -85,7 +85,7 @@ func (r *NonceRegistry) tryConsume(nonce string) bool {
 
 // ContractVerifier 契约验证层（daemon 侧唯一验证点——05 §X.6.3 时序四句）。
 // 验证四步+重放防线：验签→时效→吊销→ProfileDigest→（消费时）Nonce。
-// 零值非法（R-1106 同纪律）：v2 五字段空值=拒绝（signature_invalid 族归 profile/字段非法）。
+// 零值非法（R-1106 同纪律）：v2 五字段空值/格式非法=拒绝（reject_reason=invalid_fields——R-1628①）。
 type ContractVerifier struct {
 	secret   []byte
 	nonces   *NonceRegistry
