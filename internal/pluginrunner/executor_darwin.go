@@ -44,30 +44,7 @@ func applySandboxExec(cmd *exec.Cmd) bool {
 	}
 
 	// 动态生成 Seatbelt profile
-	profile := `(version 1)
-(deny default)
-;; 允许读取工作区和临时目录
-(allow file-read* file-write*
-    (subpath "` + workspace + `")
-    (subpath "` + tmpDir + `")
-    (subpath "/usr/lib")
-    (subpath "/System/Library")
-    (literal "/dev/null")
-    (literal "/dev/zero")
-    (literal "/dev/random")
-    (literal "/dev/urandom"))
-;; 禁止访问 GoalOS 系统目录和敏感路径
-(deny file-read* file-write*
-    (subpath (string-append (param "HOME_DIR") "/.goalos"))
-    (subpath (string-append (param "HOME_DIR") "/.ssh"))
-    (subpath (string-append (param "HOME_DIR") "/.aws")))
-;; 禁止创建子进程
-(deny fork)
-(deny process-exec)
-(deny process-fork)
-;; 禁止网络
-(deny network*)
-`
+	profile := seatbeltProfileDarwin(workspace, tmpDir)
 
 	// 写入临时 profile 文件
 	profilePath := filepath.Join(tmpDir, "goalos-"+randomID()+".sb")
@@ -89,6 +66,7 @@ func applySandboxExec(cmd *exec.Cmd) bool {
 		"sandbox-exec",
 		"-f", profilePath,
 		"-D", "HOME_DIR=" + homeDir,
+		"-D", "TARGET_BINARY=" + origPath,
 		"--",
 		origPath,
 	}, origArgs[1:]...)
@@ -108,4 +86,38 @@ func randomID() string {
 		out[i*2+1] = enc[v&0x0f]
 	}
 	return string(out)
+}
+
+// seatbeltProfileDarwin 受限档 Seatbelt profile 构造（W5 任务 5.3 收敛——提取为函数=
+// SBPL 合法性契约测试锚点）。
+// ⚠️ 诚实标注（2026-08-29 实证，会议 #256 证据包）：本读白名单形态在现代 macOS 上
+// 进程启动即 abort（dyld 系统面依赖不可枚举——firmlink 规范化陷阱）；且原内联版含
+// 非法 filter (deny fork)（本 macOS 版本 SBPL 无 fork/exec 原子名）——生产插件沙箱
+// 路径从未真实生效。macOS 受限档语义裁决（Option B：写禁闭+敏感禁读+网络禁+子进程禁）
+// 归会议 #256；Provider 侧已定稿（internal/runtime/profile_restricted_darwin.sb）。
+// 本函数保留读白名单意图形态待裁决后收敛——当前不可用于真实执行。
+func seatbeltProfileDarwin(workspace, tmpDir string) string {
+	return `(version 1)
+(deny default)
+;; 允许读取工作区和临时目录
+(allow file-read* file-write*
+    (subpath "` + workspace + `")
+    (subpath "` + tmpDir + `")
+    (subpath "/usr/lib")
+    (subpath "/System/Library")
+    (literal "/dev/null")
+    (literal "/dev/zero")
+    (literal "/dev/random")
+    (literal "/dev/urandom"))
+;; 禁止访问 GoalOS 系统目录和敏感路径
+(deny file-read* file-write*
+    (subpath (string-append (param "HOME_DIR") "/.goalos"))
+    (subpath (string-append (param "HOME_DIR") "/.ssh"))
+    (subpath (string-append (param "HOME_DIR") "/.aws")))
+;; 禁止创建子进程（process-exec 仅放行目标二进制——全 deny=sandbox-exec execvp 自拒假象）
+(allow process-exec (literal (param "TARGET_BINARY")))
+(deny process-fork)
+;; 禁止网络
+(deny network*)
+`
 }
