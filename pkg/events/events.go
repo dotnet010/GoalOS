@@ -163,4 +163,18 @@ const (
 	TypePluginUnregistered  = "PluginUnregistered"  // Plugin 移除。Publisher: PluginRunner。layer: core
 	TypeSessionCreated      = "SessionCreated"      // 新 Session 创建。Publisher: PipelineRunner。layer: core
 	TypeTokenBudgetAdjusted = "TokenBudgetAdjusted" // Token 预算追加。Publisher: BudgetTracker。layer: core
+
+	// ─── v0.3.1 Runtime 族十二事件（07 §4.14 注册——R-1489/R-1509/R-1573/R-1589/R-1602/R-1618；语义权威=05 §X.6）───
+	TypeContractIssued            = "ContractIssued"            // 契约签发成功（治理层）。layer: core
+	TypeContractRejected          = "ContractRejected"          // 契约验证失败（验证层——验签/时效/吊销/ProfileDigest/Nonce 任一失败）。layer: core
+	TypeRuntimeSelected           = "RuntimeSelected"           // 解析命中唯一分级+Provider（Runtime Resolver）。layer: core
+	TypeRuntimeSelectionRejected  = "RuntimeSelectionRejected"  // 无满足候选——严禁降档（含 i5_not_implemented 显式处置 R-1602）。layer: core
+	TypeRuntimeAcquired           = "RuntimeAcquired"           // Acquire 返回句柄（Provider 经 ExecutionSession 转发）。layer: core
+	TypeRuntimeAcquireFailed      = "RuntimeAcquireFailed"      // Acquire 错误。layer: core
+	TypePrecheckFailed            = "PrecheckFailed"            // 边界建立但未生效——句柄销毁非归还热池。layer: core
+	TypeRuntimeReleased           = "RuntimeReleased"           // Release 完成（热池归还或销毁）。layer: core
+	TypeSessionEscalated          = "SessionEscalated"          // 升级完成=新会话挂同卷（escalation_signal 枚举=capability_proxy|risk_reeval——R-1560）。layer: core
+	TypeProviderDegraded          = "ProviderDegraded"          // 部分能力探测失败但核心机制有效（降级证据显式化）。layer: core
+	TypeProviderStateChanged      = "ProviderStateChanged"      // Provider 生命周期状态迁移（05 §X.6.7）。layer: core
+	TypeEscalationSignaled        = "EscalationSignaled"        // 升级信号（能力代理层检测/治理 Risk 重评——触发集合封闭五值 R-1618）。layer: core
 )

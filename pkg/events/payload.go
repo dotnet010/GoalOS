@@ -282,3 +282,190 @@ func (p GoalCompletedPayloadV2) Validate() error {
 	}
 	return nil
 }
+
+// ─── v0.3.1 Runtime 族 payload（07 §4.14——密钥/签名/敏感载荷永不入事件 R-1480）───
+
+// ContractIssuedPayload / ContractRejectedPayload 契约族（Publisher=治理层签发/验证层拒绝）。
+type ContractIssuedPayload struct {
+	ContractID               string `json:"contract_id"`
+	Subject                  string `json:"subject"`                  // WorkloadIdentity 名单条目引用
+	ProfileDigest            string `json:"profile_digest"`           // hex(32B)
+	PolicyRevision           string `json:"policy_revision"`
+	RequiresRealEnforcement  bool   `json:"requires_real_enforcement"`
+	MinIsolation             string `json:"min_isolation"`            // I 族值
+	IssuerKeyID              string `json:"issuer_key_id"`
+	ExpiresAt                string `json:"expires_at"`
+}
+
+// Validate 校验 ContractIssuedPayload（契约 ID 非空）。
+func (p ContractIssuedPayload) Validate() error {
+	if p.ContractID == "" {
+		return fmt.Errorf("ContractIssuedPayload: ContractID is required")
+	}
+	return nil
+}
+
+// ContractRejectedPayload 契约拒绝（reject_reason 枚举=07 §4.14 封闭五值）。
+type ContractRejectedPayload struct {
+	ContractID   string `json:"contract_id"`
+	Subject      string `json:"subject"`
+	ProfileDigest string `json:"profile_digest"`
+	PolicyRevision string `json:"policy_revision"`
+	RequiresRealEnforcement bool `json:"requires_real_enforcement"`
+	MinIsolation string `json:"min_isolation"`
+	IssuerKeyID  string `json:"issuer_key_id"`
+	ExpiresAt    string `json:"expires_at"`
+	RejectReason string `json:"reject_reason"` // signature_invalid|expired|revoked|profile_digest_mismatch|nonce_replayed
+}
+
+// Validate 校验 ContractRejectedPayload（reject_reason 枚举封闭）。
+func (p ContractRejectedPayload) Validate() error {
+	if p.ContractID == "" {
+		return fmt.Errorf("ContractRejectedPayload: ContractID is required")
+	}
+	switch p.RejectReason {
+	case "signature_invalid", "expired", "revoked", "profile_digest_mismatch", "nonce_replayed", "invalid_fields": // R-1628 补 invalid_fields（07 §4.14 六值）
+		return nil
+	default:
+		return fmt.Errorf("ContractRejectedPayload: reject_reason 非法值 %q", p.RejectReason)
+	}
+}
+
+// RuntimeSelectedPayload / RuntimeSelectionRejectedPayload 解析族（Publisher=Runtime Resolver）。
+type RuntimeSelectedPayload struct {
+	ContractID      string `json:"contract_id"`
+	SessionID       string `json:"session_id"`
+	Tier            string `json:"tier"`             // T0|T1|T2|T3（工程值；用户呈现经产品语义词映射）
+	Provider        string `json:"provider"`         // RuntimeSelected 必填
+	SelectionReason string `json:"selection_reason"` // 决策表命中行标识（机器值——R-1527 映射表转换）
+	MatchedWorkload string `json:"matched_workload,omitempty"` // 行 1 命中=名单条目 publisher_key 短码前 8 字符；非名单路径=省略（R-1589，MINOR 兼容）
+}
+
+// Validate 校验 RuntimeSelectedPayload。
+func (p RuntimeSelectedPayload) Validate() error {
+	if p.ContractID == "" || p.SessionID == "" || p.Tier == "" || p.Provider == "" {
+		return fmt.Errorf("RuntimeSelectedPayload: contract_id/session_id/tier/provider 必填")
+	}
+	return nil
+}
+
+// RuntimeSelectionRejectedPayload 解析拒绝（reject_detail=各候选筛除原因列表）。
+type RuntimeSelectionRejectedPayload struct {
+	ContractID   string `json:"contract_id"`
+	SessionID    string `json:"session_id"`
+	Tier         string `json:"tier"`
+	Provider     string `json:"provider"`
+	SelectionReason string `json:"selection_reason"`
+	RejectDetail string `json:"reject_detail"`
+}
+
+// Validate 校验 RuntimeSelectionRejectedPayload。
+func (p RuntimeSelectionRejectedPayload) Validate() error {
+	if p.ContractID == "" {
+		return fmt.Errorf("RuntimeSelectionRejectedPayload: contract_id 必填")
+	}
+	return nil
+}
+
+// RuntimeLeasePayload 租约族四事件共用（RuntimeAcquired/RuntimeAcquireFailed/PrecheckFailed/RuntimeReleased）。
+type RuntimeLeasePayload struct {
+	ContractID   string `json:"contract_id"`
+	SessionID    string `json:"session_id"`
+	LeaseID      string `json:"lease_id"`
+	Provider     string `json:"provider"`
+	Tier         string `json:"tier"`
+	HandleState  string `json:"handle_state"`   // 租约状态机当前值
+	WarmPoolHit  bool   `json:"warm_pool_hit"`  // RuntimeAcquired 必填——热池命中率指标数据源
+	ErrorCode    string `json:"error_code,omitempty"` // 失败两事件=09 RTM 族错误码
+}
+
+// Validate 校验 RuntimeLeasePayload。
+func (p RuntimeLeasePayload) Validate() error {
+	if p.ContractID == "" || p.SessionID == "" || p.LeaseID == "" {
+		return fmt.Errorf("RuntimeLeasePayload: contract_id/session_id/lease_id 必填")
+	}
+	return nil
+}
+
+// SessionEscalatedPayload 升级完成（新会话挂同卷——升级=新会话挂同一工作区卷，不做句柄迁移）。
+type SessionEscalatedPayload struct {
+	OldSessionID      string `json:"old_session_id"`
+	NewSessionID      string `json:"new_session_id"`
+	OldContractID     string `json:"old_contract_id"`
+	NewContractID     string `json:"new_contract_id"`
+	FromTier          string `json:"from_tier"`
+	ToTier            string `json:"to_tier"`
+	WorkspaceVolumeID string `json:"workspace_volume_id"` // 同一卷引用不变
+	EscalationSignal  string `json:"escalation_signal"`   // capability_proxy|risk_reeval（R-1560 同枚举随链传递）
+}
+
+// Validate 校验 SessionEscalatedPayload。
+func (p SessionEscalatedPayload) Validate() error {
+	if p.OldSessionID == "" || p.NewSessionID == "" || p.NewContractID == "" {
+		return fmt.Errorf("SessionEscalatedPayload: old_session_id/new_session_id/new_contract_id 必填")
+	}
+	switch p.EscalationSignal {
+	case "capability_proxy", "risk_reeval":
+	default:
+		return fmt.Errorf("SessionEscalatedPayload: escalation_signal 非法值 %q", p.EscalationSignal)
+	}
+	return nil
+}
+
+// ProviderDegradedPayload / ProviderStateChangedPayload Provider 族（Publisher=Provider 健康探测）。
+type ProviderDegradedPayload struct {
+	Provider           string `json:"provider"`
+	Version            string `json:"version"`
+	FromState          string `json:"from_state"`
+	ToState            string `json:"to_state"`
+	DegradedEvidence   string `json:"degraded_evidence"`   // ProviderDegraded 必填——降级证据描述
+	CapabilitySnapshot string `json:"capability_snapshot"` // PlatformCapability 摘要引用
+}
+
+// Validate 校验 ProviderDegradedPayload。
+func (p ProviderDegradedPayload) Validate() error {
+	if p.Provider == "" || p.DegradedEvidence == "" {
+		return fmt.Errorf("ProviderDegradedPayload: provider/degraded_evidence 必填")
+	}
+	return nil
+}
+
+// ProviderStateChangedPayload Provider 状态迁移。
+type ProviderStateChangedPayload struct {
+	Provider           string `json:"provider"`
+	Version            string `json:"version"`
+	FromState          string `json:"from_state"`
+	ToState            string `json:"to_state"`
+	DegradedEvidence   string `json:"degraded_evidence,omitempty"`
+	CapabilitySnapshot string `json:"capability_snapshot,omitempty"`
+}
+
+// Validate 校验 ProviderStateChangedPayload。
+func (p ProviderStateChangedPayload) Validate() error {
+	if p.Provider == "" || p.ToState == "" {
+		return fmt.Errorf("ProviderStateChangedPayload: provider/to_state 必填")
+	}
+	return nil
+}
+
+// EscalationSignaledPayload 升级信号（能力代理层检测/治理 Risk 重评——触发集合封闭五值 R-1618）。
+type EscalationSignaledPayload struct {
+	SessionID     string `json:"session_id"`
+	ContractID    string `json:"contract_id"`
+	SignalSource  string `json:"signal_source"`  // capability_proxy|risk_reeval
+	SignalDetail  string `json:"signal_detail"`  // 越界能力请求描述/重评依据（=触发值，审计可回放 R-1618）
+	CurrentTier   string `json:"current_tier"`
+}
+
+// Validate 校验 EscalationSignaledPayload。
+func (p EscalationSignaledPayload) Validate() error {
+	if p.SessionID == "" || p.ContractID == "" {
+		return fmt.Errorf("EscalationSignaledPayload: session_id/contract_id 必填")
+	}
+	switch p.SignalSource {
+	case "capability_proxy", "risk_reeval":
+	default:
+		return fmt.Errorf("EscalationSignaledPayload: signal_source 非法值 %q", p.SignalSource)
+	}
+	return nil
+}
