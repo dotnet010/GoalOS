@@ -7935,3 +7935,39 @@ resolutions:
       - must_exist: "R-1636"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 R-1636"
+  R-1637:
+    desc: "工具链健康权属与三段循环制度化(会议 #254——PM 五点指令, Linus 事故史五连实证『无专责』代价: buildvcs 跑步机数周未被发现/releasecheck 裸 exit code/staticcheck 漂移/PluginRunner 175s 挂起/check-deprecated 漏扫): 权属=PM 总体裁决+Russ Cox 任工具链专责(Toolchain Owner——清单维护/引进改进裁决/版本后 review 主持/事故史登记; 事故驱动守门员非全职岗; R-1636 观察项②提前闭环不等 v0.4.0)+全员提议权; 三段循环挂接既有节点不创新会议: 开发前=开发就绪检查清单「十二、工具箱评估」(覆盖度/已知限制/引进需求清零三问); 开发中=随时提议, 专责 24h 裁决或上会; 版本后=复盘固定议程「工具链 review」(事故逐条过+清单刷新+最佳实践沉淀——写成类别非流水账, 与发布规范 §11 反模式机制同构)。disposition: 生效"
+    files: [会议纪要.md, 发布规范.md, 开发就绪检查清单.md]
+    verify:
+      - must_exist: "R-1637"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1637"
+      - must_exist: "工具链专责"
+        in_file: 发布规范.md
+        reason: "发布规范 §13 必须落权属（R-1637）"
+      - must_exist: "工具箱评估"
+        in_file: 开发就绪检查清单.md
+        reason: "就绪清单必须新增十二节（R-1637）"
+  R-1638:
+    desc: "工具引进/改进决策矩阵(会议 #254——PM 范围规则的第一性原理化): 第一性四问(提议者必答): ①根本问题是什么(说不出=不许动工具)②现有工具使用范围内可解吗(可解→改进/不可解→才谈引进——范围内改造范围外引进)③它根本解决问题吗(不解决→不引进; 只提升效率→借鉴该工具优点融入改进现有工具——正面先例: R-1635 分支快速环未引进新框架/R-1629 未引进 cosign)④引进门槛五件: 钉版本+来源可信最小权限+CI 可运行+可移除(退出策略)+owner 明确; 范围争议→专责裁决→再争议→PM。disposition: 生效"
+    files: [会议纪要.md, 发布规范.md]
+    verify:
+      - must_exist: "R-1638"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1638"
+      - must_exist: "决策矩阵"
+        in_file: 发布规范.md
+        reason: "发布规范 §13.3 必须落决策矩阵（R-1638）"
+  R-1639:
+    desc: "工具链清单建立(会议 #254——没有清单就没有 review 的对象): 载体=发布规范 §13.4; 首发条目 10 件(Go 工具链/make/12 检查脚本/CI workflows/releasecheck/update_plugin_signatures/staticcheck+golangci-lint/git/Claude Code harness/决议传播机检); 每条目五字段: 用途/使用范围/版本纪律/owner/已知限制与事故史; 防腐两道: 版本后 review 强制刷新+无 owner 条目=清单自检不通过。disposition: 生效"
+    files: [会议纪要.md, 发布规范.md, 开发就绪检查清单.md]
+    verify:
+      - must_exist: "R-1639"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1639"
+      - must_exist: "工具链清单"
+        in_file: 发布规范.md
+        reason: "发布规范 §13.4 必须落工具链清单（R-1639）"
+      - must_exist: "R-1637/R-1639"
+        in_file: 开发就绪检查清单.md
+        reason: "就绪清单十二节必须标注依据（R-1639）"
