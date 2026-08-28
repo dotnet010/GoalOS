@@ -3,6 +3,7 @@
 package governance
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -16,13 +17,17 @@ func TestRuntime_KeyRotation_OverlapWindow(t *testing.T) {
 	kr := NewKeyring(24*time.Hour, clock) // 代际窗口=24h
 
 	// 首代注册
-	kr.AddGeneration("kid-1", []byte("key-material-generation-1-32bytes!"))
+	if err := kr.AddGeneration("kid-1", []byte("key-material-generation-1-32bytes!")); err != nil {
+		t.Fatalf("首代注册失败: %v", err)
+	}
 	if kid, _, err := kr.SignKey(); err != nil || kid != "kid-1" {
 		t.Fatalf("活跃 kid 应=kid-1，实际 %q", kid)
 	}
 
 	// 轮换：kid-2 活跃，kid-1 保留窗口内验签
-	kr.Rotate("kid-2", []byte("key-material-generation-2-32bytes!"))
+	if err := kr.Rotate("kid-2", []byte("key-material-generation-2-32bytes!")); err != nil {
+		t.Fatalf("轮换失败: %v", err)
+	}
 	if kid, _, err := kr.SignKey(); err != nil || kid != "kid-2" {
 		t.Fatalf("轮换后活跃 kid 应=kid-2，实际 %q", kid)
 	}
@@ -51,7 +56,9 @@ func TestRuntime_KeyRotation_OverlapWindow(t *testing.T) {
 // c) 不跨进程传递：见 pluginrunner 包 env 白名单测试（TestChildEnv_Whitelist——构造侧隔离）
 func TestRuntime_Keystore_NoPlaintextDisk(t *testing.T) {
 	kr := NewKeyring(time.Hour, time.Now)
-	kr.AddGeneration("kid-1", []byte("sensitive-key-material-32-bytes!!!"))
+	if err := kr.AddGeneration("kid-1", []byte("sensitive-key-material-32-bytes!!!")); err != nil {
+		t.Fatalf("注册失败: %v", err)
+	}
 	// 取引用后清零
 	kid, key, err := kr.SignKey()
 	if err != nil || kid != "kid-1" || len(key) == 0 {
@@ -64,5 +71,12 @@ func TestRuntime_Keystore_NoPlaintextDisk(t *testing.T) {
 	}
 	if _, _, err := kr.SignKey(); err == nil {
 		t.Fatal("Zeroize 后仍可签发——内存清零未生效")
+	}
+	// R-1640④：清零后写操作 fail-closed（静默 no-op=调用方误以为注册成功——Kees 裁决）
+	if err := kr.AddGeneration("kid-9", []byte("late-key-material-32-bytes!!!!!!")); !errors.Is(err, ErrKeyringZeroized) {
+		t.Fatalf("Zeroize 后 AddGeneration 应=ErrKeyringZeroized，实际: %v", err)
+	}
+	if err := kr.Rotate("kid-9", []byte("late-key-material-32-bytes!!!!!!")); !errors.Is(err, ErrKeyringZeroized) {
+		t.Fatalf("Zeroize 后 Rotate 应=ErrKeyringZeroized，实际: %v", err)
 	}
 }

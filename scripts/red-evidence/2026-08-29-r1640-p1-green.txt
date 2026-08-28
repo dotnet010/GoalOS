@@ -1,0 +1,6 @@
+命令: go test -count=1 -run TestRuntime_Attach_PrecheckFailure ./internal/runtime/
+日期: 2026-08-29
+分支: fix/w3-w4-review-rulings
+commit: 4654b5f（修复后工作区）
+输出:
+ok  	github.com/goalos/goalos/internal/runtime	0.289s

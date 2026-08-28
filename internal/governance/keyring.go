@@ -38,27 +38,32 @@ func NewKeyring(window time.Duration, now func() time.Time) *Keyring {
 }
 
 // AddGeneration 注册新代际（首次注册=活跃）。
-func (k *Keyring) AddGeneration(kid string, key []byte) {
+// 清零后注册=fail-closed 返回 ErrKeyringZeroized（R-1640④——静默 no-op 会让调用方
+// 误以为注册成功，Kees：fail-closed 文化下错误的沉默不可接受）。
+func (k *Keyring) AddGeneration(kid string, key []byte) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	if k.zeroized {
-		return
+		return ErrKeyringZeroized
 	}
 	k.entries[kid] = keyEntry{key: append([]byte{}, key...), createdAt: k.now()}
 	if k.activeKID == "" {
 		k.activeKID = kid
 	}
+	return nil
 }
 
 // Rotate 轮换（新代际=活跃；旧代际保留——窗口内可验）。
-func (k *Keyring) Rotate(newKID string, newKey []byte) {
+// 清零后轮换=fail-closed 返回 ErrKeyringZeroized（R-1640④）。
+func (k *Keyring) Rotate(newKID string, newKey []byte) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	if k.zeroized {
-		return
+		return ErrKeyringZeroized
 	}
 	k.entries[newKID] = keyEntry{key: append([]byte{}, newKey...), createdAt: k.now()}
 	k.activeKID = newKID
+	return nil
 }
 
 // SignKey 当前活跃签发材料（清零/无代际=fail-closed 错误）。

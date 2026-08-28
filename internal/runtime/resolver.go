@@ -42,7 +42,7 @@ type Resolver struct {
 	now           func() time.Time                  // 时钟注入（测试可控）
 	platformMax   func() IsolationLevel             // 平台实际达成 I 级探测（生产=internal/sandbox detect）
 	i4Available   func() bool                       // 本机 I4 后端可用探测（v0.3.1=永不命中——R-1599；默认 false）
-	onEvent       func(eventType string, sel Selection, rejectDetail string) // 事件发射点（nil=不发射——daemon 接线随任务 3.3）
+	onEvent       func(eventType string, sel Selection, rejectDetail string) // 事件发射点（nil=不发射——daemon 生产接线=W5 任务 5.5 前置，R-1640②）
 }
 
 // NewResolver 构造解析器（名单=启动校验四规则已过的载入结果——config 层 R-1549）。
@@ -154,7 +154,7 @@ func (r *Resolver) Resolve(in ResolveInput) (Selection, error) {
 	return Selection{}, err
 }
 
-// emit 事件发射（nil hook=不发射——daemon 生产接线随任务 3.3）。
+// emit 事件发射（nil hook=不发射——daemon 生产接线=W5 任务 5.5 前置，R-1640②）。
 func (r *Resolver) emit(eventType string, sel Selection, rejectDetail string) {
 	if r.onEvent != nil {
 		r.onEvent(eventType, sel, rejectDetail)
