@@ -40,6 +40,25 @@ type ExecResult struct {
 	DurationMs int    `json:"cost_ms"`
 }
 
+// childEnv 子进程环境白名单构造（Kees N16——仅四键：PATH/HOME/GOALOS_WORKSPACE/GOALOS_TMP；
+// 密钥材料永不入子进程环境——TC-RT-031c 构造侧隔离断言点，06 §X.8/R-1557）。
+func childEnv(cfg ExecConfig) []string {
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		pathEnv = "/usr/local/bin:/usr/bin:/bin"
+	}
+	homeEnv := os.Getenv("HOME")
+	if homeEnv == "" {
+		homeEnv = "/tmp"
+	}
+	return []string{
+		"PATH=" + pathEnv,
+		"HOME=" + homeEnv,
+		"GOALOS_WORKSPACE=" + cfg.WorkDir,
+		"GOALOS_TMP=" + cfg.TmpDir,
+	}
+}
+
 // Execute 启动子进程（v0.1.0 会议 #63 重写）。
 // seccomp profile 通过 InitMessage 传给子进程自加载。
 // session_token 用于 HMAC Zero Trust IPC。
@@ -51,20 +70,7 @@ func Execute(cfg ExecConfig, action ActionRequest) (*ExecResult, error) {
 	// v0.2.0 audit fix (Kees N16): 重置 Cmd.Env 为白名单，防止 GOALOS_SECRET_KEY 等敏感
 	// 环境变量泄露到子进程。仅传递子进程必需的变量。
 	// E13: PATH/HOME 可能为空，提供 fallback
-	pathEnv := os.Getenv("PATH")
-	if pathEnv == "" {
-		pathEnv = "/usr/local/bin:/usr/bin:/bin"
-	}
-	homeEnv := os.Getenv("HOME")
-	if homeEnv == "" {
-		homeEnv = "/tmp"
-	}
-	cmd.Env = []string{
-		"PATH=" + pathEnv,
-		"HOME=" + homeEnv,
-		"GOALOS_WORKSPACE=" + cfg.WorkDir,
-		"GOALOS_TMP=" + cfg.TmpDir,
-	}
+	cmd.Env = childEnv(cfg)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
