@@ -11,7 +11,7 @@
   ],
   "description": "Shell 命令执行器 — 在独立 OS 子进程中运行 shell 命令",
   "name": "shell-executor",
-  "signature": "sha256:ac317d69557374d07b4d8816ada613c0aadfac689c67967b5a0d8cd6dab4c221",
+  "signature": "sha256:35e4fd90adcd3a8b131cad10c56a342222a7a0a712b2964f6120770be6775ba5",
   "type": "capability",
   "version": "1.0.0"
 }
