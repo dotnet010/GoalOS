@@ -7855,3 +7855,59 @@ resolutions:
       - must_exist: "R-1628"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 R-1628"
+  R-1629:
+    desc: "插件签名机制修复(会议 #252——PM 五点指令之①②, 会前四路调研: Linux 模块签名 PKCS#7+in-tree 构建期临时密钥/Sigstore-SLSA 分层(sha256=完整性非来源证明)/VS Code-Chrome-Codex-DeepSeek Harness 信任模型/Go 可复现构建): ①三处签名闸口构建点(Makefile ci/docker-publish.yml/windows-daily.yml)统一加 -trimpath -buildvcs=false(install-plugin 对齐防腐)——实证根因=buildvcs 把 vcs.revision 烙入二进制(vcs.modified 对未追踪文件亦翻转), 每提交必失效的签名跑步机根治; ②digest 语义诚实化: signature 字段当前承载 sha256 digest=发布一致性闸口(防清单/二进制错配流入发布), 非运行时安全边界(运行时边界=沙箱五引擎+FD3 HMAC+治理 Token); 08 §8.3 Ed25519 规格与 sha256 双轨实现裂缝补现状注记; ③签名批 churn 死亡确认——提交值=本机参考平台 digest, 合法刷新触发器=源码/工具链/平台变更三类, CI 构建后自刷新再校验机制不变; 验收实证=跨提交双构建同 hash(build-twice-compare)。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
+    verify:
+      - must_exist: "R-1629"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1629"
+      - must_exist: "buildvcs=false"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §8.3 必须补现状注记含构建修复 flags（R-1629）"
+      - must_exist: "RT-D-06"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "Ed25519 认证通道启用必须登记 RT-D-06（R-1629）"
+  R-1630:
+    desc: "发布规范+GIT-RULES 修订(会议 #252): 发布规范反模式 #4 补残留根因注记(buildvcs=commit hash 烙入二进制, R-1629 已根治); §6.3 提交粒度补插件签名刷新例外条款(构建产物回写允许随依赖变更同刀或单独 chore——不违反一提交一逻辑变更); GIT-RULES 规则 5 白名单补 plugins/(capability manifest——签名提交先例合法化, GIT-RULES 为本地文件不入库)。disposition: 生效"
+    files: [会议纪要.md, 发布规范.md]
+    verify:
+      - must_exist: "R-1630"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1630"
+      - must_exist: "R-1630"
+        in_file: 发布规范.md
+        reason: "发布规范反模式 #4 与 §6.3 必须落 R-1630 注记"
+  R-1631:
+    desc: "插件信任分级采纳(会议 #252——PM 之问 4, 业界一致二分: Linux in-tree 自动签 vs out-of-tree MOK 注册/VS Code Marketplace 签名 vs 侧载不验证/Chrome Web Store vs 开发者模式警告): certified/community 二分采纳为策略元数据; plugin.json 预留 trust_tier 字段(08 §8.2 登记, v0.3.1 零代码——实例暂不携带, 无消费方前不写入); 安全语义焊死: community 插件永远不得入 trusted_workloads(T0 名单=认证插件专属)+永远受限档起步; 第一方插件现状=certified 全量; 真分级实施(Ed25519 认证通道启用/cosign 族 OIDC 身份绑定评估/trust_tier 实例化/community 准入策略)入 RT-D-06, 与 RT-D-04 供应链 SBOM v0.4.0 合并评估。disposition: 生效"
+    files: [会议纪要.md, 08沙箱隔离与进程通信规范.md, stub追踪清单.md]
+    verify:
+      - must_exist: "R-1631"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1631"
+      - must_exist: "trust_tier"
+        in_file: 08沙箱隔离与进程通信规范.md
+        reason: "08 §8.2 必须登记 trust_tier 预留（R-1631）"
+      - must_exist: "RT-D-06"
+        in_file: stub追踪清单.md
+        reason: "stub 清单三-H 节必须登记 RT-D-06（R-1631）"
+  R-1632:
+    desc: "red-evidence 处置(会议 #252——PM 之问 5, 业界调研: 测试运行结果=CI artifacts 不入库): 保留入库(scripts/red-evidence/)——业界规则适用可再生运行输出(GitHub artifacts 默认 90 天过期), red-evidence=R-571 先红纪律的不可再生存续证据(转绿后 RED 状态无法复现), git 历史=防篡改锚; GIT-RULES 规则 5『审计记录』措辞澄清=运行时审计导出日志, 测试留痕属 scripts/ 白名单合法范围; 新增 scripts/red-evidence/README.md 存证契约(命名=日期+专项编号+red|green; 内容=命令+关键输出+commit+日期最小集; 禁存例行测试日志)。disposition: 生效"
+    files: [会议纪要.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "R-1632"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1632"
+      - must_exist: "red-evidence"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须登记 red-evidence 存证契约（R-1632）"
+  R-1633:
+    desc: "任务级提交节奏确认(会议 #252——PM 之问 3, 流程纪律): 任务 green 即提交+评审通过基线当日固化+不积累跨任务脏树(发布规范 §6.3『一个提交=一个逻辑变更』的正确读法); W1-2→B4 批处置=一次性清算不构成先例。disposition: 生效"
+    files: [会议纪要.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "R-1633"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1633"
+      - must_exist: "R-1633"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划修改记录必须登记 R-1633"
