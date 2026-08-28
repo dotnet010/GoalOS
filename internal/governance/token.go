@@ -12,18 +12,34 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"time"
 )
 
+// ErrTokenExpired 过期哨兵错误（v0.3.1——验证层区分 验签失败/时效过期 两拒绝原因，
+// 07 §4.14 ContractRejected.reject_reason=expired 映射依据）。
+var ErrTokenExpired = errors.New("token: 已过期")
+
 // TokenClaims 是 Capability Token 的 Payload。
+// v2 扩展（R-1505/R-1520——ExecutionContract v2 同一对象、同一签发、同一验证链；
+// 唯一字段权威=05 §X.6.3 结构体，R-1606/B-1）：既有五字段+v2 八字段。
 type TokenClaims struct {
 	GoalID       string   `json:"goal_id"`
 	ActionID     string   `json:"action_id"`
 	Capabilities []string `json:"capabilities"`
 	IssuedAt     int64    `json:"iat"`
 	ExpiresAt    int64    `json:"exp"`
+	// ─── v2 扩展（会议 #229 起——Runtime Boundary）───
+	Subject                 string `json:"subject"`                   // WorkloadIdentity 名单条目引用（05 §X.6.3）
+	ProfileDigest           string `json:"profile_digest"`            // hex(32B)——生效 CompiledProfile 摘要
+	SessionID               string `json:"session_id"`                // 唯一 ExecutionSession 绑定（签发时预分配——E-05B-07 专项复核）
+	RequiresRealEnforcement bool   `json:"requires_real_enforcement"` // T0 适用性唯一判据（计算规则=06 §1.3 签发决策表）
+	MinIsolation            string `json:"min_isolation"`             // I 族最小隔离强度（I1/I2/I3/I4——I5=拒绝 R-1602）
+	Nonce                   string `json:"nonce"`                     // hex(32B)——仅会话建立时单次消费（防跨会话重放，R-1510 时序句①）
+	IssuerKeyID             string `json:"issuer_key_id"`             // keyring kid（R-1389）
+	PolicyRevision          string `json:"policy_revision"`
 }
 
 // tokenHeader 是 Token 的固定 Header。
@@ -90,7 +106,7 @@ func VerifyToken(tokenStr string, secret []byte) (*TokenClaims, error) {
 
 	// 验证过期
 	if time.Now().Unix() > claims.ExpiresAt {
-		return nil, fmt.Errorf("token: 已过期 (exp=%d)", claims.ExpiresAt)
+		return nil, fmt.Errorf("(exp=%d): %w", claims.ExpiresAt, ErrTokenExpired)
 	}
 
 	return &claims, nil

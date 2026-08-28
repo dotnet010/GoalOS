@@ -134,6 +134,14 @@ func (ts *TokenStore) Revoke(tokenID string) {
 	ts.revoked[tokenID] = true
 }
 
+// IsRevoked 查询 tokenID 是否在撤销表（v0.3.1 W2——runtime 契约验证层吊销步骤
+// 接线点，R-1501 契约边界验证四步之③；tokenID 形态=goalID+"-"+actionID）。
+func (ts *TokenStore) IsRevoked(tokenID string) bool {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	return ts.revoked[tokenID]
+}
+
 // RevokeAllForPlugin 撤销某 Plugin 的所有活跃 Token。
 func (ts *TokenStore) RevokeAllForPlugin(pluginID string) {
 	ts.mu.Lock()
