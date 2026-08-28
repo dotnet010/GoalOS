@@ -7984,3 +7984,16 @@ resolutions:
       - must_exist: "R-1640"
         in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
         reason: "开发计划任务 5.5 必须落接线前置注记（R-1640②）"
+  R-1641:
+    desc: "macOS 受限档 Seatbelt 语义定稿(会议 #256——W5 任务 5.3 施工阻塞触发; 证据包 E1~E5): ①Option B 采纳=写禁闭(workspace/tmp)+敏感目录禁读(~/.goalos/.ssh/.aws/.config)+网络禁闭+子进程禁(process-exec 仅目标字面量+process-fork deny)+读全域开放; ②06 §1.3 macOS 行同步精确化(约定级注记保留+禁闭语义按 Option B 逐字); ③executor 内联 profile 收敛=与 Provider 单源(internal/runtime/profile_restricted_darwin.sb)同语义, 窗口=W5-6 内任务 5.3 尾部, 收敛前契约测试登记先红(R-1452); ④反虚假绿断言加固入探针规格(execvp 级失败『sandbox-exec:』前缀不计边界证据——E5 假象事故); ⑤E1/E2 事故(executor 生产路径从未生效/canonical .sb 从未运行)登记工具链清单事故史+发布规范反模式候选(『策略文件零执行验证』类别——v0.4.0 复盘议程)。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "R-1641"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1641"
+      - must_exist: "写禁闭"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 macOS 行必须落 Option B 语义（R-1641②）"
+      - must_exist: "TC-RT-001c"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单必须登记 TC-RT-001c 转绿形态（R-1641）"

@@ -7,6 +7,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -46,4 +47,19 @@ func (r *ProviderRegistry) AcquireForTier(tier string) (ProviderHandle, error) {
 		return nil, ErrNoProviderRegistered
 	}
 	return ps[0], nil
+}
+
+// AcquireProviderForTier 按档取回 SPI v2 全量 Provider（任务 5.x——生产解析路径与
+// 旁路探针共用；仅经 RegisterChecked 注册者可取回——R-1468 骨架纪律闭环）。
+func (r *ProviderRegistry) AcquireProviderForTier(tier string) (Provider, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	ps := r.byTier[tier]
+	if len(ps) == 0 {
+		return nil, ErrNoProviderRegistered
+	}
+	if a, ok := ps[0].(providerHandleAdapter); ok {
+		return a.p, nil
+	}
+	return nil, fmt.Errorf("runtime: 注册项无 SPI v2 执行面（经 Register 身份注册——非 RegisterChecked）")
 }

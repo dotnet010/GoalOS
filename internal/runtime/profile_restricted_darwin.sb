@@ -1,0 +1,38 @@
+;; profile_restricted_darwin.sb — 受限档（T1）Provider 的 Seatbelt 策略（任务 5.3）
+;; 单源承诺：本文件=受限档策略的演进权威（embed 进二进制）。
+;; 收敛欠债登记：sandbox/goalos-default.sb（根目录副本）与 executor_darwin.go 内联字符串
+;; 为待收敛副本——统一收敛到本文件=W5-6 后续（executor 插件路径切换时）。
+;;
+;; 语义定稿（会议 #256 证据包——SBPL 实证）：
+;;   原「读白名单」形态在本机 macOS 上进程启动即 abort（dyld 系统面需求不可完整枚举——
+;;   firmlink 规范化陷阱 /System/Cryptexes→/System/Volumes/Preboot/Cryptexes 等，
+;;   SBPL 为弃用私有 API 无文档可考）→ 受限档语义=写禁闭+敏感目录禁读+网络禁闭+子进程禁。
+;;   读全域开放——敏感面由显式禁读清单承接（~/.goalos/.ssh/.aws/.config）。
+(version 1)
+(deny default)
+
+;; ── 文件系统：读开放+写禁闭（写=唯一外泄/破坏通道）──
+(allow file-read*)
+(allow file-read-metadata)
+(allow file-write*
+    (subpath (param "WORKSPACE_DIR"))     ;; ~/Goals/<目标名>/
+    (subpath (param "TMP_DIR")))          ;; /tmp/goalos/<action_id>/
+
+;; ── 敏感目录禁读（读开放语义的显式收口——密钥/凭证面）──
+(deny file-read* file-write*
+    (subpath (string-append (param "HOME_DIR") "/.goalos"))
+    (subpath (string-append (param "HOME_DIR") "/.ssh"))
+    (subpath (string-append (param "HOME_DIR") "/.aws"))
+    (subpath (string-append (param "HOME_DIR") "/.config")))
+
+;; ── 进程：仅目标二进制可 exec（全 deny=sandbox-exec execvp 自拒假象——2026-08-29 实证）；
+;;    子进程 fork 禁止（防 fork bomb/权限提升）──
+(allow process-exec (literal (param "TARGET_BINARY")))
+(deny process-fork)
+
+;; ── 网络：完全禁止 ──
+(deny network*)
+
+;; ── 系统调用面：危险系统操作禁止 ──
+(deny sysctl-write)
+(deny iokit-open)
