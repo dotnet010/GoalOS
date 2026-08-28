@@ -237,13 +237,24 @@ resolve_path() {
 
 extract_body_start() {
     local fp="$1"
-    local start
-    start=$(awk '/^---$/{n++; if(n>=2){print NR; exit}}' "$fp" 2>/dev/null)
-    if [ -z "$start" ]; then
-        start=10  # fallback: 跳过 frontmatter
-    fi
-    # +1 跳过 --- 行本身，从正文第一行开始
-    echo $((start + 1))
+    # R-1582/S-245-01 契约修复（会议 #245）：与 check-deprecated.sh body_start() 同算法——
+    # 正文起点=「## 修改记录」表结束后首个 --- 的下一行；表后无 --- 时=表结束后第一个非表格行；
+    # 无「## 修改记录」节时=前 30 行内首个 --- 的下一行；兜底=1（全扫）。
+    awk '
+        /^```/ { in_fence = !in_fence; next }
+        done { next }
+        !in_fence && /^## 修改记录/ { in_mod = 1; next }
+        !in_fence && in_mod && /^---$/ && in_table { print NR + 1; done = 1; next }
+        !in_fence && in_mod && in_table && !/^[|]/ && !table_done { table_done = 1; body_line = NR; next }
+        !in_fence && in_mod && /^[|]/ { in_table = 1; next }
+        !in_fence && !in_mod && /^---$/ && NR <= 30 && first_sep == 0 { first_sep = NR; next }
+        END {
+            if (done) exit
+            if (in_mod && table_done) { print body_line; exit }
+            if (first_sep) { print first_sep + 1; exit }
+            print 1
+        }
+    ' "$fp"
 }
 
 # =============================================================================

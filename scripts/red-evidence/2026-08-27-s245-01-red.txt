@@ -1,0 +1,10 @@
+=== S-245-01 红证：旧契约 vs 新契约对同一 fixture 的正文起点 ===
+fixture: /tmp/s245_fixture.md（结构=10 模块指南型：无 --- 包裹 frontmatter；修改记录表；正文含 Dashboard；多条 ---）
+
+[旧契约（第二个 --- 之后）]:
+  body_start=25
+  Dashboard 检出: 否（漏报——CI 假绿实证）
+
+[新契约（修改记录表后首个 --- 之后）]:
+  body_start=19
+  Dashboard 检出: 是（修复有效）

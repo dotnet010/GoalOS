@@ -12,7 +12,7 @@
 #       reason=completed、reject_reason=state_changed——无错误码, 有 07 锚点）。
 # 本文件为唯一维护侧（R-1300 F-18——yaml 首改→09 §2.5→07；非"转录源"）。
 # 计数: 行数随枚举变更动态变化（R-1389/C-16——落地时五处计数全检），
-#       当前: error_type 14 + failure_type 7 + reason 12 + reject_reason 5。
+#       当前: error_type 14 + failure_type 7 + reason 13 + reject_reason 5。
 # =============================================================================
 event_field_mapping:
   - {field: error_type, value: timeout, domain: SBX, severity: R}
@@ -28,7 +28,6 @@ event_field_mapping:
   - {field: error_type, value: profile_invalid, domain: SBX, severity: F}
   - {field: error_type, value: physical_guard, domain: SBX, severity: F}
   - {field: error_type, value: validation_error, domain: SBX, severity: F}
-  - {field: error_type, value: approval_extensions_exhausted, domain: GOV, severity: F}
   - {field: failure_type, value: check_rejected, domain: CTR, severity: W}
   - {field: failure_type, value: check_blocked, domain: CTR, severity: W}
   - {field: failure_type, value: exec_crash, domain: SBX, severity: F}
@@ -38,6 +37,7 @@ event_field_mapping:
   - {field: failure_type, value: wait_timeout, domain: CTR, severity: R}
   - {field: reason, value: completed, domain: —, severity: —}
   - {field: reason, value: timeout, domain: SBX, severity: R}
+  - {field: reason, value: execution_timeout, domain: SBX, severity: R}
   - {field: reason, value: crash, domain: SBX, severity: F}
   - {field: reason, value: seccomp_violation, domain: SBX, severity: F}
   - {field: reason, value: daemon_stopping, domain: CFG, severity: I}

@@ -1,0 +1,3 @@
+=== S-245-02 红证：category 校验段对注入夹具的检出 ===
+BAD:6:ValidationError
+期望: 恰好 1 处 BAD（TST-BAD-F-002，ValidationError）；TST-OK 合法通过；CLI-* 继承豁免不误报

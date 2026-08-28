@@ -139,8 +139,55 @@ for name in error_type failure_type reason reject_reason; do
   fi
 done
 
+# ═══ 3.5. 09 §2 条目 category 属性校验（R-1572/S-245-02——会议 #245：category 权威四值=
+#      internal/errorcategory/category.go 定稿 Temporary/Permanent/Security/Fatal；
+#      09 §2 模板已声明封闭集合（R-1512⑤），本段为机检兜底——category=validation_error
+#      残留 CI 绿实证（会议 #245 F-9/C-9）。CLI-* 聚合条目「按底层错误码继承」豁免）═══
+echo "── 3. 09 §2 条目 category 属性校验 ──"
+CAT_TMP=$(mktemp)
+awk '
+BEGIN {
+  split("Temporary Permanent Security Fatal", v)
+  for (i = 1; i <= 4; i++) allowed[v[i]] = 1
+}
+/^```/ { in_fence = !in_fence; next }
+!in_fence && /^### / {
+  if (entry_line && !cat_found) printf "MISSING:%d\n", entry_line
+  entry_line = NR; cat_found = 0; next
+}
+!in_fence && entry_line && /^- \*\*\{category, severity, retryable\}\*\*/ {
+  rest = $0
+  sub(/^[^:]*:[[:space:]]*/, "", rest)
+  sub(/^例[[:space:]]*/, "", rest)
+  if (rest ~ /^\{/) {
+    sub(/^\{/, "", rest)
+    sub(/\}.*$/, "", rest)
+    split(rest, a, /,[[:space:]]*/)
+    cat = a[1]
+    cat_found = 1
+    if (!(cat in allowed)) printf "BAD:%d:%s\n", entry_line, cat
+  } else if (rest ~ /^按底层错误码继承/) {
+    cat_found = 1
+  }
+  next
+}
+END {
+  if (entry_line && !cat_found) printf "MISSING:%d\n", entry_line
+}
+' "$DOC09" > "$CAT_TMP"
+
+CAT_BAD=$(grep -cE '^(BAD|MISSING):' "$CAT_TMP" || true)
+if [ "$CAT_BAD" -gt 0 ]; then
+  echo -e "  ${RED}❌${NC} 09 §2 category 校验失败 $CAT_BAD 处（权威=internal/errorcategory 定稿四值 Temporary/Permanent/Security/Fatal）："
+  sed 's/^/    /' "$CAT_TMP"
+  FAILED=$((FAILED + CAT_BAD))
+else
+  echo -e "  ${GREEN}✅${NC} 09 §2 category 属性全部合法（Temporary/Permanent/Security/Fatal）"
+fi
+rm -f "$CAT_TMP"
+
 # ═══ 4. 跨字段语义一致性（09 §2.5 尾部条款）═══
-echo "── 3. 跨字段一致性（同名值 domain/severity 一致）──"
+echo "── 4. 跨字段一致性（同名值 domain/severity 一致）──"
 CROSS_BAD=$(YVAL | sort | awk -F'|' '
   { v=$1; d=$3; s=$4 }
   v==prev_v && (d!=prev_d || s!=prev_s) { print v"|"prev_d"|"prev_s" vs "v"|"d"|"s }
@@ -152,11 +199,11 @@ while IFS= read -r bad; do
 done <<< "$CROSS_BAD"
 
 # ═══ 5. codes.go 显式 SKIP ═══
-echo "── 4. pkg/errors/codes.go 常量比对 ──"
+echo "── 5. pkg/errors/codes.go 常量比对 ──"
 echo -e "  ${YELLOW}⚠️${NC} 显式 SKIP（R-1159 §3.2——错误码常量随实现阶段落地后接线; 当前为文档/CI 阶段）"
 
 # ═══ 6. 01 §17.9 单向指针校验（R-1395: 01 引用的枚举集合 ⊆ 09 §2 条目集合）═══
-echo "── 5. 01 §17.9 ↔ 09 §2 单向指针 ──"
+echo "── 6. 01 §17.9 ↔ 09 §2 单向指针 ──"
 # Set A: 01 §17.9 failHints 表"09 条目号（单向指针）"列引用的枚举名（"09 §2：<NAME>" 形态）
 # Set B: 09 §2 条目标题中的 AgentErrorCode=<NAME> 标注
 A01=$(grep -E '^\| [A-Z_]+ \| 09 §2：' "$DOC01" 2>/dev/null | sed -E 's/^\| [A-Z_]+ \| 09 §2：([A-Z_]+).*/\1/' | sort -u || true)

@@ -92,6 +92,11 @@ readonly DASHBOARD_PATTERN='(^|[^[:alnum:]_])Dashboard([^[:alnum:]_]|$)'
 # ─── 弹窗废弃模式（R-1125/R-1333：审批交互唯一呈现=CLI，弹窗范式已废弃）───
 readonly POPUP_PATTERN='弹窗'
 
+# ─── 模糊词警示模式族（R-1516——会议 #235，C 顾问 Zero Interpretation 收编）───
+# 警示档：命中只警告不计 FAIL（exit 0 不受影响）；W1 末评估误报率后决定是否升硬闸。
+# 合法运营语义（如"必要时禁后端"类处置指令）应精确化改写，而非依赖白名单。
+readonly VAGUE_PATTERN='尽可能|原则上|必要时|适当处理|根据需要|合理重试|视情况而定'
+
 # 颜色（仅终端输出；CI 重定向时自动禁用）
 if [ -t 1 ]; then
     readonly RED='\033[0;31m'; readonly GREEN='\033[0;32m'
@@ -142,14 +147,30 @@ if [ "$REPO_ONLY" = true ]; then
     exit 0
 fi
 
-# ─── 正文起始行（复用 check-resolution-propagation.sh 契约：跳过 frontmatter+修改记录）───
+# ─── 正文起始行（R-1582/S-245-01 契约修复——会议 #245：旧契约「第二个 --- 之后」对前置
+# 内容多的文档漏扫（10:68 Dashboard 残留实证）。新契约：
+#   ① 有「## 修改记录」节：正文起点=修改记录表结束后首个 --- 的下一行；
+#      表后无 --- 时（如 12 测试清单全文无 ---）=表结束后第一个非表格行；
+#   ② 无「## 修改记录」节（如 stub 追踪清单/v0.2.1 计划）：前 30 行内首个 --- 的下一行；
+#   ③ 兜底=1（全扫，宁误扫不漏扫）。
+# 与 check-resolution-propagation.sh 的 extract_body_start() 同算法（同名异体保持）───
 body_start() {
-    local fp="$1" start
-    start=$(awk '/^---$/{n++; if(n>=2){print NR; exit}}' "$fp" 2>/dev/null)
-    if [ -z "$start" ]; then
-        start=10
-    fi
-    echo $((start + 1))
+    local fp="$1"
+    awk '
+        /^```/ { in_fence = !in_fence; next }
+        done { next }
+        !in_fence && /^## 修改记录/ { in_mod = 1; next }
+        !in_fence && in_mod && /^---$/ && in_table { print NR + 1; done = 1; next }
+        !in_fence && in_mod && in_table && !/^[|]/ && !table_done { table_done = 1; body_line = NR; next }
+        !in_fence && in_mod && /^[|]/ { in_table = 1; next }
+        !in_fence && !in_mod && /^---$/ && NR <= 30 && first_sep == 0 { first_sep = NR; next }
+        END {
+            if (done) exit
+            if (in_mod && table_done) { print body_line; exit }
+            if (first_sep) { print first_sep + 1; exit }
+            print 1
+        }
+    ' "$fp"
 }
 
 # ─── 构建 grep -E 模式 ───
@@ -158,7 +179,9 @@ for p in "${DEPRECATED_PATTERNS[@]}"; do
     [ -z "$PATTERN" ] && PATTERN="$p" || PATTERN="$PATTERN|$p"
 done
 
-# ─── 收集检查目标文件（顶层规范文档，排除历史/备份/草稿；bash 3.2 兼容：while read 替代 mapfile）───
+# ─── 收集检查目标文件（顶层规范文档 + 活动开发计划文档（R-1582/S-245-01 扩围——
+# 开发计划/v*/ 纳入语义冻结机检；归档版本 v0.2.*/v0.3.0* 排除，沿用 check-doc-version.sh
+# ARCHIVE_PATTERNS 先例）；排除历史/备份/草稿；bash 3.2 兼容：while read 替代 mapfile）───
 DOC_FILES=()
 while IFS= read -r fp; do
     DOC_FILES+=("$fp")
@@ -168,6 +191,19 @@ done < <(
         ! -name '会议纪要.md' \
         -print 2>/dev/null | sort
 )
+
+# 开发计划/v*/ 活动计划文档（归档版本排除）
+if [ -d "$DOC_DIR/开发计划" ]; then
+    while IFS= read -r fp; do
+        DOC_FILES+=("$fp")
+    done < <(
+        find "$DOC_DIR/开发计划" \
+            \( -path '*/开发计划/v0.2.*' -o -path '*/开发计划/v0.3.0*' \) -prune -o \
+            -name '*.md' -type f \
+            ! -name '*.bak.md' \
+            -print 2>/dev/null | sort
+    )
+fi
 
 FAILED=0
 CHECKED=0
@@ -254,6 +290,24 @@ if [ -n "$CODE_DASHBOARD_HITS" ]; then
     echo -e "  ${RED}[FAIL]${NC} 代码目录（internal/cmd）残留 Dashboard 引用（R-1372/C-UI-01）:"
     echo -e "$CODE_DASHBOARD_HITS" | grep -v '^$' | head -20
 fi
+
+# ─── 模糊词警示段（R-1516——警示档：只警告不计 FAIL）───
+VAGUE_HITS=""
+for fp in "${DOC_FILES[@]}"; do
+    [ -f "$fp" ] || continue
+    rel="${fp#"$DOC_DIR"/}"
+    start=$(body_start "$fp")
+    vhits=$(tail -n +"$start" "$fp" | grep -nE "$VAGUE_PATTERN" 2>/dev/null || true)
+    if [ -n "$vhits" ]; then
+        VAGUE_HITS="${VAGUE_HITS}${vhits}"$'\n'
+        while IFS= read -r line; do
+            lineno="${line%%:*}"
+            abs=$((start + lineno - 1))
+            echo -e "  ${YELLOW}[WARN]${NC} $rel:$abs [模糊词警示 R-1516]: ${line#*:}"
+        done <<< "$vhits"
+    fi
+done
+[ -n "$VAGUE_HITS" ] && echo -e "  ${YELLOW}模糊词警示（R-1516）——仅警告不计失败；处置=精确化改写（非白名单）${NC}"
 
 echo "── 检查完成：${GREEN}$CHECKED 通过${NC} / ${RED}$FAILED 失败${NC} ──"
 

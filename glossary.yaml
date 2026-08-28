@@ -1,18 +1,82 @@
-# GoalOS GLOSSARY — 机器可读 YAML（从 开发文档/GLOSSARY.md 自动生成）
-# 生成时间: 2026-06-29T02:08:49Z
-# 真相来源: 开发文档/GLOSSARY.md — 本文件是其派生文件。不一致时以 Markdown 为准。
+# GoalOS 00统一术语表 — 机器可读 YAML（从 开发文档/00统一术语表.md 自动生成）
+# 生成时间: 2026-08-27T07:48:42Z
+# 真相来源: 开发文档/00统一术语表.md — 本文件是其派生文件。不一致时以 Markdown 为准。
 
 terms:
+  - name: 'Validatable 接口'
+    description: '— | v0.2.0 新增。`Validate() error`。Payload 类型实现此接口以声明自校验逻辑。**EventBus.Publish() 在投递事件前自动调用**（R-770 最终统一）。校验失败→数据不进入 EventBus。复用 H8 EventPayload.Validate() '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'CategorizedError 接口'
+    description: '— | v0.2.0 新增。`Category() ErrorCategory` + `Suggestion() string`。模块返回的 error 实现此接口→PipelineRunner 自动路由。Category 固定 4 值：Temporary/Permanent/Security/Fatal（**与代码 internal/errorcategory 一致——09 §2 模板 validation_error 系文档漂移，R-1512⑤ 已对齐回 Security**）。**与 Sandbox error 四态（Timeout/Retryable/Fatal/NeedHuman）的关系（R-996 澄清）**：CategorizedError 是**模块级错误分类**（跨所有模块）；Sandbox 四态是**接口级契约**（仅 Sandbox.Execute）。两者经 R-943 Error 映射矩阵互译——Sandbox 层 classifyNativeError 产出四态 → Plugin Runner 翻译为 AgentErrorCode → CategorizedError 承载上报（详见 05 §X.1b） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Sandbox'
+    description: '沙箱 | OS 级强制隔离执行环境。由声明式 TOML Profile 定义权限边界（文件系统、网络、子进程创建），通过平台原生机制在内核级强制执行。Linux: Landlock+seccomp / macOS: Seatbelt / Windows: Restricted Token+Job Object+ACL。支持两种运行形态——Goal 模式（Plugin 子进程内嵌）和 Run 模式（CLI 包裹，Passthrough Plugin + PTY；**Run 模式形态推迟 v0.5.0——R-921/R-925，标注对齐 R-1119**）。不接受代码约定 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
   - name: 'IPC'
     description: '— | **v0.2.0 两行协议**：第一行 HMAC-SHA256 hex string，第二行 JSON payload。HMAC 基于第二行原始 bytes 计算。替代旧版"每行完整 JSON 消息"协议（会议 #75 KSPP #8） '
     has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'Passthrough Plugin'
+    description: 'Capability Plugin 子类型（R-934）。**推迟 v0.5.0 实施（R-925，Jobs+Meyer 双批）**。`execute()` 实现为 `syscall.Exec(target_cmd)`——将自身进程替换为目标 CLI，使目标 CLI 在沙箱约束下直接与用户终端交互（**Unix 语义；Windows 为 CreateProcess+退出码代理，R-904 设计种子**）。PTY 由 Plugin Runner 在子进程启动前分配。stdout/stderr 直接透传，退出码即 Result。`declared_capabilities: ["passthrough.execute"]`。用于 Run 模式 '
+    has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'Primitive'
     description: 'Kernel 理解的原子操作。**3 种：Check/Exec/Decide**（会议 #78 第一性原理修正：从四原语改为三原语）。Wait 是 PipelineRunner 中间状态，不是 Primitive '
     has_schema: 0
     defined_in: '05软件架构文档.md'
+  - name: 'session_id'
+    description: 'GoalOS 自有运行时标识（R-1427——PM 裁定 2026-08-15）。由 Scheduler（交互 Session）或 Agent Runner（子 Agent 任务级 Session）生成，写入事件信封；幂等键组成={goal_id}-{action_id}-{session_id}。**概念边界：非模型 API 会话 id**——与模型 API 的交互=无状态请求（每次调用自带完整上下文，上下文由 ContextEngine 组装），文档体系内不存在模型 API 会话概念 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Session'
+    description: 'v0.2.0 新增。Goal 的运行时隔离单元。每个 Goal 启动时创建独立 Session，持有独立 LLM 连接、Context 窗口、Token 预算。Session 之间零耦合。Session 随 Goal 生命周期结束而销毁（实例化判定句——用户一次对话=创建一个 Goal，权威=05 §2.1，R-1413）。（**概念边界（R-1427——PM 裁定）**：本 Session 与 session_id 均为 GoalOS 自有运行时概念，非模型 API 会话 id；模型 API 交互=无状态请求每次调用自带完整上下文——见 session_id 词条。）（会议 #207 R-1423 两级扩展）交互 Session=Goal 级唯一活跃；任务级子 Session=子 Agent 生命周期——结束即归档日志，只保留在审计事件流（SubAgentSpawned/SubAgentCompleted）。（会议 #107）新 Session 重做（R-741）——同一 GoalID、全新 PipelineState、保留已完成 Action 产出物、不重新 Align、重新 Plan、独立 SessionID、同样失败→ESCALATE。（**边界（R-1496）**：Session=Goal 级运行时隔离单元；ExecutionSession=执行契约激活的执行会话（05 §X.6）——一个 Goal Session 可含多个 ExecutionSession，生命周期正交，禁止混用） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Workspace'
+    description: 'v0.2.0 新增。用户创建 Goal 时通过 `--workspace` 指定的可写目录。GoalOS 只写此目录及其子目录。**默认值（R-1003 裁决）**：`~/Goals/<目标名>/`——未指定 `--workspace` 时自动创建该目录（04/01 全部示例隐含此值）；显式指定时以指定值为准。访问 workspace 外目录需审批（审批交互唯一呈现=goalos CLI——R-1125）。（会议 #107） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
   - name: 'Wait'
     description: '**PipelineRunner 中间状态**（会议 #78 修正：不是 Primitive）。订阅外部事件并等待。PipelineRunner 进入 Wait 后保存 PipelineState→发布 PipelinePaused→退出 Run()。GoalRunner 等待唤醒事件后重新调用 Run()。唤醒事件映射：Approval→UserApprovedAction / Dependency→ActionCompleted / Resource→ResourceAvailable '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'BudgetTracker'
+    description: '预算追踪与熔断决策器（R-550 术语统一：删除 CircuitBreaker 独立概念。CircuitBreaker 为 BudgetTracker 内部熔断逻辑）。追踪 Token/费用/重试次数/重复失败模式。任一维度超限→熔断→Decide 返回 ESCALATE。**规划 Token 预算熔断归本机制（R-1171/R-1247）**——不再单列 PlanningCircuitBreaker 条件（原''''连续 2 次 Plan 失败或规划 Token>30%''''词条已删） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'RecoveryPipeline'
+    description: '**已废除（会议 #107 + R-740）**。旧失败恢复机制——多策略尝试（SWITCH_TOOL/AUTO_FIX/RETRY）。已被新 Session 重做替代。新 Session 重做见 Session 条目。 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'FlowComposer'
+    description: 'Flow 约束执法者。负责 ValidatePlan()：检查 Agent.Plan() 产出的 MissionGraph 是否覆盖 Flow 的 required stages。确定性算法，不用 LLM。校验失败→MissionGraphRejected。**校验结局三分路（R-1171）**：a) 结构非法→MissionGraphRejected→重规划（≤2 次）→第 3 次→Goal→NeedsReview(reason=plan_failed)；b) Flow 无匹配模板→NeedsReview(reason=flow_template_missing)→用户确认临时 Flow 继续（不产生 Rejected）；c) 契约冲突→R-1130 仲裁（契约优先+动态规划补足，不拒绝） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'ReviewReport'
+    description: 'v0.2.0 新增（R-846）。Multi-LLM 审查的结构化报告。含 verdict / vote_distribution / provider_opinions（每个 Provider 的完整 reasoning）/ user_decision。持久化至 bbolt 桶（~/.goalos/state.db 投影——R-1175 载体单一化；per-goal 目录布局废弃，R-1328）。用户通过 CLI `goalos review` 查看（审查交互唯一呈现=CLI——R-1333）。**Invariant**: Provider 原始意见完整保留——不截断、不翻译、不美化 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'MultiLLMUserDecided'
+    description: 'v0.2.0 新增（R-850）。用户对 Multi-LLM 审查结果做出决策的事件。decision 取值：accept（接受结果，tainted_review=true）/ retry（新 Session 重做）/ refine（修改需求→Agent.Replan）。layer: core。**Invariant**: 同一 Action 最多发布一次。决策不可撤销 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Local UI Server'
+    description: 'HTTP Server | daemon HTTP API 的本地交付通道（R-1580 对齐 R-1123/R-1378）：**=goalos CLI 的后端接口，非用户直接入口**（新原型交付前 CLI 唯一软件入口——R-1123）。监听 UDS `~/.goalos/run/daemon.sock`；TCP `localhost:18920` 仅留 `/metrics`（R-1378）。实现细节。对标 Cups/VS Code Server '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'JSONL Event Store'
+    description: 'events.jsonl。append-only。Source of Truth。**WAL 先行协议（R-1175）**：写入顺序=WAL append→fsync→bbolt tx 投影（WAL 为唯一串行化提交点，追加互斥）；bbolt 失败→按 WAL 回滚重放；恢复源=WAL（bbolt 可重建）。单一全局 WAL 文件（per-goal 目录布局废弃） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'StateSnapshot'
+    description: 'state.json。可重建投影（R-1116 更名自 State Snapshot）——**R-1175 载体单一化**：投影/快照/索引存 bbolt（~/.goalos/state.db），事件索引+投影原子写（投影=纯函数） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'goalos (CLI)'
+    description: '脚本集成。HTTP (localhost)。Goal 模式：`goalos "<目标>"`。Run 模式：`goalos run [--profile] [--mcp] -- <cmd>`。迁移工具：`goalos migrate`。**新原型交付前唯一软件入口（R-1123）** '
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'Persona'
@@ -36,7 +100,7 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'typed event payload'
-    description: 'v0.2.0 类型安全改进（TC-TYPE-001）。Go struct（如 GoalCreatedPayload）替代 `map[string]interface{}`。编译期类型安全。定义于 `pkg/events/` '
+    description: 'v0.2.0 类型安全改进（TC-TYPE-001）。Go struct（如 GoalCreatedPayload）替代 `map[string]interface{}`。编译期类型安全。定义于 `goalos/events/` '
     has_schema: 1
     defined_in: '05软件架构文档.md'
   - name: 'IPC两行协议'
@@ -52,7 +116,7 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'api_contract_test'
-    description: 'v0.2.0 新增第 10 个契约测试文件。验证 HTTP API M6（goal 非空 + len<10000）。Meyer M6 的 L2 测试 '
+    description: 'v0.2.0 新增第 10 个契约测试文件。验证 HTTP API M6（goal 非空 + len<10000）。Meyer M6 的契约测试（金字塔底层 AutoTest——确定性断言） '
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'STRIDE威胁建模'
@@ -72,6 +136,310 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'B7a/B7b 拆分'
-    description: 'Dashboard 分阶段交付方案（会议 #75 R-404）。B7a: Week 1 最小可用输入框。B7b: Week 7 SSE 实时卡片 '
+    description: '旧 Web UI 分阶段交付方案（会议 #75 R-404）——Web UI 交付已随 R-1333/R-1372 拆除（v0.5.0 原型重开发后重评估），审批交互唯一呈现=CLI。B7a: Week 1 最小可用输入框。B7b: Week 7 SSE 实时卡片 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'PluginRegistered'
+    description: 'v0.2.0 新增（R-737）。PluginRunner 发布。Plugin 通过签名验证后的注册事件。订阅者：PipelineRunner / CapabilityEngine。layer: core。payload: {plugin_name, plugin_type, capabilities, version, signature} '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'PluginUnregistered'
+    description: 'v0.2.0 新增（R-737）。PluginRunner 发布。Plugin 被移除时的事件。订阅者同 PluginRegistered。layer: core。payload: {plugin_name, reason} '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'GoalContract'
+    description: 'GoalOS 最顶层领域对象。Goal + CompletionContract + FlowName + RecoveryPolicyRef 的绑定。FlowContract 和 RecoveryContract 不独立存储——是 FlowTemplate 和 daemon.yaml 的运行时懒加载视图。**字段裁决（R-1178）**：struct 持久字段=FlowName string（值绑定，与懒加载视图一致）；FlowContract=渲染期视图类型（由 FlowName 解析生成，定义于 05 §3.11，字段=FlowName+渲染元数据）；GoalContract 版本状态机（Draft→Frozen→Revised→Superseded）序列化以 FlowName 为持久字段。用户和系统的完整契约 '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'ArbitrationPolicy'
+    description: 'Multi-LLM 裁决策略（R-637；R-1250 S''-07 重写——R-1563 单点化，原 500 行重复条目已合并删除）。**裁决规则不可配置**——唯一合成函数=S-20 四规则（05 §3.3）；加权打分/risk_override/provider_reliability 降权机制已全部删除（R-1162/R-1250）。配置只保留执行参数：provider_minimum（R3_plus=2/R5=3）+timeout（per_provider=30s 超时=FAIL；fallback=local_ollama）。字段权威=05 附录 C.1 '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'VerificationPrecedence'
+    description: '验证强度层级（R-638；R-1177 D42 修订——R-1563 重写）：**行为层结果 > cross_model 结果 > auto_tests 结果**——高层级 FAIL/WARN 覆盖低层级（否决权语义，非线性）。BehavioralTest（确定性终极，观察真实行为、强度最高）> CrossModel（跨 Provider 独立审查）> AutoTest（基础验证）。旧线性链（含 SeverityWeightedMajority 加权判定）已废弃——verdict 合成唯一来源=S-20 四规则函数。SemanticMetaVerification=阶段 2 仲裁机制，v0.4.0 挂起（R-1272），挂起期间 DIVERGENCE 直接转 NeedsReview 人工决策链路 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'I0–I5'
+    description: '隔离等级（执行后端隔离度，R-1098 命名分离——R-1114 全量传播：隔离维度一律 I0-I5，禁 L 前缀）。**阶梯唯一定义（R-1506——会议 #234，修订 R-1354 的 I4 部分）**：I0=无隔离（仅进程边界）；I1=进程边界+资源限制；I2=OS 原生强制**单面**（syscall 过滤族或文件系统禁闭族任一，诚实标注覆盖面）；I3=I2 双面齐备（syscall 过滤+文件系统禁闭）；I4=独立内核边界（gVisor 用户态内核/Windows Sandbox/HV 微虚拟机——信创 systrap 可达）；I5=一次性执行环境。**金丝雀移出阶梯**（数据面检测归五支柱，不是隔离边界）；macOS Seatbelt=I2 唯一值（文件禁闭单面）。与 R0–R5 正交：风险→最小隔离映射归治理策略（06 §1.3 签发决策表）。权威：06 §1.3 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '执行分级（ExecutionTier——T 族速记，R-1475/R-1477/R-1498/R-1521）'
+    description: '运行时边界四档（权威：05 §X.6）：**T0 协作档**=I1 扩展（进程边界+资源限制+能力代理协议——协议外直接系统调用不被拦截，仅限认证工作负载；v0.3.1 仅测试夹具可达——R-1507 诚实标注）；**T1 受限档**=I2/I3（OS 原生强制，按平台探测落档）；**T2 强隔离本地档**=**I4 强度+本地拓扑**（R-1521 定义放宽——热池=延迟优化形态非档位定义；既有 gVisor systrap 本地后端=T2 非热池形态，延迟按实测诚实标注）；**T3 强隔离远程档**=I4-remote（v0.3.1 不做——R-1483：远程需求由远程代理托管承接）。档位编号=呈现与决策顺序，**非强度严格单调**（T0 与 T1/T2/T3 不同轴=协作 vs 强制；T2=T3 同强度异拓扑）；与部署拓扑两轴正交（见"隔离强度与部署拓扑"词条）。**降级边界（R-1497）**：契约 MinIsolation=硬地板——既有自动降级链 I5→I4→I3→I2 只允许在 ≥MinIsolation 范围内运作，低于地板=拒绝+治理重新评估；**双路径关闭（R-1512③）**：v0.3.1 起所有执行走契约硬地板 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '协作/受限/强隔离/远程（产品语义词，R-1477/R-1527）'
+    description: '用户可见文本（CLI/提示/文档）唯一合法分级词汇，依次对应 T0/T1/T2/T3——v0.3.1 呈现**协作/受限/强隔离三档**（R-1542 修订 R-1512④：T2 生产路径=既有 I4 后端真实可达，强隔离为用户可见档；远程档本版本不呈现，T3 不做）；工程文档可用 T 族速记；用户可见处禁止出现 T0/I4 等工程词汇（TC-RT-100 grep 断言——范围=人类可读通道）。**JSON 机器值枚举登记（R-1527——三方映射唯一权威=本词条）**：cooperative/constrained/hardened_local/hardened_remote。**"远程"两义分离（R-1527）**：档位词"远程"=T3；R-1483 的远程承接路径措辞="远程代理托管"（agent 远程管理）——两词不同义，用户可见文本用后者指承接路径 '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'ExecutionContract（执行契约，R-1505/R-1498）'
+    description: '治理层签发的短时效、单会话绑定、HS256 签名执行授权=**CapabilityToken v2 扩展**（同一对象、同一签发、同一验证链——R-1505 修订"增强投影"措辞：非平行权限模型，新增 ProfileDigest 绑定/分钟级 ExpiresAt/SessionID 唯一绑定/Nonce 单会话消费/RequiresRealEnforcement 显式字段五件；密钥=secrets.key keyring 既有轮换；Ed25519=预留方向）。字段权威：05 §X.6。**Nonce 两义注记（R-1498）**：契约 Nonce（单会话消费，防跨会话重放）≠IPC 握手 nonce_c/nonce_d（R-1197 通道级抗重放，每次握手）——不同层不同语义，禁止混用 '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'Runtime Resolver（运行时解析器，R-1475/R-1476/R-1512）'
+    description: '**解析期**把契约强度要求+PlatformCapabilities 探测映射为唯一分级与 RuntimeProvider 的决策函数——每个 ExecutionSession 解析一次并冻结，Execute 路径零判断（R-1012 语义）；**术语纪律（R-1512②）**：不称"Compile 期"（Compile=TOML Profile→CompiledProfile 既有占用）；不重新评估安全策略。权威：05 §X.6 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'RuntimeProvider（运行时提供方，R-1475/R-1494/R-1523）'
+    description: '某分级在某平台的具体实现：只声明与实现能力，不产生权限、不改变策略、不跳过审计；**未实现 RuntimeProvider 不注册**（R-1468 骨架纪律——结构上不可达，非运行时状态）。**SPI 唯一权威=05 §X.6.5（接口定稿）；08 §19.10a=接入原则+Conformance 权威+平台机制要点**（R-1523——K 顾问 P0-4 双权威修复）。**命名分离（R-1494）**：与 **LLMProvider**（模型提供方——09 GOV-LLM 族/05 Multi-LLM 既有用法）互斥；文档正文一律 RuntimeProvider，代码层 internal/runtime 包内类型名 Provider 保留（包作用域无歧义） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'ExecutionSession（执行会话，R-1478/R-1496/R-1504）'
+    description: '一份 ExecutionContract 激活的唯一会话（Nonce 仅会话建立时单次消费）；**粒度钉死（R-1504）：与 Action 1:1**（契约绑 action_id）、与沙箱进程组 1:1——会话内 Execute 可重复=Action 内多次工具调用；一个 Goal Session 顺序持有 N 个 ExecutionSession；热池=跨会话实例复用（归还≠销毁）；**升级=新会话挂载同一工作区卷**（旧会话关闭、新会话建立、卷引用不变——不做句柄迁移）。状态机权威：05 §X.6。**边界（R-1496）**：≠ Session（Goal 级运行时隔离单元，持有 LLM 连接/Context/Token 预算）——一个 Goal Session 可含多个 ExecutionSession，生命周期正交；07 事件 SessionEscalated 归属本词 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '热池（Warm Pool，R-1478/R-1495）'
+    description: 'T2 原型的预启动实例池：归还时 VMSnapshot 暂停、获取时恢复（延迟目标来源）；恢复前必须内存清零+工作区卷重新校验（防跨会话残留——顾问审计 K-1，TC-RT-040 攻击测试） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '隔离强度与部署拓扑（两轴模型，R-1475）'
+    description: '强度=执行体与宿主间隔着什么边界（机制问题）；拓扑=边界运行在哪台机器、经什么信道访问（位置问题）；两轴独立求解——本地也能有强隔离（T2），远程不是强度的必要条件 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '完整性防线（R-1041 语义/R-1114 命名）'
+    description: 'events.jsonl 三层完整性防线——**防线一**=条目级 CRC32（R-1037，介质损坏检测）/**防线二**=seq 单调性（丢失/乱序检测）/**防线三**=hash chain（R-1041，SHA-256 前向链，篡改检测+断裂点单条目定位）。禁用 L 数字前缀（R-1114：L 前缀四家族拆分后弃用字母编号——D=错误码域码/T=Windows 约束层/W=周号均已占用） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '快照族术语（R-1116 六义六名——R-1495 收编第六义）'
+    description: '六义六名对照：**StateSnapshot**=StateStore 投影快照（R-545，冷启动 O(1) 加速）；**FileSnapshot**=statefs 快照（Snapshot 方法名保留，R-1035/R-1065——文件版本 vN 机制已删，R-1366，语义见 statefs 词条）；**环境快照（EnvSnapshot）**=Observer 采集物（只读，采集不裁决）；**Checkpoint**=状态快照子集+token 撤销锚点+定期增量边界（R-772/R-1093）；**MVCC 读视图**=bbolt ReadTx（R-1109，禁称快照）；**VMSnapshot（热池镜像，R-1495）**=T2 热池实例的虚拟机状态快照（归还时快照暂停/获取时恢复——恢复前内存清零+卷重新校验）。正文禁用裸"快照"跨义指代 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Level 尺度对照（R-1115 三义分离）'
+    description: '**IsolationLevel（I0-I5）**=CompiledProfile 沙箱隔离等级（05 §X.1a）；**PlatformTier（1/2/3）**=平台支持三级（R-924：1=编译通过/2=测试通过/3=沙箱强制生效，06 §1.3）；**Persona Level（0-3）**=人格语气授权档（禁裸用 Level——必须完整前缀 Persona Level N） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'TOML Profile (SandboxProfile)'
+    description: '声明式安全契约文件。定义文件系统白名单、网络白名单、exec 分层策略、资源限制、环境变量注入。三层配置体系（R-935）：① `--profile <path>` 显式路径 ② 当前目录 `goalos-sandbox.toml` 自动检测（**推迟 v0.5.0**，信任模型见 R-909 设计种子） ③ `--profile @name` 引用 `~/.goalos/profiles/<name>.toml`。均未指定时使用内置默认 strict profile（deny-all + workspace rw）。v0.3.0 起由 Sandbox 抽象层消费——第一消费者=Plugin Runner（Goal 模式，R-926）。解析器=BurntSushi/toml（R-907，Ken 否决自建 parser） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Exec Monitor (execmonitor)'
+    description: 'Sandbox 层模块（`internal/execmonitor/`，R-936）。不属于 Kernel。对每次 execve 系统调用进行同步安全审查。**syscall 级审查 UX 推迟 v0.5.0**（完整形态 seccomp-notify 仅现代 Linux 可用——Windows 无机制/信创 4.19 不支持/macOS 仅约定级 PATH 代理，与平台优先级倒挂）。v0.3.0 保留底层资产：命令分类器接入 Governance Risk 引擎（R-914） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'exec 分层策略'
+    description: 'Exec Monitor 的安全决策等级（R-937）。R0-R1（Allow 类命令如 git status）→ 自动放行。R2-R3（Escalated 类命令如 git push --force）→ 用户确认（审批交互唯一呈现=goalos CLI——R-1125/R-1333；**推迟 v0.5.0**）。R4-R5（Forbidden 类命令如 rm -rf /）→ 自动拒绝。默认规则来自 agentbox 命令分类器规则组（**实测：14 Forbidden/16 Escalated/~14 Allow 规则组**——pin 版本 `v0.0.0-20260409110136-e003e7574798`，完整枚举见 08-沙箱 §11，R-914），可由 TOML `[permissions.sys]` 覆盖 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'agentbox'
+    description: 'GoalOS 默认沙箱后端（R-931）。Go 原生库（`github.com/zhangyunhao116/agentbox`），零 cgo，依赖仅 go-ole/x/net/x/sys。编译进 GoalOS 二进制。三平台机制：Windows（Restricted Token + Job Object + Low Integrity + ACLs）/ Linux（namespace + Landlock + seccomp BPF）/ macOS（Seatbelt/SBPL）。内置命令分类器规则组（实测 14F/16E/~14A，见上）。fail-closed 默认。**W0 STRIDE 裁决：通过（有条件）——vendor 目录锁定+commit pin（无 tagged release）+Go 1.24 工具链升级+热点代码审查（platform/windows、reexec、proxy/）。不通过则 R-942 分层 Plan B** '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'MXC (Microsoft Execution Container)'
+    description: '微软开源（MIT）可选沙箱后端（R-938）。Rust 核心 + TypeScript SDK。Windows ProcessContainer 三层：T1 BaseContainer（25H2+，内核级）/ T2 AppContainer+BFS / T3 AppContainer+DACL（23H2+）。Linux: bubblewrap/LXC。macOS: Seatbelt（实验性）。需独立安装 `wxc-exec`。GoalOS 启动时自动检测→有则优先使用→无则 fallback agentbox。用户 TOML `[agent.backend] prefer` 可指定偏好 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '后端引擎架构（原"双后端架构"，R-938 重命名）'
+    description: '**引擎维度**的后端组织：agentbox（默认 Go 库，编译进二进制）+ MXC（可选容器）。**注意与"Sandbox 后端矩阵"（R-926，平台策略维度四后端）区分**——两者是不同维度：引擎维度回答"用什么库/容器实现沙箱"，平台维度回答"每平台用哪种 OS 机制"。**v0.3.0 现状（R-958）**：MXC 降为检测+预留接口 stub，实际单引擎=agentbox；MXC 完整实现随企业用户需求评估。后端选择对用户透明（R-938） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'goalos migrate'
+    description: '外部工具知识资产迁移引导。**推迟至 v0.4.0 之后实施（Jobs+Meyer 双批）**——迁移的"源"与"目的地"由 v0.4.0 MCP+skills 定义。当前代码库无实现。一次授权→全量迁移→立即可用。三步流程：自动扫描发现→预览需迁移内容→一个回车确认。默认 Y（交互式终端）或需 `--yes`（非 TTY）。支持 `--from` 指定来源（claude-code/codex/openclaw/hermes）或扫描全部。`--dry-run` 仅预览。原始文件永不修改、永不删除。迁移完成后展示基于真实数据的个性化"试试看"引导（R-941） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '迁移资产类型'
+    description: '可迁移的外部工具知识文件分类：CLAUDE.md/AGENTS.md→AGENTS.md（开放标准兼容）；Memory 文件→Decision Record/Lesson Record/Pattern；agentskills.io Skills→直接复制到 `~/.goalos/skills/`；偏好设置→Persona + PolicyConfig；API Keys→secrets.enc '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Sandbox 接口'
+    description: 'v0.3.0 架构中心制品（R-893 接口形态 + R-926 定位）。单方法 `Execute(ctx, cmd, profile)→(*Result, error)`。**error 四态契约（R-906a）：Timeout/Retryable/Fatal/NeedHuman**。Precondition: profile 已通过 Validate() + 调用点位于治理闸门之后（R-906a 不变量）。Postcondition: 子进程受 profile 约束+审计完整。Invariant: 后端失效 fail-closed；daemon 不受子进程崩溃影响。生命周期管理（Start/Stop/Wait）是 Plugin Runner 的职责——非 Sandbox 接口。第一消费者=Plugin Runner（Goal 模式） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'exec 过滤盲区（R-898）'
+    description: 'Exec Monitor 检查 execve 的可执行文件名——不检查解释型语言内部的危险操作。`python -c "rmtree(''/'')"` 不被 exec 层拦截（python 在 Allow 列表）。由文件系统白名单（Landlock/Seatbelt/ACL）和网络白名单在内核级兜底。这是纵深防御的设计意图——不是缺陷。**随 Exec Monitor 推迟 v0.5.0；兜底层（文件系统/网络白名单）在 v0.3.0 由各后端独立强制，不依赖 Exec Monitor** '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'TOML Profile Validate()'
+    description: 'v0.3.0 新增（R-901）。profile 加载后立即校验：name 非空、规则无冲突（同一 pattern 多 risk→取最严格）、`${secret:xxx}` 引用存在、duration 合法。Validate 失败→拒绝执行。**错误是值，非 recover（R-907）；缓存键=内容 SHA-256（R-908，废 mtime）** '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Session 决策缓存'
+    description: 'v0.3.0 新增（R-901）。Exec Monitor 维护的 actionID→decision map。**随 Exec Monitor UX 推迟 v0.5.0（R-913）；actionID 规范化算法（二进制真实路径+参数规范化+风险类归属）已作为设计种子存入 08-沙箱 §15** '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'STRIDE Week 0'
+    description: '开发启动前的轻量威胁建模（R-899 设立，R-916 按会议 #170 路线重构）。v0.3.0 六场景：agentbox 供应链/Windows token 降权缺口/信创 4.19 fallback/TOML 恶意输入/Windows named pipe 冒充/平台现状盘点。Lipner+Meyer 共同负责。产出同步到 06-安全 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '平台支持三级定义（R-924/R-977）'
+    description: '平台支持成熟度的诚实分级：1 级=编译通过 / 2 级=测试通过 / 3 级=沙箱强制生效。每平台每级如实标注。会议 #170 基线：Windows=1 级，信创=1 级，macOS=3 级，Linux=3 级。v0.3.0 目标：Windows=3 级，macOS=3 级，Linux=3 级，信创=2 级（3 级在 0.3.x 真机窗口收敛）。**尺度互指注记（R-1571）**：本词条"N 级"=**PlatformTier**（平台支持成熟度）——与 IsolationLevel（I0-I5，隔离强度阶梯）不同轴（macOS=PlatformTier 3 级 且 IsolationLevel=I2 唯一值）；对照见"Level 尺度对照"词条。**SandboxLevel 语义（R-977）**：`Result.SandboxLevel`=本次执行**实际生效**的能力级别；3 级=该平台当前配置**可达的最高级**；降级=**能力受限**（如信创无 Landlock），**非不安全**——诚实标注的目的就是让用户知道当前限制，能力仍在 OS 级强制执行（只是少一层） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Sandbox 后端矩阵（R-926）'
+    description: '四后端：windows-job（agentbox：Restricted Token+Job Object+Low IL+ACL）/ xinchuang-sandbox（seccomp BPF 自加载+mount namespace，内核 4.19+，R-1399 命名）/ linux-sandbox（seccomp+mount namespace+Landlock 可选增强 5.13+——BPF 不做路径鉴权，R-1399）/ darwin-seatbelt（sandbox-exec .sb 统一收口）。运行时特性探测选择后端策略，失效 fail-closed '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '插件协议传输层（R-922）'
+    description: 'FD3 协议消息语义（两行 HMAC）不变，传输层抽象化：Unix=fd 继承 / Windows=named pipe（管道名随机化+ACL 限制）。Go `exec.Cmd.ExtraFiles` 不支持 Windows——传输层化是 Windows 插件 IPC 的前置。位于 `internal/pluginrunner/ipc/` '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '内核能力模拟开关（R-929/R-1014）'
+    description: '`GOALOS_SANDBOX_SIMULATE_KERNEL=4.19` 及 per-feature 强制覆盖开关。使信创回退路径（4.19 模式：无 Landlock/无 seccomp-notify）在现代内核 CI 中每日 exercised——"第一次执行的代码必然是坏的代码"（Kees）。模拟 4.19 模式 CI 全绿是 v0.3.0 **2 级测试通过闸口**。**边界（R-1014）**：模拟仅验证降级逻辑与诊断路径，**不是底层 OS 沙箱能力的验收标准**——3 级验收必须依赖真实 4.19 物理机或 QEMU 镜像 CI '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '信创诊断包（R-929/R-1014）'
+    description: '`goalos sandbox doctor` 单命令产出 tarball：内核信息/特性探测结果/沙箱决策轨迹/contract test 报告/结构化 log/panic stack。为物理隔离内网的离线往返设计——每趟最大化诊断信息量。模拟开关生效时输出 **SIMULATED** 标记（与 REAL 真机结果区分，R-1014） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '底层安全清单（R-928）'
+    description: 'v0.3.0 显式工作流：fd CLOEXEC 卫生 / secret 红线（解密 secret 永不进事件/审计/日志，R-917）/ audit 链完整 / 进程树生命周期（R-957：范围含孙子/SIGTERM→2s→SIGKILL/TerminateJobObject/daemon 崩溃清理）/ 沙箱逃逸对抗测试 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '治理不变量（R-906a）'
+    description: 'Sandbox.Execute 的所有调用点必须位于 Governance 治理闸门之后。Goal 模式现有链路已满足；任何新增沙箱调用路径不得绕过；v0.5.0 Run 模式直接继承。技术强制：CI import 白名单（仅 pluginrunner 可 import internal/sandbox，R-953） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'CommandSpec（R-988）'
+    description: 'Sandbox.Execute 的 `cmd` 参数类型（05 §X.1a）。不暴露 `*exec.Cmd`——Windows 的 exec.Cmd 不支持 ExtraFiles，跨平台语义必须统一。字段：Path（绝对路径）/Args/Env（含 ${secret:xxx} 解密后注入）/WorkingDir/Stdio（INHERIT\|CAPTURE\|FILE）/Resources（CPU/内存/文件数上限）/Timeout。与 Plugin Runner 的 ExecuteMessage 关系：ExecuteMessage（IPC 协议层）→ 翻译 → CommandSpec（Sandbox 层） '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'PlatformCapabilities（R-947/R-976）'
+    description: 'daemon **启动期一次**探测的平台环境事实（内核版本/Landlock ABI/seccomp-notify/namespace/Job Object/MXC 存在性），内存缓存，Daemon 生命周期内不变。是 Governance 决策的**上下文前提**（降级环境→高风险审批收紧），非调用链步骤。探测失败→fail-closed（最保守配置+降级警告）。模拟开关（R-929）仅 CI/诊断用途，生产检测到→拒绝启动 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '诚实标注格式（R-960）'
+    description: '平台/特性安全级别的用户可见声明规范。通道：CLI 启动横幅+SSE 事件流（R-1195 改定——原''''CLI 启动横幅+UI 徽章''''：identity labels 自 D54 DegradedItems() 数据源，供未来 UI 订阅；CLI 启动横幅=SSE 流的当前消费者（横幅标签数据取自流，S-48/R-1243）；读取路径=初始快照 GET /api/system/status+SSE 增量（R-1580 修正——/v1 前缀已废除，R-1321）（过滤 SandboxDegraded/ModelSelection 事件）；横幅 SSE 连接计入 4 上限不设豁免（F-19）；CLI 本机 SSE 走 unix socket）。格式：`当前级别(1/2/3) ｜ 缺失项 ｜ 依据`（全角分隔）——例：`2 级 ｜ 文件系统隔离降级(seccomp-only) ｜ 内核 4.19 无 Landlock`。不伪造安全能力 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'fail-closed（R-960 明确）'
+    description: '后端失效或能力不满足时**拒绝执行**，绝不降级为无沙箱执行。返回 error 四态之 `Fatal`→AgentErrorCode=POLICY_DENIED（05 §X.1b 矩阵） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'CompiledProfile（R-1008）'
+    description: 'Sandbox.Execute 的 `profile` 参数类型（05 §X.1a）。**值类型 struct**。**零值非法化（R-1106 — 会议 #195 修正）**：Execute 入口零值检测→Fatal fail-closed——零值不再是"Level 0 显式形态"（旧语义已废弃），Level 0 也必须经 Compile() 显式构造（明确配置，绝无隐式默认降级）。"不可为空"（R-975）语义修订为：**必须由 `Compile(profile, caps)` 产出**——调用方禁止手造/零值绕过编译。**R-1036 opaque 强化**：规则字段全不导出（外部包复合字面量=Go 编译期拒绝，语言级机制非约定——盲区 4）；唯一非零构造途径=Compile()（导出 getter 读路径：Level()/Platform()/...）；零值声明 Go 允许（issue #333）——Execute 入口零值检测→Fatal（fail-closed：宁可拒绝执行，不可无配置执行）；同包手造=信任边界。跨平台策略：超集结构体+Platform 字段+Extensions map（08 §19）。`Result.SandboxLevel ≤ CompiledProfile.Level` 为契约测试断言（诚实标注验证） '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'CompletionContract 第一性原则（R-1091/R-1102）'
+    description: 'mission 完成 ⇔ CompletionContract 验证通过**且作为系统状态记录**（与事件/文件同等持久化）——CompletionContract 不是执行副产物，是判定者（判定者与被判定者同源=LLM 生成的测试测 LLM 生成的代码=自己批改作业）。auto_tests 可执行协议：MissionGraph 预览阶段固化（审批通过后冻结）→**人类审查测试意图**（审批流一部分，不可跳过不可自动化豁免）→沙箱内执行（E2B 模式）→结构化回报→失败=mission 未完成。权威：05 §3.19.1 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Logical Truth / Physical Truth（R-1092）'
+    description: '双真相源主从定义：events.jsonl=**Logical Truth**（唯一权威，状态从事件重放推导）；statefs=**Physical Truth**（加速投影，可丢弃、可从事件重放重建，Checkpoint 从不是权威）。**Commit Point = Event Commit ∩ StateFS Commit**（两者落盘才对外可见）；Action Commit=Logical+Physical+Audit 三合一。恢复顺序唯一：先 Event 恢复→statefs reconcile；Audit=append-only 证据链不在 reconcile 范围。**Commit Point 修订（R-1175 S-06）**：''''bbolt 投影 tx 原子+WAL 先行协议''''——WAL append→fsync 先行（WAL 为唯一串行化提交点，追加互斥），随后 bbolt 投影 tx 原子提交；bbolt 失败→按 WAL 回滚重放；恢复源=WAL（bbolt 可重建）。权威：05 §3.19.2 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '状态代数矩阵（R-1095）'
+    description: 'Goal 状态机=四维代数 **GoalState×ActionState×PipelineState×ApprovalState**（每维独立终态集合+合法迁移表，交叉合法性穷尽枚举，非法迁移=契约测试拒绝）。Stop/Cancel/Fail 语义分离：**Stopped(user_stopped)**=用户主动停止终态（不伪装 Failed）；Cancelled=治理层撤销；Failed=异常终止。**GoalState=9 态（R-1137，会议 #198）**：Draft/Planned/Running/Paused/NeedsReview/Stopped/Failed/Cancelled/Completed。权威：05 §3.2 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '唯一 Contract Authority（R-1099）'
+    description: '每个契约指定唯一权威文档+权威章节，其余文档引用权威条款而非复述定义——契约权威分散=文档复述漂移（会议 #195 实证：版本头滞后+旧语义残留+备份文件混入）。配套 CI 机检：check-doc-version.sh（版本头=修改记录最新）/check-deprecated.sh（废弃语义残留检测）。权威：00统一术语表 本词条 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Semantic Freeze（R-1099）'
+    description: '废弃语义 `[DEPRECATED]` 标注+CI 残留检测（check-deprecated.sh 扫描活动规范文档正文，命中即 FAIL）——旧语义靠人脑记忆淘汰必然残留（会议 #195 实证：05 活动正文三处旧语义残留）。废弃模式登记表见脚本头部（新增废弃语义时追加）。权威：00统一术语表 本词条 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'bbolt（R-1109/R-1175）'
+    description: 'statefs 实现选型（钉死）：纯 Go 单文件 MVCC KV——事务原子提交、MVCC 读视图=ReadTx（禁称快照，R-1116）、崩溃安全（B+tree copy-on-write）。**R-1175 物理载体单一化（会议 #198）**：bbolt=statefs 唯一载体，路径=~/.goalos/state.db；桶 schema=meta/events-index/checkpoints/goals/{goal_id}/projections+decision 桶（UserDecisionReceived/ActionApproved/ActionRejected 事件投影）+drift-detector 桶；Checkpoint=bbolt 一致性快照；tx 纪律=tx 内事件索引+投影原子写（投影=纯函数），副作用/下游事件发布一律 tx 提交后执行（不在源事件 tx 内），事件处理器禁止重入 bbolt 写，写锁等待>1s→事件排队退避；单一 store 写者+串行化段=internal/statestore 单 goroutine（append→fsync→global_seq 分配→bbolt tx→tx 提交后出队下游事件再入 append 循环），废弃 AtomicEventStore 拆除；单一全局 WAL 文件 events.jsonl（per-goal 目录布局废弃）+一次性迁移脚本=独立 cmd/ 工具（daemon 检测旧布局拒绝启动并提示迁移；tie-break=(occurred_at, goal_id, per-goal seq)）；写者循环重入不变量（F-05/R-1287）：写者循环内禁止同步调用任何会重新入 store 的路径，发布=fire-and-forget 投递入写者输入通道，handler 不得阻塞写者循环。选型钉死=实现有物理载体，非技术幻觉。权威：05 §3.19.5 '
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
+  - name: 'ResumePrimitive（R-1112）'
+    description: '幂等重放原语：恢复路径以 (session_id, mission_id) 关联定位 Resumepoint；重放从 Resumepoint 起逐事件幂等应用（事件 seq 幂等去重），中断重试安全；恢复后管线从 Resumepoint 继续而非从头执行。权威：05 §3.19.6 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'working_directory（R-1018）'
+    description: '**进程工作目录**。由 Plugin Runner 显式设置（R-977，v0.3.0 实现）——CommandSpec.WorkingDir，Sandbox 仅从 CompiledProfile 读取。与 cwd_conditional_rules 是**两个不同概念**，禁止混用 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'cwd_conditional_rules（R-1018）'
+    description: '基于 CWD 的**条件规则**（如 `if cwd == /project` 则 deny 某路径）——推迟 v0.5.0（R-909）。文档中禁止单用"CWD 推迟"表述，必须区分 working_directory（未推迟）与 cwd_conditional_rules（推迟） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '降级决策树（R-1015）'
+    description: '平台能力矩阵中"灰度功能"降级行为的统一判定规则：功能有独立开关→默认关闭（显式启用）；无开关→必须提供 Mock 实现+日志；两者皆不可→该功能在该平台标记"不支持"。**禁止静默失败**（Fail-fast with dignity，R-377） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'rollback 物理语义（R-1030/R-1035/R-1094/R-1366）'
+    description: '`goalos rollback <id>` 的显式语义：**回滚对象=状态级（GoalState+执行结果，R-1035/R-1366——workspace 文件级回滚不实现，C-PLAT-09 stub 登记，v0.4 评估）**（状态机恢复至上个 Checkpoint，R-772；恢复=Logical Truth 事件重放+Physical Truth 投影对齐，R-1092）+ **重做前置回滚幂等（R-1094 — 会议 #195）**：新 Session 重做前置=回滚点之后的投影→从回滚点事件重放重建；幂等契约：重复执行回滚=状态不变+审计记录 no-op；**回滚不变量（R-1394 L-13）**：状态级回滚后，该 Action 的 workspace 产物标记为脏：回滚区间产物不得被后续校验采纳，直至重新执行覆盖；workspace 外 API 副作用不可撤销（审计留痕）。权威：05 §3.1 rollback 物理语义+statefs 章节 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '组提交（R-1039 判定——原 R-1038 撤销）'
+    description: 'Q 顾问"批量回填阻塞审批"的机制选型记录：**不采纳（附证据）**——GoalOS 事件写入=单条 Append+单次 fsync（statestore mu 串行，全库无 batch 路径），无长事务无饥饿，审批最多等 1 次 fsync（~ms）；组提交收益场景（高频并发提交）与 Action 级事件频率不匹配。**登记设计种子**：未来若出现真实批量写入路径，启用 Critical/Standard/Bulk 优先级类+syncWorker 解耦（NodeDB/NoKV 先例）。权威：05 §3.10.1 单一写入点并发模型 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'SyncWrite（R-1037/R-1041）'
+    description: '所有持久化写入的强制原语（05 附录 C.2）：write → fsync → 可选 read-back 诊断模式。完整性与持久性分离：CRC32（条目内）+ seq 单调性（防丢失）+ **hash chain（防线三 防篡改：prev_hash SHA-256 link，R-1041）**。tail scrub 周期验证。不采纳每次回读（OpenZFS #2526）/BeforeImage 双 hash（Checkpoint 可重建）/二进制 WAL（File over Database）。权威：05 附录 C.2 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'statefs 不可变状态树（R-1035/R-1366）'
+    description: 'workspace 状态级快照机制（05 §3.1）：物理载体=bbolt 唯一（~/.goalos/state.db，R-1109/R-1175）；原版本树机制（`.states/v1..vn` 版本目录+`workspace` 链接+`.current` 指针文件，tmp+rename 原子更新）已删除（R-1366——05 §3.1 同批删除 9 个具名契约测试，改状态级测试集；workspace 文件级回滚不实现，C-PLAT-09 stub 登记，v0.4 评估）。核心操作保留：FileSnapshot=Snapshot（方法名保留）/Commit（原子切换+提交锁，与 Checkpoint R-772+事件流提交点对齐）/Discard（逻辑删除物理保留）。崩溃恢复=指针+事件流双对账（R-1021 统一）。与沙箱正交互补："写不越界"+"写了可回滚"（状态级）。权威：05 §3.1 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '人类锚点（R-1031）'
+    description: '验证金字塔**终极裁决（behavioral_tests）的来源底线**：至少 1 条行为测试必须来自人类锚点（`HUMAN_INJECTED`=用户 CompletionContract 确认/修正注入——确认即锚点事件入审计；`GOLDEN_SET`=用户预置回归测试集）。AI 生成测试不得作为终极裁决唯一来源（无锚点→`human_anchor:"WAIVED"` 用户显式确认路径）。权威：05 §3.3 behavioral_tests 来源标注 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '离线模式验证策略（R-1032）'
+    description: '"完全离线可用"（01 §7）与"Multi-LLM 必须跨 Provider"（05 §3.3）冲突的显式裁决：R0-R1 离线=仅本地单模型（已有）；R2-R3 离线=单模型+用户显式确认+Confidence LOW+恢复联网后补跨 Provider 复核；R4-R5 离线=阻断（fail-closed）。离线执行记录 `offline_verified: true`+单模型 ID 入审计。权威：06 §9.2 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '错误码知识库（R-1022）'
+    description: '09错误码知识库规范.md 定义的错误码工程资产：四段式编码 `[域]-[子域]-[严重级]-[序号]`（域=SBX/IPC/CTR/SKL/CFG/GOV/RTM——R-1334/R-1491，R-1512⑤ 补齐）；严重级 F/R/W/I 对齐四态）；错误码即常量（pkg/errors/codes.go）；`goalos error explain <CODE>` 查询；UI 文案单一入口（禁止写死）。用户可见错误=最根本致死原因（错误冒泡优先级 R-1020：安全越权>资源耗尽>逻辑错误） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '审批生命周期（R-1019）'
+    description: 'pending 审批合法出口=4 种：Approved / Denied(approval_denied) / approval_timeout / system_restart。超时可配置（PolicyConfig.approval_timeout，默认 300s）；daemon 重启反序列化时一切 approval_pending 强制转 ActionRejected(system_restart)——不自动重新呈现审批交互（fail-closed，杜绝幽灵状态） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '内核能力模拟开关枚举（R-960）'
+    description: '`GOALOS_SANDBOX_SIMULATE_KERNEL=4.19`（整包模拟）+ per-feature：`GOALOS_SANDBOX_DISABLE_LANDLOCK` / `_SECCOMP_NOTIFY` / `_NAMESPACE` / `_ALL`。仅 CI/诊断用途——生产环境检测到开关置位→daemon 拒绝启动（R-954 防篡改） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '语义一致（R-960）'
+    description: '跨后端验收标准（验收场景 3）：同一 TOML profile+同一 action 在不同后端得到**相同 ALLOW/DENY 安全判定**。机制实现差异（Landlock vs ACL vs Seatbelt）不构成不一致——判定等价即可 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '逃逸向量清单（R-960）'
+    description: '对抗测试覆盖的攻击向量（参考 runc CVE 系列与容器逃逸公开案例）：①路径穿越（`../` 越白名单）②符号链接劫持（白名单内 symlink 指向外部）③/proc 泄露（宿主进程视图/敏感文件）④namespace 逃逸（子进程 unshare 重建视图）⑤Token/句柄提权（Windows 受限 SID 绕过）⑥写白名单滥用（rw 目录内植入可执行文件再执行）⑦DLL 搜索路径劫持 ⑧reparse point 替换（handle-relative+身份校验 fail-closed）⑨NULL DACL 资源/FAT 卷 ⑩seccomp-notify TOCTOU（指针参数策略判定=竞态面，PIN_ARGS 未落地内核前禁用 CONTINUE 指针判定）⑪默认白名单 syscall 参数级逃逸（SCTPhantom 教训：按参数过滤，非仅 syscall 号）——**R-1072 修订（会议 #192）**：⑦~⑪ 为 Chromium 分层对照与容器逃逸 CVE 时序教训（Leaky Vessels/containerd checkpoint 系列）后扩充；对抗时序=R-1064（随后端落地即对抗） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '五支柱模型安全体系（R-1077）'
+    description: '会议 #193 威胁模型升级：LLM 使攻击带宽从"人年"降为"秒"，模型本身会系统性尝试突破边界——**白名单/规则判定降级为基础层**，其上叠加五支柱行为级防御：P1 物理隔离升级（gVisor/Windows Sandbox/一次性执行环境）P2 数据面+经济学（金丝雀三层）P3 验证分离（Guard LLM 前置审查）P4 可观测性（目标偏离检测）P5 以 AI 对 AI（LLM 红队常态化）+人机终局裁决（已有）。权威：06 §9.7。**R-1120（会议 #196）命名统一**：全文档唯一概念名（01 变体"五支柱安全基建/五支柱安全体系"已回收；"五支柱组件"=体系内构件表述） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'I4-I5 隔离层级（R-1078/R-1114）'
+    description: '隔离层级扩展（06 §5/08 §19.8）：**I4**=gVisor 后端（Sentry 用户态内核+Gofer 9P；KVM 探测优先、无 KVM 自动 systrap——信创 4.19 可跑；不兼容 syscall seccomp 兜底 fail-closed）/Windows Sandbox .wsb（Hyper-V 硬件隔离、air-gap、仅 Pro/Enterprise）；**I5**=一次性执行环境；macOS 诚实标注维持 Seatbelt（无等价物）。自动降级链 I5→I4→I3→I2，每级降级=审计事件+诚实标注 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '一次性执行环境（R-1079）'
+    description: 'I5 隔离层：每次执行全新环境、用完即销毁、无持久状态——对抗"残留探测+跨执行侦察"。生命周期三态机 create→run→destroy；**FileSnapshot（statefs 快照）/复用优化一律不做（简单>性能）**。与 Firecracker/Lambda MicroVM 8h 一次性会话实证对齐（Anthropic Claude 工具调用同模式） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '金丝雀（R-1080）'
+    description: '数据面经济学防御：三层哨兵——①workspace 外金丝雀=逃逸检测（文件路径+内容双层哨兵）②workspace 内金丝雀=超宽 profile 检测 ③假凭据本地解析陷阱（假 API key 指向本地解析地址，解析即触发 ~0.01s——避开 TruffleHog 静态绕过）。触发=审计事件+审批升级+用户通知（只升级不自动阻断）；**零误报硬契约**（正常流程触碰=设计缺陷）；季度轮换+触发即失效重建。权威：06 §9.7 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Guard LLM（R-1081）'
+    description: '前置审查第二层（05 §3.17）：第二模型、跨 Provider 部署（OpenAI↔Ollama 交叉）；不可信输入以数据非指令呈现+显式分隔符（Hermes 架构模式）；结构化 verdict=ALLOW/DENY/ESCALATE。DENY=fail-closed；ALLOW 仍需行为测试复核（不自证）；guard 不可用→最高审批级。三层验证链：静态确定性层→Guard LLM→人类终审 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '目标偏离检测（R-1082）'
+    description: '行为级攻击观测（05 §3.18）：两层——确定性层（工具调用集 vs 目标声明集偏离+循环检测+预算异常+金丝雀信号）**零误报硬契约**；语义层 ESN+CUSUM 统计遥测（~200μs/步，无需第二 LLM）。信号→暂停+审批升级+通知+人类裁决（**不自动阻断**）；闭环=drift 确认→statefs rollback→重跑 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '红队常态化（R-1083）'
+    description: 'LLM 红队 CI：nightly 生成攻击（PyRIT/Rampart/Foundry）→人工/行为测试确认（**非自证**——IEEE 实证扫描器存在可靠性缺陷）→入对抗契约库→PR/发布闸口运行；OWASP LLM Top 10 2025/Agentic Top 10 2026 为 eval gate 基线；红队三件套与生产数据隔离、滥用即金丝雀触发 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '标准最小运行时挂载集（R-1084）'
+    description: '08 §18.4：允许进入沙箱 namespace 的工具链只读路径**封闭白名单**（/bin、/usr/bin、/usr/lib、/lib、/etc/ld.so.cache 等），未列路径=namespace 内不存在；条目变更走契约变更流程。同决议 fd CLOEXEC 卫生契约：spawn 前全 fd 关至 0/1/2 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '统一 spawn 原语（R-1086）'
+    description: '通用 fd 卫生契约（08 §18.4 四防线）：已打开 fd 是"已授权句柄"——子进程继承后无需 open() 即可读写，绕过文件白名单与 seccomp 路径过滤双层。四防线：①创建期 wrapper 强制 O_CLOEXEC（CI AST 查裸 fd 创建）②启动期 close_range(5.9+)优先+/proc/self/fd 遍历兜底（**CPython bpo-47260 教训：任何错误无条件 fallback，禁止假设已关闭**）③spawn 期全模块唯一入口（散落 os/exec 直调=CI FAIL）+fork-exec 间 /proc/self/fd 扫描；Windows=PROC_THREAD_ATTRIBUTE_HANDLE_LIST 显式继承白名单 ④验证期对抗契约（子进程 fd 仅 {0,1,2,FD3}） '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'seccomp-only 对抗分级（R-1087）'
+    description: '信创降级链重排后的 I2 兜底验证分级：**可验证向量**（路径穿越/符号链接劫持/写白名单滥用——BPF 可断言，契约测试全覆盖）vs **已知弱向量**（TOCTOU 路径重解析竞态——seccomp 无法安全按路径过滤，路径可经 /proc/self/fd 重解析；Landlock 因此设计为 inode 级但 4.19 无）——不可完全验证，诚实标注入 FSR bug bar。信创 I4 主路径=gVisor systrap；seccomp-only 仅 I2 兜底+硬化三件。权威：08 §18.3/§19.8 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: '内核 CVE 残余风险（R-1088）'
+    description: 'I3 及以下与宿主共享内核——攻击面=内核 attack surface 全集，**任何内核提权 bug 定义上即容器逃逸**（Copy Fail CVE-2026-31431 跨租户 page-cache LPE；runc CVE-2024-21626 同谱系；Bugcrowd：gVisor "not affected; no shared host kernel"）。处置：威胁模型登记（R3 残余风险入 FSR bug bar 发布时逐级声明）+风险分层强制（高危目标强制 I4/I5）+运营闭环（CVE 订阅→影响分析→安全公告/禁后端）。权威：06 §5 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'DLL 搜索路径劫持防线（R-1089）'
+    description: 'Windows 向量⑦（T1574.001）四件套（08 §19.9）：①SetDefaultDllDirectories（Microsoft 权威缓解 KB2533623；单次调用规避 SetDllDirectory 覆盖 caveat）②插件可执行文件目录只读（copy-to-readonly——应用目录搜索第一+不可写=劫持落点不存在）③编译期契约 writable dirs ∩ dll search dirs = ∅ ④加载路径审计（Sysmon Event 7 等价物）+SafeDllSearchMode 核验。契约测试 TestSandbox_Adversarial_Windows_DLLHijack 先红后绿 '
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'Compile 期冻结（R-1090）'
+    description: '运行时挂载集机制链第二步（08 §18.4）：工具链发现（ldconfig -p 采集+ld.so.cache 内容哈希，不一致→重建或诚实降级——distroless 教训）→**Compile 期冻结**（工具链路径集+cache 哈希冻结入 CompiledProfile，每次 Compile 冻结不跨次复用）→挂载子序列（§18.2：tmpfs 根→工具链 ro,nosuid bind→workspace→deny 遮蔽→procfs→/dev→pivot_root→seccomp）。运行时新增库=重新 Compile；禁止运行时动态补挂载 '
     has_schema: 0
     defined_in: '05软件架构文档.md'
