@@ -317,6 +317,15 @@ func wakeupEventSetForReason(reason string) []string {
 		}
 	case "dependency":
 		return []string{events.TypeActionCompleted}
+	case "post_exec":
+		// R-1594（会议 #247——05 §3.3 等待条件→唤醒事件映射表权威行；修正包任务 3.5）：
+		// post_exec=等待 Action 执行结局——完成/失败/取消三结局+用户恢复 全部入集
+		return []string{
+			events.TypeActionCompleted,
+			events.TypeActionFailed,
+			events.TypeActionCancelled,
+			events.TypeGoalResumed,
+		}
 	case "resource":
 		return []string{events.TypeResourceAvailable}
 	default:

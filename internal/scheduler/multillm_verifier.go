@@ -69,15 +69,17 @@ func (mv *MultiLLMVerifier) ColdVerify(artifactCode string, actionID string) (*V
 
 	wg.Wait()
 
+	// R-1595（会议 #247）：采集失败/超时=TIMEOUT 票（无贡献票）——不再丢弃，
+	// 入合成供 quorum/degraded 判定（Kees 加固：不静默吞票）。
 	validVotes := make([]ProviderVote, 0, len(votes))
 	for _, v := range votes {
-		if v.Vote != "" {
-			validVotes = append(validVotes, v)
+		if v.Vote == "" {
+			v.Vote = "TIMEOUT"
 		}
+		validVotes = append(validVotes, v)
 	}
 
 	verdict := mv.combiner.Combine(validVotes)
-	verdict = mv.combiner.ResolveDivergent(verdict)
 
 	// R-860: 辩论轮次——WARN + 分歧 → Round 2
 	if mv.debateRound && verdict.Result == "WARN" && verdict.Divergent {
@@ -161,15 +163,17 @@ func (mv *MultiLLMVerifier) Verify(code string, actionID string) (*Verdict, erro
 
 	wg.Wait()
 
+	// R-1595（会议 #247）：采集失败/超时=TIMEOUT 票（无贡献票）——不再丢弃，
+	// 入合成供 quorum/degraded 判定（Kees 加固：不静默吞票）。
 	validVotes := make([]ProviderVote, 0, len(votes))
 	for _, v := range votes {
-		if v.Vote != "" {
-			validVotes = append(validVotes, v)
+		if v.Vote == "" {
+			v.Vote = "TIMEOUT"
 		}
+		validVotes = append(validVotes, v)
 	}
 
 	verdict := mv.combiner.Combine(validVotes)
-	verdict = mv.combiner.ResolveDivergent(verdict)
 
 	// R-860: 辩论轮次
 	if mv.debateRound && verdict.Result == "WARN" && verdict.Divergent {

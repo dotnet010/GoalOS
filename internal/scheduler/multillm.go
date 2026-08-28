@@ -44,42 +44,82 @@ func (vc *VerdictCombiner) SetDebateCaller(caller DebateCaller) {
 
 // Verdict 是最终裁决结果。
 type Verdict struct {
-	Result        string         `json:"result"`       // "PASS"|"WARN"|"FAIL"
+	Result        string         `json:"result"`       // "PASS"|"WARN"|"FAIL"|"DIVERGENCE"（R-1595 五规则——DIVERGENCE 恢复注册）
 	WeightedScore float64        `json:"weighted_score"`
 	Votes         []ProviderVote `json:"votes"`
 	Consensus     bool           `json:"consensus"`
 	NeedsMeta     bool           `json:"needs_meta_verification"` // 是否需要语义元验证
 	Divergent     bool           `json:"divergent"`               // 是否存在实质性分歧
 	DebatePrompt  string         `json:"debate_prompt,omitempty"` // R-860: 辩论轮次 prompt
+	// R-1595（会议 #247——S-20 四规则→五规则修订）：
+	Degraded    bool `json:"degraded"`     // 全 PASS 但含 TIMEOUT 票=降级通过（覆盖降低诚实呈现）
+	QuorumUnmet bool `json:"quorum_unmet"` // 有效票<quorum(2)→NeedsReview(verification_quorum_unmet)——Kees 加固：不静默吞票
 }
 
-// Combine 执行两阶段裁决（v1.1.0）。
-// 阶段 1: 快速加权。阶段 2: 语义元验证（实质性分歧时标记 needs_meta=true）。
+// Combine 投票合成函数（R-1595 五规则——S-20 四规则修订，会议 #247 G 顾问 2.1 关闭；
+// 唯一合成函数 R-1250；修正包任务 3.6——会议 #250 R-1625）。
+// 票值枚举=PASS/WARN/FAIL/TIMEOUT（TIMEOUT=独立票值——采集层超时重试 1 次退避 5s 后的
+// 最终票，非 FAIL；R-1595 修订 R-659/R-1331「超时记 FAIL」旧语义）。
+// 有效票=非 TIMEOUT 票；quorum=2（有效票下限）。
+// ①有效票<quorum→QuorumUnmet=true（→verification_quorum_unmet——Kees 加固：不静默吞票）
+// ②全 FAIL→FAIL
+// ③含 FAIL 非全 FAIL→DIVERGENCE（分歧→人工裁定——04 review 三命令链接收）
+// ④含 WARN 无 FAIL→WARN
+// ⑤全 PASS→PASS（含 TIMEOUT 票则 Degraded=true——覆盖降低诚实呈现，04 §14 依据行）
 func (vc *VerdictCombiner) Combine(votes []ProviderVote) *Verdict {
-	if len(votes) == 0 {
-		return &Verdict{Result: "WARN", Consensus: true}
-	}
-
 	v := &Verdict{Votes: votes}
-
-	// 阶段 1: 快速加权
-	v.WeightedScore = vc.weightedScore(votes)
-	v.Consensus = vc.isConsensus(votes)
-	v.Divergent = vc.isDivergent(votes)
-
-	switch {
-	case v.WeightedScore > 1.5:
-		v.Result = "FAIL"
-	case v.WeightedScore > 0.8:
+	if len(votes) == 0 {
 		v.Result = "WARN"
-		// 实质性分歧→需要语义元验证
-		if v.Divergent {
-			v.NeedsMeta = true
-		}
-	default:
-		v.Result = "PASS"
+		v.QuorumUnmet = true // 零票=quorum 不足
+		return v
 	}
 
+	// TIMEOUT 票分离：有效票=非 TIMEOUT
+	valid := make([]ProviderVote, 0, len(votes))
+	timeoutCount := 0
+	for _, vote := range votes {
+		if vote.Vote == "TIMEOUT" {
+			timeoutCount++
+		} else {
+			valid = append(valid, vote)
+		}
+	}
+	v.Divergent = vc.isDivergent(valid)
+	v.WeightedScore = vc.weightedScore(valid) // 遗留展示字段（persona/events 消费）——不参与 Result 合成；废弃归专项 E-05A-04
+
+	// 规则①quorum
+	if len(valid) < 2 {
+		v.Result = "WARN" // 占位——QuorumUnmet 承载语义（路由=verification_quorum_unmet）
+		v.QuorumUnmet = true
+		return v
+	}
+	// 规则②全 FAIL
+	allFail := true
+	hasFail, hasWarn := false, false
+	for _, vote := range valid {
+		if vote.Vote != "FAIL" {
+			allFail = false
+		}
+		if vote.Vote == "FAIL" {
+			hasFail = true
+		}
+		if vote.Vote == "WARN" {
+			hasWarn = true
+		}
+	}
+	switch {
+	case allFail:
+		v.Result = "FAIL" // 规则②
+	case hasFail:
+		v.Result = "DIVERGENCE" // 规则③
+	case hasWarn:
+		v.Result = "WARN" // 规则④
+	default:
+		v.Result = "PASS" // 规则⑤
+		if timeoutCount > 0 {
+			v.Degraded = true // 全 PASS 但含 TIMEOUT 票=降级通过（覆盖降低诚实呈现）
+		}
+	}
 	return v
 }
 
@@ -117,19 +157,6 @@ func (vc *VerdictCombiner) voteWeight(vote string) int {
 	}
 }
 
-// isConsensus 判断是否所有投票一致。
-func (vc *VerdictCombiner) isConsensus(votes []ProviderVote) bool {
-	if len(votes) <= 1 {
-		return true
-	}
-	first := votes[0].Vote
-	for _, v := range votes[1:] {
-		if v.Vote != first {
-			return false
-		}
-	}
-	return true
-}
 
 // isDivergent 判断是否存在实质性分歧——任意两个 Provider 投票不同。
 func (vc *VerdictCombiner) isDivergent(votes []ProviderVote) bool {
@@ -145,39 +172,6 @@ func (vc *VerdictCombiner) isDivergent(votes []ProviderVote) bool {
 	return (hasFail && hasWarn) || (hasFail && hasPass) || (hasWarn && hasPass)
 }
 
-// ResolveDivergent 解决 Provider 投票分歧（R-830 重命名自 SemanticMetaVerify）。
-// 规则: 多数 FAIL→FAIL，其他→WARN。纯本地计算，无需额外 LLM 调用。
-func (vc *VerdictCombiner) ResolveDivergent(v *Verdict) *Verdict {
-	// R-843: consensus → 直接取投票结果，不使用加权评分
-	if v.Consensus && len(v.Votes) > 0 {
-		v.Result = v.Votes[0].Vote
-		v.NeedsMeta = false
-		return v
-	}
-	if !v.NeedsMeta {
-		return v
-	}
-	// H19: 记录分歧详情——Provider 投票分布
-	failCount, warnCount, passCount := 0, 0, 0
-	for _, vote := range v.Votes {
-		switch vote.Vote {
-		case "FAIL": failCount++
-		case "WARN": warnCount++
-		case "PASS": passCount++
-		}
-	}
-	log.Printf("[VerdictCombiner] ResolveDivergent: FAIL=%d WARN=%d PASS=%d", failCount, warnCount, passCount)
-	// R-843: 多数 FAIL→FAIL；全部 WARN→WARN（不是 FAIL）
-	if failCount > passCount && failCount > warnCount {
-		v.Result = "FAIL"
-	} else if failCount > 0 {
-		v.Result = "WARN"
-	} else {
-		v.Result = "PASS"
-	}
-	v.NeedsMeta = false
-	return v
-}
 
 // Debate 执行辩论轮次——将 Round 1 各 Provider 的 reasoning 交叉注入，重新投票（R-860）。
 // 仅当 Round 1 verdict = WARN 且存在分歧时触发。Round 2 结果覆盖 Round 1。
@@ -223,15 +217,13 @@ func (vc *VerdictCombiner) Debate(round1Votes []ProviderVote) *Verdict {
 		DebatePrompt: debatePrompt,
 	}
 
-	v.WeightedScore = vc.weightedScore(round2Votes)
-	switch {
-	case v.WeightedScore > 1.5:
-		v.Result = "FAIL"
-	case v.WeightedScore > 0.8:
-		v.Result = "WARN"
-	default:
-		v.Result = "PASS"
-	}
+	// R-1595 五规则=唯一合成函数（R-1250）——Debate 的 Round 2 合成同样走 Combine，
+	// 不再有第二条加权路径（加权合成已废弃——遗留展示字段不参与 Result）。
+	v2 := vc.Combine(round2Votes)
+	v.Result = v2.Result
+	v.Degraded = v2.Degraded
+	v.QuorumUnmet = v2.QuorumUnmet
+	v.WeightedScore = v2.WeightedScore
 
 	log.Printf("[VerdictCombiner] Debate: round1=%s → round2=%s (score=%.2f, votes_used=%d)",
 		round1Votes[0].Vote, v.Result, v.WeightedScore, len(round2Votes))

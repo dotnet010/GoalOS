@@ -283,12 +283,22 @@ func (pr *PipelineRunner) decide(goalID string, actionID string, execErr error) 
 			verdict, err := pr.multiLLM.Verify(code, actionID)
 			if err == nil {
 				pr.publishVerdict(actionID, verdict)
+				switch {
+				case verdict.QuorumUnmet:
+					// R-1595 规则①：有效票<quorum(2)——不静默继续（verification_quorum_unmet——
+					// GoalNeedsReview 事件链全量接线=GoalRunner 侧后续窗口；当前=升级链留痕）
+					return pr.decidePath(goalID, actionID, DecideESCALATE, "verification_quorum_unmet: 多模型验证有效票不足")
+				}
 				switch verdict.Result {
 				case "FAIL":
 					return pr.decidePath(goalID, actionID, DecideESCALATE, "multi_llm_fail: code review failed") // REPLAN
+				case "DIVERGENCE":
+					// R-1595 规则③：含 FAIL 非全 FAIL=分歧→人工裁定（不静默继续——
+					// GoalNeedsReview 事件链全量接线=GoalRunner 侧后续窗口）
+					return pr.decidePath(goalID, actionID, DecideESCALATE, "multi_llm_divergence: 验证结论分歧需人工裁定")
 				case "WARN":
 					return pr.decidePath(goalID, actionID, DecideCONTINUE, "multi_llm_warn")
-				default: // PASS
+				default: // PASS（含 degraded——覆盖降低已在 verdict 留痕+事件载荷）
 					return pr.decidePath(goalID, actionID, DecideCONTINUE, "")
 				}
 			}
@@ -323,6 +333,9 @@ func (pr *PipelineRunner) publishVerdict(actionID string, verdict *Verdict) {
 			"score":     verdict.WeightedScore,
 			"consensus": verdict.Consensus,
 			"votes":     votes,
+			// R-1595：TIMEOUT 票/degraded/quorum 留痕（07 §4.14 v1.2 字段族）
+			"degraded":     verdict.Degraded,
+			"quorum_unmet": verdict.QuorumUnmet,
 		},
 	})
 }
