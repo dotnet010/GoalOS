@@ -7971,3 +7971,16 @@ resolutions:
       - must_exist: "R-1637/R-1639"
         in_file: 开发就绪检查清单.md
         reason: "就绪清单十二节必须标注依据（R-1639）"
+  R-1640:
+    desc: "W1-W3 评审裁决包(会议 #255——PM 十点指令; 会前对抗性核查七项全过: 34/34 函数存在/零空壳/零伪代码/真实断言实证/事件 12=12/SKIP 2 登记/日志完整+清单名实相符): ①P1 修——Attach Precheck 失败路径补句柄清理 Release(07 §4.14『销毁非归还热池』, 销毁 vs 归还区分=W7 热池窗口; 新契约测试 TestRuntime_Attach_PrecheckFailure_ReleasesHandle 先红后绿, red-evidence 契约首次实弹 2026-08-29-r1640-p1-red/green); ②P2 钉——生产接线=W5 任务 5.5 前置(Resolver/ContractVerifier/ExecutionSession 入主流水线+事件生产发射点; 三处『随任务 3.3』自我指涉注记修正+开发计划 5.5 注记); ③P3 修——interrupted 队列存完整 ExecuteRequest(重执行=同一 Action 再执行非硬编码占位; TC-RT-070 补请求保真断言); ④P4 修——keyring Zeroize 后 AddGeneration/Rotate 返回 ErrKeyringZeroized(fail-closed, Kees: 错误的沉默不可接受); ⑤P5 修——contract.go:88 注释同步 invalid_fields(R-1628① 残留); ⑥P6 修——Combine 补输入契约注释(票值归一化=采集层责任, 不重复防御)。Jobs 条件通过: 修复落地+CI 全绿=W5 放行。disposition: 生效"
+    files: [会议纪要.md, 12测试清单与规范.md, 开发计划/v0.3.1/v0.3.1-开发计划.md]
+    verify:
+      - must_exist: "R-1640"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1640"
+      - must_exist: "TestRuntime_Attach_PrecheckFailure_ReleasesHandle"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 G 节必须补 P1 新测试行（R-1640①）"
+      - must_exist: "R-1640"
+        in_file: 开发计划/v0.3.1/v0.3.1-开发计划.md
+        reason: "开发计划任务 5.5 必须落接线前置注记（R-1640②）"
