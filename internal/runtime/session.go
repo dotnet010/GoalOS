@@ -58,9 +58,9 @@ type ExecutionSession struct {
 
 	// Action 台账（升级语义数据源——已完成产出物不重复，R-1499 断言③）
 	completed  map[string][]string // actionID → 产出物清单
-	executing  map[string]bool     // 执行中 actionID
+	executing  map[string]ExecuteRequest // 执行中 actionID → 原始请求（R-1640③——重执行保真：请求不丢）
 	cancelled  map[string]bool     // 被中断标记 Cancelled（断言②）
-	interrupted []string           // 待重执行队列（升级时被中断的 Action）
+	interrupted []ExecuteRequest   // 待重执行队列（升级时被中断的 Action——完整请求，R-1640③）
 }
 
 // NewExecutionSession 建会话（准备中——未挂句柄）。
@@ -71,7 +71,7 @@ func NewExecutionSession(id, goalID string, workspace WorkspaceRef) *ExecutionSe
 		workspace:  workspace,
 		state:      SessionPreparing,
 		completed:  make(map[string][]string),
-		executing:  make(map[string]bool),
+		executing:  make(map[string]ExecuteRequest),
 		cancelled:  make(map[string]bool),
 	}
 }
@@ -92,6 +92,10 @@ func (s *ExecutionSession) Attach(ctx context.Context, p Provider, req LeaseRequ
 		return fmt.Errorf("runtime: Start 失败: %w", err)
 	}
 	if err := guard.Precheck(ctx); err != nil {
+		// R-1640①（会议 #255 P1）：边界建立未生效——句柄必须清理（07 §4.14 PrecheckFailed：
+		// 销毁非归还热池；销毁 vs 归还的区分=W7 热池窗口落地，当前 Release=唯一清理路径）。
+		// 不清理=真实 Provider 持有进程/沙箱资源时的泄漏面。
+		_ = guard.Release(context.Background())
 		return fmt.Errorf("runtime: Precheck 失败（边界建立未生效——句柄销毁非归还热池，RTM-PRECHECK-F-001 族）: %w", err)
 	}
 	s.handle = guard
@@ -112,7 +116,7 @@ func (s *ExecutionSession) Execute(ctx context.Context, req ExecuteRequest) (Exe
 		s.mu.Unlock()
 		return ExecuteResult{}, fmt.Errorf("runtime: 会话非运行态 %v——Execute 非法", s.state)
 	}
-	s.executing[req.ActionID] = true
+	s.executing[req.ActionID] = req
 	h := s.handle
 	s.mu.Unlock()
 
@@ -131,11 +135,12 @@ func (s *ExecutionSession) MarkActionCompleted(actionID string, artifacts []stri
 	s.completed[actionID] = artifacts
 }
 
-// MarkActionExecuting 登记 Action 执行中（升级时被中断=Cancelled 标记来源）。
-func (s *ExecutionSession) MarkActionExecuting(actionID string) {
+// MarkActionExecuting 登记 Action 执行中（升级时被中断=Cancelled 标记来源；
+// 存完整请求——R-1640③ 重执行保真）。
+func (s *ExecutionSession) MarkActionExecuting(req ExecuteRequest) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.executing[actionID] = true
+	s.executing[req.ActionID] = req
 }
 
 // ActionStatus Action 状态（Completed/Executing/Cancelled/未知）。
@@ -148,7 +153,7 @@ func (s *ExecutionSession) ActionStatus(actionID string) string {
 	if _, ok := s.completed[actionID]; ok {
 		return "Completed"
 	}
-	if s.executing[actionID] {
+	if _, ok := s.executing[actionID]; ok {
 		return "Executing"
 	}
 	return "Unknown"
@@ -165,10 +170,10 @@ func (s *ExecutionSession) Escalate(ctx context.Context, newProvider Provider, s
 		return nil, fmt.Errorf("runtime: 升级非法状态 %v（仅运行中可升级）", s.state)
 	}
 	s.state = SessionEscalating
-	// 被中断 Action=执行中集合 → Cancelled+待重执行队列
-	for id := range s.executing {
+	// 被中断 Action=执行中集合 → Cancelled+待重执行队列（完整请求——R-1640③）
+	for id, req := range s.executing {
 		s.cancelled[id] = true
-		s.interrupted = append(s.interrupted, id)
+		s.interrupted = append(s.interrupted, req)
 	}
 	handle := s.handle
 	s.mu.Unlock()
@@ -194,7 +199,7 @@ func (s *ExecutionSession) Escalate(ctx context.Context, newProvider Provider, s
 	newSess := NewExecutionSession(s.id+"-escalated", s.goalID, s.workspace)
 	// 台账继承：已完成（重执行跳过判定）+被中断队列（重执行对象——R-1499 断言③）
 	newSess.completed = s.completed
-	newSess.interrupted = append([]string{}, s.interrupted...)
+	newSess.interrupted = append([]ExecuteRequest{}, s.interrupted...)
 
 	s.mu.Lock()
 	s.state = SessionEscalated
@@ -204,27 +209,28 @@ func (s *ExecutionSession) Escalate(ctx context.Context, newProvider Provider, s
 	if err := newSess.Attach(ctx, newProvider, LeaseRequest{GoalID: s.goalID}); err != nil {
 		return nil, fmt.Errorf("runtime: 新会话挂接失败（重签失败=任务失败——RTM-RESOLVE-F-001 族）: %w", err)
 	}
-	_ = signal // signal 入事件载荷（SessionEscalated.escalation_signal——daemon 接线随任务 3.3 事件发射点）
+	_ = signal // signal 入事件载荷（SessionEscalated.escalation_signal——daemon 生产接线=W5 任务 5.5 前置，R-1640②）
 	return newSess, nil
 }
 
-// ReexecuteInterrupted 重执行升级时被中断的 Action（已完成 Action 跳过——产出物不重复，R-1499 断言③）。
+// ReexecuteInterrupted 重执行升级时被中断的 Action（已完成 Action 跳过——产出物不重复，R-1499 断言③；
+// 原始请求保真重放——R-1640③：重执行=同一 Action 的再执行，非硬编码占位请求）。
 func (s *ExecutionSession) ReexecuteInterrupted(ctx context.Context) error {
 	s.mu.Lock()
 	if s.state != SessionRunning {
 		s.mu.Unlock()
 		return fmt.Errorf("runtime: 重执行非法状态 %v", s.state)
 	}
-	queue := append([]string{}, s.interrupted...)
+	queue := append([]ExecuteRequest{}, s.interrupted...)
 	completed := s.completed
 	s.mu.Unlock()
 
-	for _, actionID := range queue {
-		if _, done := completed[actionID]; done {
+	for _, req := range queue {
+		if _, done := completed[req.ActionID]; done {
 			continue // 已完成=不重复（产出物不重复）
 		}
-		if _, err := s.Execute(ctx, ExecuteRequest{ActionID: actionID, ActionType: "reexecute"}); err != nil {
-			return fmt.Errorf("runtime: 重执行 %s 失败: %w", actionID, err)
+		if _, err := s.Execute(ctx, req); err != nil {
+			return fmt.Errorf("runtime: 重执行 %s 失败: %w", req.ActionID, err)
 		}
 	}
 	return nil

@@ -4,6 +4,7 @@
 package runtime
 
 import (
+	"fmt"
 	"context"
 	"testing"
 )
@@ -21,8 +22,8 @@ type upgradeFakeProvider struct {
 type upgradeFakeHandle struct {
 	id            string
 	state         HandleState
-	interruptSeq  []string // Interrupt 调用时序记录（取消协议链断言数据源）
-	executed      []string // 已执行 Action 序列
+	interruptSeq  []string         // Interrupt 调用时序记录（取消协议链断言数据源）
+	executed      []ExecuteRequest // 已执行 Action 序列（完整请求——R-1640③ 保真断言数据源）
 	interruptErr  error
 	releaseErr    error
 }
@@ -51,7 +52,7 @@ func (h *upgradeFakeHandle) Start(context.Context) error {
 	return nil
 }
 func (h *upgradeFakeHandle) Execute(_ context.Context, req ExecuteRequest) (ExecuteResult, error) {
-	h.executed = append(h.executed, req.ActionID)
+	h.executed = append(h.executed, req)
 	return ExecuteResult{Status: "success", ExitCode: 0}, nil
 }
 func (h *upgradeFakeHandle) Interrupt(context.Context) error {
@@ -101,7 +102,7 @@ func TestRuntime_Escalate_NewSessionSameVolume(t *testing.T) {
 	// 升级信号 → 升级到受限档（新 Provider=T1）
 	handleT1 := &upgradeFakeHandle{id: "h-t1", state: HandleAcquired}
 	providerT1 := &upgradeFakeProvider{name: "fake-t1", tier: "T1", handle: handleT1}
-	sess.MarkActionExecuting("act-2")
+	sess.MarkActionExecuting(ExecuteRequest{ActionID: "act-2", ActionType: "shell.execute", Timeout: 5 * 1e9})
 
 	newSess, err := sess.Escalate(ctx, providerT1, "capability_proxy")
 	if err != nil {
@@ -124,15 +125,20 @@ func TestRuntime_Escalate_NewSessionSameVolume(t *testing.T) {
 		t.Fatalf("重执行失败: %v", err)
 	}
 	// act-1 不在新会话重执行（已完成产出物不重复）
-	for _, id := range handleT1.executed {
-		if id == "act-1" {
+	for _, r := range handleT1.executed {
+		if r.ActionID == "act-1" {
 			t.Fatal("断言③失败：已完成 act-1 在新会话被重复执行——产出物重复")
 		}
 	}
 	found := false
-	for _, id := range handleT1.executed {
-		if id == "act-2" {
+	for _, r := range handleT1.executed {
+		if r.ActionID == "act-2" {
 			found = true
+			// R-1640③ 请求保真断言：重执行=同一 Action（原 ActionType/Timeout 不丢——
+			// 修复前硬编码 "reexecute" 占位的架空行为已消除）
+			if r.ActionType != "shell.execute" || r.Timeout != 5*1e9 {
+				t.Fatalf("断言③保真失败：act-2 重执行请求被篡改——ActionType=%q Timeout=%v（应=shell.execute/5s）", r.ActionType, r.Timeout)
+			}
 		}
 	}
 	if !found {
@@ -157,7 +163,7 @@ func TestRuntime_Session_EscalateInterruptFailure(t *testing.T) {
 	if err := sess.Attach(ctx, provider, LeaseRequest{GoalID: "goal-x", ActionID: "act-1"}); err != nil {
 		t.Fatal(err)
 	}
-	sess.MarkActionExecuting("act-1")
+	sess.MarkActionExecuting(ExecuteRequest{ActionID: "act-1", ActionType: "fs.write"})
 
 	_, err := sess.Escalate(ctx, &upgradeFakeProvider{name: "t1", tier: "T1", handle: &upgradeFakeHandle{id: "h-y", state: HandleAcquired}}, "risk_reeval")
 	if err == nil {
@@ -166,5 +172,68 @@ func TestRuntime_Session_EscalateInterruptFailure(t *testing.T) {
 	// 旧会话清理失败=强制销毁——状态=已销毁
 	if sess.State() != SessionDestroyed {
 		t.Fatalf("Interrupt 失败后旧会话应=强制销毁，实际: %v", sess.State())
+	}
+}
+
+// ─── R-1640① 夹具：Precheck 失败 Provider（P1——句柄清理断言）───
+
+type precheckFailHandle struct {
+	id            string
+	state         HandleState
+	releaseCalled bool
+}
+
+func (h *precheckFailHandle) ID() string { return h.id }
+func (h *precheckFailHandle) Start(context.Context) error {
+	h.state = HandleReady // D-5 定序：Start→Ready（Precheck 闸门不架空——R-1620）
+	return nil
+}
+func (h *precheckFailHandle) Precheck(context.Context) error {
+	return fmt.Errorf("runtime: 边界建立未生效（夹具模拟 Precheck 失败）")
+}
+func (h *precheckFailHandle) Execute(context.Context, ExecuteRequest) (ExecuteResult, error) {
+	return ExecuteResult{}, fmt.Errorf("不应到达 Execute")
+}
+func (h *precheckFailHandle) Interrupt(context.Context) error { return nil }
+func (h *precheckFailHandle) Pause(context.Context) error     { return nil }
+func (h *precheckFailHandle) Resume(context.Context) error    { return nil }
+func (h *precheckFailHandle) Release(context.Context) error {
+	h.releaseCalled = true
+	h.state = HandleReleased
+	return nil
+}
+func (h *precheckFailHandle) State() HandleState { return h.state }
+
+type precheckFailProvider struct{ handle *precheckFailHandle }
+
+func (p *precheckFailProvider) Name() string { return "precheck-fail" }
+func (p *precheckFailProvider) Tier() string { return TierRestricted.String() }
+func (p *precheckFailProvider) State(context.Context) (ProviderState, error) {
+	return ProviderPrepared, nil
+}
+func (p *precheckFailProvider) Capabilities(context.Context) (ProviderCapability, error) {
+	return ProviderCapability{Platform: "test", AchievedIsolation: I2}, nil
+}
+func (p *precheckFailProvider) Prepare(context.Context, RuntimePlan) error { return nil }
+func (p *precheckFailProvider) Acquire(context.Context, LeaseRequest) (RuntimeHandle, error) {
+	return p.handle, nil
+}
+
+// TestRuntime_Attach_PrecheckFailure_ReleasesHandle（R-1640①——会议 #255 P1；12 清单 G 节）：
+// Precheck 失败=边界建立但未生效——句柄必须清理（07 §4.14 PrecheckFailed：销毁非归还热池；
+// 销毁 vs 归还的区分=W7 热池窗口落地，当前 Release=唯一清理路径）；会话不得进 Running。
+func TestRuntime_Attach_PrecheckFailure_ReleasesHandle(t *testing.T) {
+	h := &precheckFailHandle{id: "h-pf", state: HandleAcquired}
+	p := &precheckFailProvider{handle: h}
+	s := NewExecutionSession("s-pf", "g-pf", WorkspaceRef{VolumeID: "v1", Path: "/tmp/x"})
+	err := s.Attach(context.Background(), p, LeaseRequest{GoalID: "g-pf", ActionID: "a1"})
+	if err == nil {
+		t.Fatal("Precheck 失败应 Attach 报错")
+	}
+	if !h.releaseCalled {
+		t.Fatal("P1：Precheck 失败路径未清理句柄（Release 未调用）——真实 Provider 持有进程/沙箱资源时=泄漏面")
+	}
+	if s.State() == SessionRunning {
+		t.Fatal("Precheck 失败会话不得进 Running")
 	}
 }
