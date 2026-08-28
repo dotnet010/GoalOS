@@ -54,6 +54,17 @@ type DaemonConfig struct {
 	// SocketPath 是 UDS 治理通道路径（R-1322/R-1378）——审批族端点 UDS-only，
 	// 治理面不得暴露于 TCP。默认 "~/.goalos/run/daemon.sock"
 	SocketPath string `yaml:"socket_path"`
+	// TrustedWorkloads 名单登记工作负载（05 §X.6.3 R-1508/R-1549——人工审核名单；
+	// T0 信任=本机管理员显式登记白名单的管理员信任决策，非发行者密码学认证——R-1619）。
+	// 启动校验四规则（R-1549③）：hex 格式非法/ISO8601 非法/条目重复→拒绝启动。
+	TrustedWorkloads []TrustedWorkloadEntry `yaml:"trusted_workloads"`
+}
+
+// TrustedWorkloadEntry trusted_workloads 名单条目（05 §X.6.3）。
+type TrustedWorkloadEntry struct {
+	PublisherKey string `yaml:"publisher_key"` // 64 字符小写 hex——身份标签/审计分组（v0.3.1 不验签）
+	ArtifactHash string `yaml:"artifact_hash"` // 64 字符小写 hex——运行时验证值（SHA-256 静态比对）
+	ExpiresAt    string `yaml:"expires_at"`    // ISO8601 可空（空=永不过期）
 }
 
 
@@ -313,7 +324,49 @@ func (cfg *Config) Validate() error {
 	if cfg.Policy.TokenTTL <= 0 {
 		return fmt.Errorf("policy.token_ttl 必须为正整数，当前: %d", cfg.Policy.TokenTTL)
 	}
+	// trusted_workloads 启动校验四规则（R-1549③——名单登记工作负载）：
+	// hex 格式非法/expires_at 非法 ISO8601/条目重复（同 publisher_key+artifact_hash）→拒绝启动。
+	if err := validateTrustedWorkloads(cfg.Daemon.TrustedWorkloads); err != nil {
+		return err
+	}
 	return nil
+}
+
+// validateTrustedWorkloads R-1549 启动校验四规则（fail-closed）。
+func validateTrustedWorkloads(list []TrustedWorkloadEntry) error {
+	seen := map[string]bool{}
+	for i, w := range list {
+		if !isLowerHex64(w.PublisherKey) {
+			return fmt.Errorf("trusted_workloads[%d].publisher_key 必须为 64 字符小写 hex（当前 %d 字符）", i, len(w.PublisherKey))
+		}
+		if !isLowerHex64(w.ArtifactHash) {
+			return fmt.Errorf("trusted_workloads[%d].artifact_hash 必须为 64 字符小写 hex（当前 %d 字符）", i, len(w.ArtifactHash))
+		}
+		if w.ExpiresAt != "" {
+			if _, err := time.Parse(time.RFC3339, w.ExpiresAt); err != nil {
+				return fmt.Errorf("trusted_workloads[%d].expires_at 非法 ISO8601: %q", i, w.ExpiresAt)
+			}
+		}
+		key := w.PublisherKey + "/" + w.ArtifactHash
+		if seen[key] {
+			return fmt.Errorf("trusted_workloads[%d] 条目重复（同 publisher_key+artifact_hash）", i)
+		}
+		seen[key] = true
+	}
+	return nil
+}
+
+// isLowerHex64 校验 64 字符小写 hex（32 字节编码）。
+func isLowerHex64(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // WriteDefault 写入带注释的默认配置文件（v0.1.0 首次启动自动生成）。
