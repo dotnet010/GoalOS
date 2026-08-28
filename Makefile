@@ -35,8 +35,8 @@ all: lint race deadcode test build
 # （linux/amd64+xinchuang 信创变体, -tags xinchuang 显式传参）。
 ci: lint build
 	@echo "=== Building plugins (releasecheck 前置——发布规范 #9 本地签名一致性) ==="
-	@go build -o plugins/capability/shell-executor/plugin-shell ./cmd/plugin-shell
-	@go build -o plugins/capability/websearch/plugin-websearch ./cmd/plugin-websearch
+	@go build -trimpath -buildvcs=false -o plugins/capability/shell-executor/plugin-shell ./cmd/plugin-shell
+	@go build -trimpath -buildvcs=false -o plugins/capability/websearch/plugin-websearch ./cmd/plugin-websearch
 	@go run scripts/update_plugin_signatures.go
 	@echo "=== Running CI check scripts ==="
 	@bash scripts/check-anti-cheat.sh . || exit 1
@@ -58,7 +58,7 @@ ci: lint build
 
 install-plugin:
 	@mkdir -p ~/.goalos/plugins/capability/websearch
-	CGO_ENABLED=0 go build -o ~/.goalos/plugins/capability/websearch/plugin-websearch ./cmd/plugin-websearch/
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false -o ~/.goalos/plugins/capability/websearch/plugin-websearch ./cmd/plugin-websearch/
 	cp plugins/capability/websearch/plugin.json ~/.goalos/plugins/capability/websearch/
 	@echo "Plugin installed to ~/.goalos/plugins/capability/websearch/"
 

@@ -25,8 +25,8 @@ jobs:
 
       - name: Build plugins (required for releasecheck)
         run: |
-          go build -o ./plugins/capability/shell-executor/plugin-shell.exe ./cmd/plugin-shell
-          go build -o ./plugins/capability/websearch/plugin-websearch.exe ./cmd/plugin-websearch
+          go build -trimpath -buildvcs=false -o ./plugins/capability/shell-executor/plugin-shell.exe ./cmd/plugin-shell
+          go build -trimpath -buildvcs=false -o ./plugins/capability/websearch/plugin-websearch.exe ./cmd/plugin-websearch
 
       - name: List plugin dirs (diagnostic)
         shell: pwsh
