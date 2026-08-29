@@ -146,6 +146,7 @@ type Engine struct {
 	seq           int
 	flowComposer  interface{} // A18: FlowComposer 验证（*scheduler.FlowComposer）
 	autoConfirm   bool        // v0.2.2 W6 B10: autonomous 模式自动确认
+	contractChain *ContractChain // 任务 5.8：CompletionContract 版本链（R-1597/R-1613）
 }
 
 // SetFallbackAgent 设置 Plan 阶段的回退 Provider（B13）。
@@ -153,8 +154,11 @@ func (e *Engine) SetFallbackAgent(a Agent) { e.fallbackAgent = a }
 
 // New creates a Mission Engine.
 func New(bus *eventbus.EventBus, agent Agent) *Engine {
-	return &Engine{bus: bus, agent: agent}
+	return &Engine{bus: bus, agent: agent, contractChain: NewContractChain()}
 }
+
+// ContractChain 版本链访问器（任务 5.8——daemon 接线/测试断言用）。
+func (e *Engine) ContractChain() *ContractChain { return e.contractChain }
 
 // SetFlowComposer 设置 FlowComposer（A18）。
 func (e *Engine) SetFlowComposer(fc interface{}) {
@@ -170,7 +174,78 @@ func (e *Engine) SetAutoConfirm(auto bool) {
 // Start subscribes to PlanRequested and begins processing.
 func (e *Engine) Start() {
 	e.bus.Subscribe(events.TypePlanRequested, e.handlePlanRequested)
+	// 任务 5.8（R-1597/R-1613）：RequirementAdded 消费链——版本链修订+落账事件+重规划触发
+	e.bus.Subscribe(events.TypeRequirementAdded, e.handleRequirementAdded)
 	log.Println("[MissionEngine] started, subscribed to PlanRequested")
+}
+
+// handleRequirementAdded RequirementAdded 消费链（任务 5.8——R-1597/R-1613；
+// 07 §4 R-1362 payload={goal_id, requirement_text, source, added_at}）：
+// ①版本链修订（继承锚点全携+新验收条款追加）；②CompletionContractRecorded 落账
+// （载荷=criteria 现行+契约元数据——R-1613）；③重规划触发（PlanRequested 既有链路——
+// 确认门槛：Revised 含新验收条款→用户确认复用 R-1248 confirm 链，风险级变化→重新审批，
+// 归既有治理链不改）。
+// 无首版契约=以需求文本为 SuccessDefinition 建首版（首次需求注入=契约创建入口之一）。
+func (e *Engine) handleRequirementAdded(evt events.Event) error {
+	goalID := evt.GoalID
+	requirement, _ := evt.Payload["requirement_text"].(string)
+	if goalID == "" || requirement == "" {
+		return fmt.Errorf("missionengine: RequirementAdded 缺 goal_id/requirement_text")
+	}
+	latest := e.contractChain.Latest(goalID)
+	var criteria CompletionCriteria
+	var anchors []string
+	if latest != nil {
+		criteria = latest.Criteria
+		anchors = append([]string{}, latest.FrozenAnchors...)
+	}
+	// 新需求=新验收条款追加（只增不减——R-1597 锚点语义延伸至验收条款）
+	criteria.AcceptanceCriteria = append(criteria.AcceptanceCriteria, requirement)
+	if criteria.SuccessDefinition == "" {
+		criteria.SuccessDefinition = requirement // 首次注入=契约创建入口
+	}
+	if criteria.GoalType == "" {
+		criteria.GoalType = "generic"
+	}
+	var v *ContractVersion
+	var err error
+	if latest == nil {
+		v = e.contractChain.Record(goalID, criteria, anchors)
+	} else {
+		v, err = e.contractChain.Revise(goalID, criteria, anchors)
+		if err != nil {
+			return fmt.Errorf("missionengine: 契约版本链修订失败: %w", err)
+		}
+	}
+	// ②落账事件（07 §4 R-1414——Validate 失败=不发布，R-770）
+	payload := contractVersionPayload(v)
+	if err := payload.Validate(); err != nil {
+		return fmt.Errorf("missionengine: CompletionContractRecorded 载荷非法: %w", err)
+	}
+	e.bus.Publish(events.Event{
+		Type:    events.TypeCompletionContractRecorded,
+		GoalID:  goalID,
+		Source:  "missionengine",
+		Payload: map[string]interface{}{
+			"contract_id":    payload.ContractID,
+			"version":        payload.Version,
+			"status":         payload.Status,
+			"supersedes":     payload.Supersedes,
+			"frozen_anchors": payload.FrozenAnchors,
+		},
+	})
+	// ③重规划触发（既有 PlanRequested 链路——reason 透传 R-1400）
+	e.bus.Publish(events.Event{
+		Type:    events.TypePlanRequested,
+		GoalID:  goalID,
+		Source:  "missionengine",
+		Payload: map[string]interface{}{
+			"goal_text": requirement,
+			"reason":    "requirement_added",
+		},
+	})
+	log.Printf("[MissionEngine] requirement added: goal=%s contract=%s version=%d", goalID, v.ContractID, v.Version)
+	return nil
 }
 
 // handlePlanRequested 处理 PlanRequested 事件。

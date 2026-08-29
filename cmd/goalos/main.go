@@ -629,6 +629,8 @@ func buildHTTPMux(api *daemon.Handler, sse *daemon.SSEManager, cfg *config.Confi
 			api.HandleGoalLog(w, r)
 		case strings.HasSuffix(r.URL.Path, "/events"):
 			api.HandleGoalEvents(w, r)
+		case strings.HasSuffix(r.URL.Path, "/requirements") && r.Method == http.MethodPut:
+			api.HandleUpdateRequirements(w, r) // 任务 5.8——需求注入（S-247-01 生产入口）
 		default:
 			api.HandleGetGoal(w, r)
 		}

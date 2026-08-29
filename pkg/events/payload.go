@@ -469,3 +469,38 @@ func (p EscalationSignaledPayload) Validate() error {
 	}
 	return nil
 }
+
+// CompletionContractRecordedPayload 完成契约版本落账载荷（07 §4 R-1414 注册；
+// R-1613——载荷主体=CompletionCriteria 现行+契约元数据；R-1597 版本链两字段）。
+// 版本链语义（05 §6 R-1597 合并规则唯一权威）：线性链——Revised=新版本，Superseded=旧版本终态；
+// 继承锚点（FrozenAnchors=已 Frozen 用户审批约束）只增不减——缺任一=契约违规 fail-closed。
+type CompletionContractRecordedPayload struct {
+	ContractID     string             `json:"contract_id"`      // 契约 ID（=goalID 域内唯一）
+	Version        int                `json:"version"`          // 版本号（从 1 起单调递增）
+	Status         string             `json:"status"`           // active | revised | superseded（封闭枚举）
+	Supersedes     string             `json:"supersedes,omitempty"` // 被替代版本契约 ID（首版=空）
+	FrozenAnchors  []string           `json:"frozen_anchors"`   // 继承锚点（只增不减——R-1597）
+	Criteria       CompletionCriteria `json:"criteria"`         // 载荷主体=CompletionCriteria 现行（R-1613）
+}
+
+// Validate MUST（07 §3 R-1414——Publish 前自动调用，R-770）。
+func (p CompletionContractRecordedPayload) Validate() error {
+	if p.ContractID == "" {
+		return fmt.Errorf("CompletionContractRecordedPayload: contract_id 必填")
+	}
+	if p.Version < 1 {
+		return fmt.Errorf("CompletionContractRecordedPayload: version 从 1 起（实际 %d）", p.Version)
+	}
+	switch p.Status {
+	case "active", "revised", "superseded":
+	default:
+		return fmt.Errorf("CompletionContractRecordedPayload: status 封闭枚举（active|revised|superseded），实际 %q", p.Status)
+	}
+	if p.Status == "superseded" && p.Supersedes == "" {
+		return fmt.Errorf("CompletionContractRecordedPayload: superseded 状态必须携带 supersedes")
+	}
+	if err := p.Criteria.Validate(); err != nil {
+		return fmt.Errorf("CompletionContractRecordedPayload.criteria: %w", err)
+	}
+	return nil
+}

@@ -221,6 +221,27 @@ func (c *Client) AdjustBudget(goalID, amount string) (map[string]interface{}, er
 	return result, nil
 }
 
+// InsertRequirement 需求注入（任务 5.8——04 权威形态 goalos insert <id> --requirement）。
+// PUT /api/goals/{id}/requirements {text}（05 §2.2——200 {ok}）。
+func (c *Client) InsertRequirement(goalID, text string) error {
+	body := map[string]string{"text": text}
+	data, _ := json.Marshal(body)
+	req, err := http.NewRequest("PUT", c.baseURL+"/api/goals/"+goalID+"/requirements", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("需求注入失败: HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // ─── ReviewReport API 方法（R-849 — 会议 #156）─────────────────────────
 
 // GetReviews 获取 Goal 下所有审查摘要。

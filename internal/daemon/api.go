@@ -424,6 +424,38 @@ func decisionMessage(decision string) string {
 }
 
 
+// HandleUpdateRequirements 需求注入（PUT /api/goals/:id/requirements——05 §2.2/R-1163）；
+// 任务 5.8 实装（S-247-01 消费链生产入口）：body={text}→发布 RequirementAdded
+// （07 §4 R-1362 payload={goal_id, requirement_text, source, added_at}——软入口不直接改 DAG）。
+// 200 {ok}（成功必须带 body——R-1324 禁 204）；Goal 不存在=404。
+func (h *Handler) HandleUpdateRequirements(w http.ResponseWriter, r *http.Request) {
+	goalID := r.PathValue("id")
+	if goalID == "" {
+		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "缺少 goal id")
+		return
+	}
+	var body struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Text == "" {
+		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "需求文本为空（{text} 必填）")
+		return
+	}
+	h.mu.RLock()
+	_, exists := h.Goals[goalID]
+	h.mu.RUnlock()
+	if !exists {
+		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "目标不存在")
+		return
+	}
+	eventBus.Publish(events.NewEvent(events.TypeRequirementAdded, goalID, "api").WithPayload(map[string]interface{}{
+		"requirement_text": body.Text,
+		"source":           "cli_insert",
+		"added_at":         time.Now().Format(time.RFC3339),
+	}))
+	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "goal_id": goalID})
+}
+
 // UpdateGoalStatus 更新 Goal 状态（v0.1.1: failed 不可被 completed 覆盖）。
 func (h *Handler) UpdateGoalStatus(goalID, status string) {
 	h.mu.Lock()

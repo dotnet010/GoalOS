@@ -187,6 +187,9 @@ func main() {
 	case "retry":
 		handleRetry(c, os.Args[2:])
 
+	case "insert":
+		handleInsert(c, os.Args[2:])
+
 	case "requirements":
 		handleRequirements(c, os.Args[2:])
 
@@ -258,6 +261,21 @@ func handleRetry(c *client.Client, args []string) {
 		os.Exit(1)
 	}
 	fmt.Println("[骨架] retry——POST /api/goals/{id}/retry（唯一恢复原语 R-1127）")
+}
+
+// handleInsert 处理 goalos insert 命令（任务 5.8——04 权威形态 R-1163 六命令之一）。
+// 形态：goalos insert <goal_id> --requirement "<需求文本>"——PUT /api/goals/{id}/requirements。
+// 需求注入=软入口（RequirementAdded 事件——不直接改 DAG；版本链消费归 MissionEngine R-1597）。
+func handleInsert(c *client.Client, args []string) {
+	if len(args) < 3 || args[1] != "--requirement" {
+		fmt.Fprintln(os.Stderr, "用法: goalos insert <goal_id> --requirement \"<需求文本>\"")
+		os.Exit(1)
+	}
+	if err := c.InsertRequirement(args[0], args[2]); err != nil {
+		fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("需求已注入: %s\n系统将根据新需求重新规划（契约版本链修订——确认待复核）\n", args[0])
 }
 
 // handleRequirements 处理 goalos requirements 命令（任务 7.20——需求注入）。
