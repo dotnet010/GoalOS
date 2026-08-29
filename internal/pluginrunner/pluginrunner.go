@@ -13,6 +13,10 @@ import (
 
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/governance"
+	goruntime "runtime"
+
+	goalosruntime "github.com/goalos/goalos/internal/runtime"
+	"github.com/goalos/goalos/internal/sandbox"
 	"github.com/goalos/goalos/pkg/events"
 )
 
@@ -28,6 +32,20 @@ type Runner struct {
 	secretKey     []byte
 	tokenVerifier TokenVerifier // R-660: 支持撤销检查的 Token 验证器
 	seq           int
+
+	// v0.3.1 执行门（R-1640② 激活——会议 #255/#257）：
+	contractVerifier *goalosruntime.ContractVerifier // 契约验证强制门（验签/时效/吊销/ProfileDigest/字段）
+	resolver         *goalosruntime.Resolver         // 解析留痕（RuntimeSelected/Rejected 事件——5.5 数据源）
+	policyRevision   string                          // 策略版本（digest 复核输入——缺省 builtin-v1）
+}
+
+// SetRuntimeGate 接线 Runtime 执行门（daemon 组合根注入——nil=门未激活=旧路径；
+// 激活后：契约验证失败/解析拒绝=阻断执行（fail-closed）；Nonce 消费不激活——
+// 凭据时序句①消费点=ExecutionSession 建立（Provider 路径收敛窗口落地——R-1640② 注记）。
+func (r *Runner) SetRuntimeGate(cv *goalosruntime.ContractVerifier, res *goalosruntime.Resolver, policyRevision string) {
+	r.contractVerifier = cv
+	r.resolver = res
+	r.policyRevision = policyRevision
 }
 
 // New creates a Plugin Runner with the given plugins directory and token secret.
@@ -184,6 +202,11 @@ func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 		return execResult{}, fmt.Errorf("no plugin found for action type: %s", actionType)
 	}
 
+	// ─── v0.3.1 Runtime 执行门（R-1640② 激活）───
+	if err := r.runtimeGate(evt, plugin); err != nil {
+		return execResult{}, err
+	}
+
 	home, err := osUserHomeDir()
 	if err != nil {
 		return execResult{}, fmt.Errorf("pluginrunner: cannot determine home directory: %w", err)
@@ -244,6 +267,73 @@ type execResult struct {
 	output     string
 	errMsg     string
 	durationMs int
+}
+
+// runtimeGate Runtime 执行门（R-1640②——契约验证强制+解析留痕）：
+// ①验证强制：Verify（验签/时效/吊销/v2 字段）→ProfileDigest 复核（永远独立重算——
+// D-1 PM 裁决硬约束，不读签发侧缓存）→VerifyWithProfile 比对（不一致=默认拒绝）；
+// ②解析留痕：Resolver.Resolve（WorkloadIdentity=插件二进制哈希——R-1561）；
+// 拒绝（行 5/6 无候选/严禁降档）=阻断；行 3b 平台落差=事件留痕+放行
+// （治理升级链落地前——D-2 裁决待定，PM 决策后收紧）。
+func (r *Runner) runtimeGate(evt events.Event, plugin *DiscoveredPlugin) error {
+	if r.contractVerifier == nil {
+		return nil // 门未激活（无密钥环境）——旧路径
+	}
+	tokenStr, _ := evt.Payload["token"].(string)
+	if tokenStr == "" {
+		// 契约驱动执行（05 §X.6——无契约不执行）：门已激活而无 token=fail-closed
+		return fmt.Errorf("runtime gate: 无契约 token——契约驱动执行（05 §X.6）")
+	}
+	vc, err := r.contractVerifier.Verify(tokenStr)
+	if err != nil {
+		return fmt.Errorf("runtime gate: 契约验证失败: %w", err)
+	}
+	claims := vc.Claims()
+	rev := r.policyRevision
+	if rev == "" {
+		rev = "builtin-v1"
+	}
+	var platform sandbox.PlatformID
+	switch goruntime.GOOS {
+	case "darwin":
+		platform = sandbox.PlatformDarwin
+	case "windows":
+		platform = sandbox.PlatformWindows
+	default:
+		platform = sandbox.PlatformLinux
+	}
+	freshDigest, _, derr := sandbox.BuiltinProfileDigest(claims.MinIsolation, claims.Capabilities, platform, rev)
+	if derr != nil {
+		return fmt.Errorf("runtime gate: profile 复核重算失败: %w", derr)
+	}
+	if _, err := r.contractVerifier.VerifyWithProfile(tokenStr, freshDigest); err != nil {
+		return fmt.Errorf("runtime gate: ProfileDigest 复核不一致——默认拒绝+重新评估（05 §X.6.3）: %w", err)
+	}
+	if r.resolver == nil {
+		return nil
+	}
+	minIso, perr := goalosruntime.ParseIsolationLevel(claims.MinIsolation)
+	if perr != nil {
+		return fmt.Errorf("runtime gate: MinIsolation 非法 %q: %w", claims.MinIsolation, perr)
+	}
+	var whash string
+	if h, herr := governance.WorkloadHashOf(plugin.BinaryPath); herr == nil {
+		whash = h
+	}
+	sel, serr := r.resolver.Resolve(goalosruntime.ResolveInput{
+		RequiresRealEnforcement: claims.RequiresRealEnforcement,
+		MinIsolation:            minIso,
+		WorkloadHashHex:         whash,
+	})
+	if serr != nil {
+		// 行 5/6：无满足候选=拒绝——严禁降级到更弱档（05 §X.6.4）
+		return fmt.Errorf("runtime gate: 解析拒绝（严禁降档——05 §X.6.4 行 5/6）: %w", serr)
+	}
+	if sel.NeedsGovernanceEscalation {
+		// 行 3b 平台落差：治理升级链落地前=留痕+放行（D-2 裁决待定——裁决后收紧为审批路由）
+		log.Printf("[PluginRunner] runtime gate: 平台落差治理升级标记——%s（D-2 裁决待定，留痕放行）", sel.PlatformGap)
+	}
+	return nil
 }
 
 // tokenCoversAction 检查 Token 授权的 capability 列表是否覆盖 actionType。
