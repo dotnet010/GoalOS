@@ -32,7 +32,8 @@ Thumbs.db
 *.log
 
 # ─── Go ───
-vendor/
+# vendor/ 例外（R-931/C-EXEC-04 W0 条件——agentbox 供应链锁定入库；05 审计面）
+# vendor/
 
 # ─── 测试产物 ───
 *.test
