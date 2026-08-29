@@ -8023,3 +8023,13 @@ resolutions:
       - must_exist: "TC-RT-012"
         in_file: 12测试清单与规范.md
         reason: "12 清单 F 节必须登记 D-2 四测试（R-1643⑦）"
+  R-1644:
+    desc: "D-3 幂等对账裁决落地(会议 #259——PM 指令+调研两路: Stripe/IETF 幂等键族[回放缓存原响应+同键异载荷 400/422+在飞 409+TTL 24h]+K8s 审批族[决策记录持久可查+乐观锁 409]): 兑现规格(05 §2.2/R-1379 承诺『重复提交→200+当前状态』——404=信息丢失型谎言, Jobs 产品面裁决); ①审批决策短期留痕(decidedApprovals map——actionID=天然幂等键, 不引入客户端幂等键机制, Linus 范围纪律; TTL=policy.approval_timeout 尺度+定期清理复用撤销代际模式); ②重复同决策=200+F-04 形状({ok, goal_id, visible_state, updated_at}——R-1324 形状对齐一并收口, 原 {\"status\":\"approved\"} 非 F-04 形状分歧一并收敛)+replayed=true 审计标记; ③重复冲突决策(approve↔reject)=409 Conflict(Kees 硬语义——决策不可覆写); ④真未知/过期=404 保持; ⑤delete-in-lock 并发安全语义不变(并发双裁决恰好一次生效); wait_more 端点注册无实现缺口登记 D-4(归周评审排期——范围纪律不顺手实现)。disposition: 生效"
+    files: [会议纪要.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "R-1644"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1644"
+      - must_exist: "TestDecision_IdempotencyThreeForms"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 G 节必须登记 D-3 三形态测试（R-1644）"
