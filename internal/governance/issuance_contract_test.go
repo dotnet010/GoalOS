@@ -1,0 +1,57 @@
+// issuance_contract_test.go——签发决策表契约测试（06 §1.3=R-1507 唯一权威；R-1601 签发不变量）。
+// 标注=实现同步补强（非先红——诚实标注纪律：v0.3.1 W5 接线窗口落笔）。12 清单 G 节登记。
+package governance
+
+import "testing"
+
+// TestGovernance_IssuanceDecisionTable 签发决策表逐行+序语义（行 4 风险级优先——RI-1 注记）。
+func TestGovernance_IssuanceDecisionTable(t *testing.T) {
+	cases := []struct {
+		name    string
+		in      IssuanceInput
+		wantRRE bool
+		wantMin string
+	}{
+		// 行 1：名单登记 ∧ caps⊆声明集 ∧ 无任意子进程 → {false, I1}
+		{"行1-名单登记受限动作", IssuanceInput{WorkloadRegistered: true, CapsSubsetDeclared: true, RiskLevel: "R1"}, false, "I1"},
+		// 行 1 排除：名单登记但含任意子进程 → 落行 2
+		{"行1排除-名单内但shell", IssuanceInput{WorkloadRegistered: true, CapsSubsetDeclared: true, ArbitrarySubprocess: true, RiskLevel: "R1"}, true, "I2"},
+		// 行 1 排除：声明集外扩 → 落行 2（未认证主体语义兜底）
+		{"行2-名单外普通动作", IssuanceInput{WorkloadRegistered: false, CapsSubsetDeclared: true, RiskLevel: "R1"}, true, "I2"},
+		{"行2-声明集外扩", IssuanceInput{WorkloadRegistered: true, CapsSubsetDeclared: false, RiskLevel: "R1"}, true, "I2"},
+		// 行 3：涉网络出站/敏感路径写入 → {true, I3}
+		{"行3-网络出站", IssuanceInput{WorkloadRegistered: false, CapsSubsetDeclared: true, NetworkEgress: true, RiskLevel: "R2"}, true, "I3"},
+		{"行3-敏感路径写入", IssuanceInput{WorkloadRegistered: false, CapsSubsetDeclared: true, SensitivePathWrite: true, RiskLevel: "R2"}, true, "I3"},
+		// 行 4：R≥4 或策略显式 → {true, I4}；RI-1：风险级优先于行 2/3（不被低档截获）
+		{"行4-R4优先于行2", IssuanceInput{ArbitrarySubprocess: true, RiskLevel: "R4"}, true, "I4"},
+		{"行4-R5优先于行3", IssuanceInput{NetworkEgress: true, RiskLevel: "R5"}, true, "I4"},
+		{"行4-策略显式", IssuanceInput{PolicyExplicitI4: true, RiskLevel: "R1"}, true, "I4"},
+		{"行4-L族残留兼容", IssuanceInput{ArbitrarySubprocess: true, RiskLevel: "L4"}, true, "I4"},
+	}
+	for _, c := range cases {
+		got := ComputeIssuanceDecision(c.in)
+		if got.RequiresRealEnforcement != c.wantRRE || got.MinIsolation != c.wantMin {
+			t.Fatalf("%s：期望 {%v, %s}，实际 {%v, %s}", c.name, c.wantRRE, c.wantMin, got.RequiresRealEnforcement, got.MinIsolation)
+		}
+		// R-1601 签发不变量：RRE=false ⇒ MinIsolation≤I1
+		if !got.RequiresRealEnforcement && got.MinIsolation != "I1" && got.MinIsolation != "I0" {
+			t.Fatalf("%s：R-1601 不变量违反——RRE=false 但 MinIsolation=%s", c.name, got.MinIsolation)
+		}
+	}
+}
+
+// TestGovernance_ClassifyActionAttrs 动作属性归类（三旗标事实源）。
+func TestGovernance_ClassifyActionAttrs(t *testing.T) {
+	asp, net, _ := ClassifyActionAttrs("shell.execute", nil)
+	if !asp || net {
+		t.Fatal("shell.execute 应=任意子进程旗标，非网络")
+	}
+	_, net2, sw := ClassifyActionAttrs("browser.open", []string{"browser.open", "fs.write"})
+	if !net2 || !sw {
+		t.Fatal("browser.open+fs.write 应=网络出站+敏感写入双旗标")
+	}
+	asp3, net3, sw3 := ClassifyActionAttrs("fs.read", []string{"fs.read"})
+	if asp3 || net3 || sw3 {
+		t.Fatal("fs.read 应=三旗标全否")
+	}
+}
