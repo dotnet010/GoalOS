@@ -100,6 +100,7 @@ func main() {
 	goalAnchor := scheduler.NewGoalAnchorTracker(20)
 	sched := scheduler.New(bus, store, goalAnchor)
 	sched.SetAutonomyLevel(cfg.Daemon.AutonomyLevel) // v0.1.1: autonomous→自动确认
+
 	sched.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 6: Scheduler registered"}`, time.Now().Format(time.RFC3339))
 
@@ -324,6 +325,8 @@ func main() {
 		runner.SetRuntimeGate(runtimeBoundary.verifier, runtimeBoundary.resolver, "builtin-v1")
 	}
 	runner.Start()
+	// R-1645②：target_endpoints 生产者接线（discovery 在 Start() 中刷新——注入=运行时实时值）
+	sched.SetEndpointLookup(runner.FindManifestEndpoints)
 	for _, p := range runner.DiscoveredPlugins() {
 		gov.RegisterCapabilities(p.Manifest.Name, p.Manifest.DeclaredCapabilities)
 	}
@@ -383,6 +386,8 @@ func main() {
 	// 任务 5.5（04 §14.3）：Runtime 呈现数据源=组合根实时计算（平台探测+参考解析+
 	// 降级证据——强隔离档仅 I4 探测呈现 R-1599，v0.3.1 恒无）
 	api.SetRuntimePresentation(runtimeBoundary.presentStatus)
+	// D-4（R-1645）：wait_more 治理同步面注入（UDS 端点→引擎 WaitMore——非绕过=治理权威承载）
+	api.SetWaitMoreHandler(gov.WaitMore)
 	api.Metrics = mreg // v0.1.0 H8: 指标注册表
 	api.SetPort(cfg.Daemon.Port)
 	api.SetStartTime(startTime)
@@ -736,6 +741,8 @@ func buildUDSMux(api *daemon.Handler) *http.ServeMux {
 			api.HandleApprove(w, r)
 		} else if strings.HasSuffix(r.URL.Path, "/reject") {
 			api.HandleReject(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/wait_more") {
+			api.HandleWaitMore(w, r) // D-4（R-1645）——审批延期（UDS 治理面族）
 		} else {
 			http.Error(w, `{"error":{"code":"INVALID_REQUEST"}}`, http.StatusNotFound)
 		}

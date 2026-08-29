@@ -84,6 +84,17 @@ func (r *Runner) Start() {
 	}
 }
 
+// FindManifestEndpoints 按 actionType 查插件声明的网络出站白名单（R-1645②——
+// D-2 断点闭合：scheduler 发布 ActionScheduled 的 target_endpoints 数据源；
+// 未命中/未声明=空集——签发侧公网保守兜底语义不变）。
+func (r *Runner) FindManifestEndpoints(actionType string) []string {
+	m := r.discovery.FindManifestByAction(actionType)
+	if m == nil {
+		return nil
+	}
+	return m.NetworkAllowlist
+}
+
 // DiscoveredPlugins returns the list of discovered plugins (for capability registration).
 func (r *Runner) DiscoveredPlugins() []DiscoveredPlugin {
 	return r.discovery.List()

@@ -8033,3 +8033,13 @@ resolutions:
       - must_exist: "TestDecision_IdempotencyThreeForms"
         in_file: 12测试清单与规范.md
         reason: "12 清单 G 节必须登记 D-3 三形态测试（R-1644）"
+  R-1645:
+    desc: "W5-6 验收裁决+D-4 落地包(会议 #260——PM 十一点指令; 会前核查八项): ①F1 修——12 清单幽灵两行移除(注册后删除未同步——v1.43/v1.44 名实失真)+计数修正 183→181+防复发纪律(删除测试文件=同刀删清单行——机械联动入清单头部); ②F2 修——target_endpoints 断点闭合(D-2 最后一块: PluginManifest 补 network_allowlist 字段[08 §8.2 示例字段代码级落地]+pluginrunner.FindManifestByAction 只读查询+scheduler endpointLookup 注入+main 接线——分层=查询非依赖反转 Meyer DA②); ③F3 修——errors.go 陈旧注记(RTM 族 W0 R-1491 已注册——『随任务 3.2 注册』陈旧); ④D-4 实装——wait_more 全链(调研三路: PagerDuty snooze/Stripe 授权持有[不可延长为原则]+Temporal durable timer[取消旧+启新=不重设不重延]): 治理侧 Engine.WaitMore(计时器重启 Temporal 模式+extensionsUsed 计数+上限 3 次第 4 次=GOV-APX-F-001 即时返回+计时器继续+超时兜底——R-1603 逐字; 同步面=UDS 端点进程内调用治理权威非绕过)+daemon HandleWaitMore(UDS-only 路由族 R-1378)+CLI decision 族实装(client UDS 传输 NewUDS——决策族前置缺口闭合: 治理命令 UDS 通道此前无客户端载体)+留痕=UserDecisionReceived(decision=wait_more——R-1211 枚举既有不造新事件)+TestGovernance_WaitMore_Extension 五断言(含时序实证: 延期后超时点=延后期满); ⑤W5-6 验收=附条件通过(W7 放行; v0.3.1 发布闸口=三平台旁路全绿不退让——TC-RT-001a 环境门禁/001b tag CI 窗口)。disposition: 生效"
+    files: [会议纪要.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "R-1645"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1645"
+      - must_exist: "TestGovernance_WaitMore_Extension"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 G 节必须登记 D-4 测试（R-1645④）"

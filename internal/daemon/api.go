@@ -40,6 +40,7 @@ type Handler struct {
 	ReviewReports    map[string]*events.ReviewReport // reportKey(goalID+actionID) → full report
 	Metrics          *metrics.Registry   // v0.1.0 H8: Prometheus 指标注册表
 	runtimePresent   func() map[string]interface{} // v0.3.1 任务 5.5：Runtime 呈现数据源（R-1640②——组合根注入）
+	waitMoreFn       func(actionID string) (accepted bool, extensionsUsed int, exhausted bool) // D-4（R-1645）：wait_more 治理同步面注入（组合根——非绕过=治理权威承载）
 	mu               sync.RWMutex
 	port             int
 	startTime        time.Time
@@ -305,6 +306,50 @@ func (h *Handler) serveApprovalDecision(w http.ResponseWriter, r *http.Request, 
 // D-3（R-1644）：幂等三形态同 approve——统一服务收敛（单一权威）。
 func (h *Handler) HandleReject(w http.ResponseWriter, r *http.Request) {
 	h.serveApprovalDecision(w, r, "rejected")
+}
+
+// HandleWaitMore 审批延期。POST /api/approvals/:id/wait_more（05 §2.2 注册端点——
+// D-4 落地 R-1645，治理面 UDS-only——R-1378）。
+// 语义=延长一个完整审批窗口（policy.approval_timeout 快照——R-1343/R-1054）；
+// 上限=3 次（第 4 次=GOV-APX-F-001 即时返回——计时器继续+超时兜底，R-1603 逐字）。
+func (h *Handler) HandleWaitMore(w http.ResponseWriter, r *http.Request) {
+	actionID := r.PathValue("id")
+	if actionID == "" {
+		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "缺少 action id")
+		return
+	}
+	if h.waitMoreFn == nil {
+		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "审批不存在或已过期")
+		return
+	}
+	accepted, used, exhausted := h.waitMoreFn(actionID)
+	if exhausted {
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
+			"error": map[string]interface{}{
+				"code":    "GOV-APX-F-001",
+				"message": "审批延期次数已达上限（3 次）——计时器继续，超时后按审批超时处理",
+			},
+		})
+		return
+	}
+	if !accepted {
+		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "审批不存在或已过期")
+		return
+	}
+	// 留痕=UserDecisionReceived（07 §4.13——decision=wait_more R-1211 枚举既有）
+	if eventBus != nil {
+		eventBus.Publish(events.NewEvent(events.TypeUserDecisionReceived, "", "api").WithPayload(map[string]interface{}{
+			"action_id":       actionID,
+			"decision":        "wait_more",
+			"extensions_used": used,
+		}))
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":              true,
+		"action_id":       actionID,
+		"extensions_used": used,
+		"updated_at":      time.Now().Format(time.RFC3339),
+	})
 }
 
 // TrackResult 存储 Action 的执行结果。
@@ -824,6 +869,9 @@ func (h *Handler) HandleDaemonRestart(w http.ResponseWriter, r *http.Request) {
 // SetRuntimePresentation 注入 Runtime 呈现数据源（任务 5.5——R-1640② 组合根接线；
 // nil=未接线=status 不带 runtime 块，诚实缺省）。
 func (h *Handler) SetRuntimePresentation(f func() map[string]interface{}) { h.runtimePresent = f }
+
+// SetWaitMoreHandler 注入 wait_more 治理同步面（D-4——R-1645；nil=未接线=端点 404 诚实缺省）。
+func (h *Handler) SetWaitMoreHandler(f func(actionID string) (bool, int, bool)) { h.waitMoreFn = f }
 
 // IncrementConfigGeneration 配置代际自增（Reload 成功路径调用——R-1380 代际计数；
 // 初值=1（NewHandler 起步代际））。失败的重载不得自增（版本号=生效配置的身份）。

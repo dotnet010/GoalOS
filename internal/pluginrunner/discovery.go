@@ -29,6 +29,9 @@ type PluginManifest struct {
 	Binary                string   `json:"binary"`                // 可执行文件路径（相对于 manifest 目录）
 	DeclaredCapabilities  []string `json:"declared_capabilities"` // 声明提供的 Capability
 	Description           string   `json:"description"`
+	// NetworkAllowlist 网络出站白名单（08 §8.2 示例字段——端点族=签发决策行 3L/3P
+	// 网域分流的生产者数据源（R-1645②——D-2 断点闭合：此前有消费者零生产者））
+	NetworkAllowlist      []string `json:"network_allowlist,omitempty"`
 }
 
 // DiscoveredPlugin 是已发现的 Plugin。
@@ -36,6 +39,17 @@ type DiscoveredPlugin struct {
 	Manifest   PluginManifest
 	BinaryPath string // 可执行文件的绝对路径
 	PluginDir  string // Plugin 目录
+}
+
+// FindManifestByAction 按 actionType 查插件 manifest 只读视图（R-1645②——
+// scheduler 生产者接线用：target_endpoints 数据源=network_allowlist；
+// 未命中/无白名单=空集（调用方按公网保守——fail-closed 语义不变）。
+func (d *PluginDiscovery) FindManifestByAction(actionType string) *PluginManifest {
+	p := d.Find(actionType)
+	if p == nil {
+		return nil
+	}
+	return &p.Manifest
 }
 
 // Discover 扫描 pluginsDir 下所有子目录，读取 plugin.json，验证签名。

@@ -37,11 +37,17 @@ type Scheduler struct {
 	goalTimers       map[string]*time.Timer
 	goalProgressed   map[string]bool
 	goalFailed       map[string]bool // v0.2.2 W5 A22: GoalFailed 标记
+	// endpointLookup target_endpoints 数据源（R-1645②——D-2 网域治理生产者接线：
+	// pluginrunner discovery 只读查询注入；nil=无端点信息=签发侧公网保守兜底）
+	endpointLookup func(actionType string) []string
 	scheduling       map[string]bool // R-839: 调度中标志——阻止提前GoalCompleted
 }
 
 // SetAutonomyLevel sets autonomy level（v0.1.1）。
 // R-1058: mu 保护——热重载（handleConfigReloaded）与读取并发。
+// SetEndpointLookup 注入端点查询（R-1645②——D-2 断点闭合：target_endpoints 真实流动）。
+func (s *Scheduler) SetEndpointLookup(f func(actionType string) []string) { s.endpointLookup = f }
+
 func (s *Scheduler) SetAutonomyLevel(level string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -345,6 +351,8 @@ func (s *Scheduler) handleMissionGenerated(evt events.Event) error {
 				"required_capabilities": []interface{}{actionType},
 				"timeout_seconds":       float64(execTimeoutSec), // R-1059: 命名常量，语义=执行超时
 				"risk_level_pre":        riskLevel,
+				// R-1645②：target_endpoints 生产者接线（nil 查询=空集——签发侧公网保守兜底）
+				"target_endpoints":      s.lookupEndpoints(actionType),
 			},
 		})
 	}
@@ -548,4 +556,12 @@ var actionCounter atomic.Int64
 func generateActionID(goalID string, idx int) string {
 	actionCounter.Add(1)
 	return fmt.Sprintf("%s_act_%02d", goalID, idx)
+}
+
+// lookupEndpoints 端点查询（nil 查询函数=空集——fail-closed 语义归签发侧公网保守）。
+func (s *Scheduler) lookupEndpoints(actionType string) []string {
+	if s.endpointLookup == nil {
+		return nil
+	}
+	return s.endpointLookup(actionType)
 }

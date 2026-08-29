@@ -70,6 +70,7 @@ type Engine struct {
 	autonomyLevel   string        // 由 pendingMu 保护（R-1058: 热重载写入与读取竞态）
 	approvalTimeout time.Duration // "autonomous"→自动放行L3+。由 pendingMu 保护（R-1054）
 	tokenTTL        time.Duration // R-1059: 行动令牌执行窗口，独立于审批/执行超时。由 pendingMu 保护
+	maxExtensions   int           // D-4（R-1645）：wait_more 上限（默认 3——R-1603 上限结局逐字）。由 pendingMu 保护
 	seq             atomic.Int64
 
 	// v0.3.1 签发接线（任务 5.5 前置——R-1640②/05 §X.6.3 字段表）：
@@ -110,6 +111,7 @@ type pendingApproval struct {
 	execTimeoutSec float64 // R-1059: 执行超时原值（调度器下发），批准后透传执行层
 	timer          *time.Timer
 	decision       Decision // R-363: 异步审批路径承载 Policy/Capability/Risk 评估结果
+	extensionsUsed int      // D-4（R-1645）：wait_more 已延期次数——上限=3（第 4 次=GOV-APX-F-001 即时返回——R-1603）
 }
 
 // New creates a Governance Engine with default policies.
@@ -129,6 +131,7 @@ func New(bus *eventbus.EventBus, secretKey []byte) *Engine {
 		auditLogDir:      home + "/.goalos/logs/",
 		pendingApprovals: make(map[string]pendingApproval),
 		revokedTokens:    make(map[string]bool), // R-660: Token 撤销列表
+		maxExtensions:   3,                      // D-4（R-1645/R-1603）：wait_more 上限默认值
 		profileDigestCache: make(map[string]string), // D-1 A 方案：签发侧 digest 缓存
 done:             make(chan struct{}),
 		policy: []PolicyRule{
@@ -434,6 +437,29 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 		ActionType: actionType, Decision: decision, Result: "APPROVED",
 	})
 	return nil
+}
+
+// WaitMore 审批延期（UDS 端点同步面——R-1603「即时返回」语义=进程内同步调用）。
+// 返回（是否接受延期, 已延期次数, 是否超限）。治理权威=本引擎——API 层经注入调用（非绕过）。
+func (e *Engine) WaitMore(actionID string) (accepted bool, extensionsUsed int, exhausted bool) {
+	e.pendingMu.Lock()
+	defer e.pendingMu.Unlock()
+	pa, ok := e.pendingApprovals[actionID]
+	if !ok {
+		return false, 0, false // 无进行中审批=不接受（调用方出 404）
+	}
+	pa.extensionsUsed++
+	if pa.extensionsUsed > e.maxExtensions {
+		return false, pa.extensionsUsed - 1, true // 超限=即时返回上限（计时器不动——R-1603）
+	}
+	if pa.timer != nil {
+		pa.timer.Stop()
+	}
+	pa.timer = time.AfterFunc(time.Duration(pa.timeoutSec)*time.Second, func() {
+		e.handleApprovalTimeout(pa.goalID, actionID, pa.decision)
+	})
+	e.pendingApprovals[actionID] = pa
+	return true, pa.extensionsUsed, false
 }
 
 // handleUserApproved 处理用户异步审批。
