@@ -8043,3 +8043,29 @@ resolutions:
       - must_exist: "TestGovernance_WaitMore_Extension"
         in_file: 12测试清单与规范.md
         reason: "12 清单 G 节必须登记 D-4 测试（R-1645④）"
+  R-1646:
+    desc: "W8 走查: §X.6 实现终态核对四处收窄(会议 #261——计划行 8.4 陌生读者走查+计划行 8.5 核对, R-1623 流程兑现; 行为面零变更, 规格可编码形态向实现终态收窄): ①§X.6.3 wire 形态注记——ProfileDigest/Nonce 实现=hex(32B) 字符串(JSON wire 天然约束, struct 块 [32]byte=概念长度声明); ②§X.6.5 SPI 实现形态注记——LeaseRequest=Contract *VerifiedContract 指针+Deadline time.Duration 预算+WorkspaceRef 经 Provider 构造注入不经租约, WorkspaceRef.PersistAcrossEscalation 不设字段(挂同卷=Escalate 行为纪律非声明旗标), Provider.Tier() 返回 string wire 值/State(ctx) 带 error 探测失败可分辨; ③§X.6.6 SessionState 枚举七值实现形态(Preparing/Running/Paused/Escalating/Escalated/Destroyed/Closed)——规格十态中已计划/解析中/预检中/收尾中=瞬态, 留痕=Runtime 事件族承载, 不扩枚举凑数(无行为价值的枚举=虚假对齐); ④四处全部为文档收窄, 实现行为经 W8 核对正确不改动。disposition: 生效"
+    files: [会议纪要.md, 05软件架构文档.md]
+    verify:
+      - must_exist: "R-1646"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1646"
+      - must_exist: "SessionState 实现形态注记"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.6 必须含 SessionState 七值实现形态注记（R-1646③）"
+      - must_exist: "SPI 实现形态注记"
+        in_file: 05软件架构文档.md
+        reason: "05 §X.6.5 必须含 SPI 签名实现形态注记（R-1646②）"
+  R-1647:
+    desc: "计划行 8.5 版本同步机制化(会议 #261——会议 #237 Linus『发版前版本号不得落后』裁定机制落地; 事故史: CanonicalVersion 滞留 0.1.3 三个版本无人发现, 原注释声称『CI 检查与 git tag 一致』但机制从未存在=僵尸声明): ①CanonicalVersion 同步 0.3.1(internal/config/config.go——R-361 权威常量); ②goalos version 命令实装(帮助文本承诺多年未兑现的僵尸条目——常量首个真实消费者, R-361『所有输出版本号必须引用此常量』自此有牙); ③scripts/check-version-sync.sh 新建+接线 docker-publish.yml(tag 上下文 GITHUB_REF_NAME=vX.Y.Z ↔ 常量不等即红; 本地无 tag=形态校验+显式 SKIP 不假装校验; 不入 make ci——恒 SKIP 无牙占位); ④TestCanonicalVersion_Shape 契约测试三断言(semver 形态/无预发布后缀/声明锚点与脚本 grep 锚点逐字一致——锚点漂移=闸失效无人知晓, 双锚同步机检钉死)。disposition: 生效"
+    files: [会议纪要.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "R-1647"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1647"
+      - must_exist: "TestCanonicalVersion_Shape"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 G 节必须登记版本形态测试（R-1647④）"
+      - must_exist: "check-version-sync.sh"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 tag 闸脚本名（R-1647③）"

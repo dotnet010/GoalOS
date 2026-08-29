@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/goalos/goalos/internal/client"
+	"github.com/goalos/goalos/internal/config"
 )
 
 const defaultDaemonURL = "http://localhost:18920"
@@ -26,7 +27,7 @@ func main() {
 	c := client.New(defaultDaemonURL)
 
 	// Auto-start daemon if not running
-	if cmd != "daemon" && cmd != "help" {
+	if cmd != "daemon" && cmd != "help" && cmd != "version" {
 		if ok, _ := c.Health(); !ok {
 			fmt.Println("Daemon 未运行。正在启动...")
 			if err := startDaemon(); err != nil {
@@ -43,6 +44,10 @@ func main() {
 	}
 
 	switch cmd {
+	case "version":
+		// 任务 8.5：帮助文本承诺的 version 命令实装——R-361 权威常量唯一出口。
+		fmt.Printf("goalos version %s\n", config.CanonicalVersion)
+
 	case "new":
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "用法: goalos new <目标描述>")
