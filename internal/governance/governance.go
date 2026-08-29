@@ -184,7 +184,7 @@ func (e *Engine) computeIssuance(actionType, target string, requiredCaps []inter
 	for i, c := range requiredCaps {
 		caps[i] = fmt.Sprint(c)
 	}
-	asp, netFlag, _ := ClassifyActionAttrs(actionType, caps)
+	asp, netFlag := ClassifyActionAttrs(actionType, caps)
 	homeDir, _ := os.UserHomeDir()
 	risk := riskLevelPre
 	if risk == "" {

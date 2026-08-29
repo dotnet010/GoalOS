@@ -58,18 +58,36 @@ func TestGovernance_IssuanceDecisionTable(t *testing.T) {
 	}
 }
 
-// TestGovernance_ClassifyActionAttrs 动作属性归类（三旗标事实源）。
+// TestGovernance_ClassifyActionAttrs 动作属性归类（两旗标事实源——R-1643 拆分后形态）。
 func TestGovernance_ClassifyActionAttrs(t *testing.T) {
-	asp, net, _ := ClassifyActionAttrs("shell.execute", nil)
+	asp, net := ClassifyActionAttrs("shell.execute", nil)
 	if !asp || net {
 		t.Fatal("shell.execute 应=任意子进程旗标，非网络")
 	}
-	_, net2, sw := ClassifyActionAttrs("browser.open", []string{"browser.open", "fs.write"})
-	if !net2 || !sw {
-		t.Fatal("browser.open+fs.write 应=网络出站+敏感写入双旗标")
+	asp2, net2 := ClassifyActionAttrs("browser.open", []string{"browser.open", "fs.write"})
+	if asp2 || !net2 {
+		t.Fatal("browser.open 应=网络出站旗标，非子进程")
 	}
-	asp3, net3, sw3 := ClassifyActionAttrs("fs.read", []string{"fs.read"})
-	if asp3 || net3 || sw3 {
-		t.Fatal("fs.read 应=三旗标全否")
+	asp3, net3 := ClassifyActionAttrs("fs.read", []string{"fs.read"})
+	if asp3 || net3 {
+		t.Fatal("fs.read 应=双旗标全否")
+	}
+}
+
+// TestGovernance_IsSensitivePathWrite 敏感路径写入目标感知判定（R-1643 解冻——
+// 目标路径落敏感目录族=敏感写入；工作区写入≠敏感写入）。
+func TestGovernance_IsSensitivePathWrite(t *testing.T) {
+	home := "/home/tester"
+	if !IsSensitivePathWrite("/home/tester/.ssh/id_rsa", home) {
+		t.Fatal(".ssh 下文件=敏感写入")
+	}
+	if !IsSensitivePathWrite("/home/tester/.goalos/config/x", home) {
+		t.Fatal(".goalos 下=敏感写入")
+	}
+	if IsSensitivePathWrite("/home/tester/Goals/goal-1/out.txt", home) {
+		t.Fatal("工作区写入≠敏感写入")
+	}
+	if IsSensitivePathWrite("", home) || IsSensitivePathWrite("/x", "") {
+		t.Fatal("空输入=非敏感（防御性 false——无目标=无判定）")
 	}
 }

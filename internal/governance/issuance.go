@@ -48,8 +48,8 @@ var arbitrarySubprocessActions = map[string]bool{
 // 网络出站能力前缀族（行 3「涉网络出站」）。
 var networkEgressCaps = []string{"web.", "browser.", "net.", "http."}
 
-// 敏感路径写入能力族（行 3「敏感路径写入」——目标路径判定归执行侧，签发侧按能力族）。
-var sensitiveWriteCaps = []string{"fs.write", "fs.delete"}
+// 敏感路径写入判定=目标路径感知（IsSensitivePathWrite——R-1643 解冻；
+// 能力族前缀判定已退役：fs.write 写工作区≠敏感写入，能力族只声明可能性不声明事实）。
 
 // ComputeIssuanceDecision 签发决策表（按序求值首个匹配生效——06 §1.3；R-1643 行 3 拆分）。
 // 行 1：名单登记 ∧ caps⊆声明集 ∧ 无任意子进程 → {false, I1}
@@ -115,8 +115,9 @@ func riskAtLeast(level, floor string) bool {
 	return ord(level) >= ord(floor)
 }
 
-// ClassifyActionAttrs 动作属性归类（签发决策输入的事实源——capability/动作类型→三旗标）。
-func ClassifyActionAttrs(actionType string, caps []string) (arbitrarySubprocess, networkEgress, sensitiveWrite bool) {
+// ClassifyActionAttrs 动作属性归类（签发决策输入的事实源——任意子进程旗标+网络出站旗标）。
+// R-1643 拆分：敏感写入旗标退役（能力族只声明可能性——真实判定=IsSensitivePathWrite 目标路径感知）。
+func ClassifyActionAttrs(actionType string, caps []string) (arbitrarySubprocess, networkEgress bool) {
 	arbitrarySubprocess = arbitrarySubprocessActions[actionType]
 	for _, c := range caps {
 		for _, p := range networkEgressCaps {
@@ -124,13 +125,8 @@ func ClassifyActionAttrs(actionType string, caps []string) (arbitrarySubprocess,
 				networkEgress = true
 			}
 		}
-		for _, p := range sensitiveWriteCaps {
-			if c == p {
-				sensitiveWrite = true
-			}
-		}
 	}
-	return arbitrarySubprocess, networkEgress, sensitiveWrite
+	return arbitrarySubprocess, networkEgress
 }
 
 // ─── 名单登记匹配（签发侧——R-1508/R-1549④）───
