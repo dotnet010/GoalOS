@@ -3,6 +3,7 @@
 package governance
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -76,15 +77,17 @@ func TestGovernance_ClassifyActionAttrs(t *testing.T) {
 
 // TestGovernance_IsSensitivePathWrite 敏感路径写入目标感知判定（R-1643 解冻——
 // 目标路径落敏感目录族=敏感写入；工作区写入≠敏感写入）。
+// 路径形态平台化（filepath.Join 构造——POSIX 字面量在 Windows 上形态失配事故实证：
+// windows-daily CI 红出 2026-08-29）。
 func TestGovernance_IsSensitivePathWrite(t *testing.T) {
-	home := "/home/tester"
-	if !IsSensitivePathWrite("/home/tester/.ssh/id_rsa", home) {
+	home := filepath.Join(string(filepath.Separator)+"home", "tester")
+	if !IsSensitivePathWrite(filepath.Join(home, ".ssh", "id_rsa"), home) {
 		t.Fatal(".ssh 下文件=敏感写入")
 	}
-	if !IsSensitivePathWrite("/home/tester/.goalos/config/x", home) {
+	if !IsSensitivePathWrite(filepath.Join(home, ".goalos", "config", "x"), home) {
 		t.Fatal(".goalos 下=敏感写入")
 	}
-	if IsSensitivePathWrite("/home/tester/Goals/goal-1/out.txt", home) {
+	if IsSensitivePathWrite(filepath.Join(home, "Goals", "goal-1", "out.txt"), home) {
 		t.Fatal("工作区写入≠敏感写入")
 	}
 	if IsSensitivePathWrite("", home) || IsSensitivePathWrite("/x", "") {
