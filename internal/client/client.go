@@ -4,9 +4,11 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -20,6 +22,24 @@ type Client struct {
 }
 
 // New creates a new Client.
+// NewUDS UDS 客户端（治理面唯一通道——R-1378/R-1322：审批族端点 UDS-only；
+// D-4 配套 R-1645——决策命令族实装的传输前提）。
+// R-1246 transport×认证矩阵：本机治理命令走 unix socket。
+func NewUDS(socketPath string) *Client {
+	return &Client{
+		baseURL: "http://goalos-daemon.uds", // 占位主机名（UDS 拨号不使用 Host 连接——仅 URL 形态需要）
+		http: &http.Client{
+			Timeout: defaultTimeout,
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					var d net.Dialer
+					return d.DialContext(ctx, "unix", socketPath)
+				},
+			},
+		},
+	}
+}
+
 func New(baseURL string) *Client {
 	return &Client{
 		baseURL: baseURL,
@@ -219,6 +239,47 @@ func (c *Client) AdjustBudget(goalID, amount string) (map[string]interface{}, er
 		return nil, fmt.Errorf("client: parse budget response: %w", err)
 	}
 	return result, nil
+}
+
+// ListApprovals 待审批列表（GET /api/approvals——只读；写族=UDS-only）。
+func (c *Client) ListApprovals() ([]map[string]interface{}, error) {
+	resp, err := c.http.Get(c.baseURL + "/api/approvals")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var list []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		return nil, fmt.Errorf("client: parse approvals: %w", err)
+	}
+	return list, nil
+}
+
+// postDecision 决策端点 POST（审批族——UDS-only；F-04 形状响应）。
+func (c *Client) postDecision(actionID, action string) (map[string]interface{}, int, error) {
+	resp, err := c.http.Post(c.baseURL+"/api/approvals/"+actionID+"/"+action, "application/json", nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	var result map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+	return result, resp.StatusCode, nil
+}
+
+// Approve 批准（POST /api/approvals/:id/approve——05 §2.2）。
+func (c *Client) Approve(actionID string) (map[string]interface{}, int, error) {
+	return c.postDecision(actionID, "approve")
+}
+
+// Reject 拒绝（POST /api/approvals/:id/reject）。
+func (c *Client) Reject(actionID string) (map[string]interface{}, int, error) {
+	return c.postDecision(actionID, "reject")
+}
+
+// WaitMore 审批延期（POST /api/approvals/:id/wait_more——D-4 R-1645）。
+func (c *Client) WaitMore(actionID string) (map[string]interface{}, int, error) {
+	return c.postDecision(actionID, "wait_more")
 }
 
 // InsertRequirement 需求注入（任务 5.8——04 权威形态 goalos insert <id> --requirement）。

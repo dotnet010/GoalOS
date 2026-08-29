@@ -1,4 +1,4 @@
-// errors.go——runtime 包错误值（09 RTM 族——R-1620 注记：随任务 3.2 注册）。
+// errors.go——runtime 包错误值（09 RTM 族——RTM 族 W0 已注册（R-1491——09 §2 七码）；R-1620 注记修正（会议 #260 F3——原注记『随任务 3.2 注册』陈旧））。
 package runtime
 
 import "fmt"

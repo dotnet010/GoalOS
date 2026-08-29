@@ -222,23 +222,75 @@ func handleKeepAlive(c *client.Client, args []string) {
 	os.Exit(1)
 }
 
-// handleDecision 处理 goalos decision 命令（任务 7.20——R-1125 审批交互唯一呈现=CLI）。
+// handleDecision 处理 goalos decision 命令（R-1125 审批交互唯一呈现=CLI）。
 // 子命令：list/approve/reject/wait_more——审批决策命令族。
+// D-4 实装（R-1645——会议 #260）：治理面=UDS 唯一通道（R-1378/R-1322）——
+// 决策族经 UDS 客户端（client.NewUDS），TCP 面 404=设计使然（治理不暴露 TCP）。
+// list=只读（TCP /api/approvals 可及——写族才 UDS-only）。
 func handleDecision(c *client.Client, args []string) {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "用法: goalos decision list|approve|reject|wait_more <id>")
 		os.Exit(1)
 	}
 	subCmd := args[0]
+	home, _ := os.UserHomeDir()
+	udsClient := client.NewUDS(home + "/.goalos/run/daemon.sock")
 	switch subCmd {
 	case "list":
-		fmt.Println("[骨架] decision list——GET /api/approvals（daemon 端点既有）")
-	case "approve":
-		fmt.Println("[骨架] decision approve——POST /api/approvals/{id}/approve（daemon 端点既有）")
-	case "reject":
-		fmt.Println("[骨架] decision reject——POST /api/approvals/{id}/reject（daemon 端点既有）")
-	case "wait_more":
-		fmt.Println("[骨架] decision wait_more——POST /api/approvals/{id}/wait_more（daemon 端点既有）")
+		list, err := c.ListApprovals()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+			os.Exit(1)
+		}
+		if len(list) == 0 {
+			fmt.Println("无待审批项")
+			return
+		}
+		for _, a := range list {
+			fmt.Printf("%s: %s (%s) [goal=%s]\n", a["action_id"], a["action_type"], a["risk_level"], a["goal_id"])
+		}
+	case "approve", "reject", "wait_more":
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "用法: goalos decision %s <id>\n", subCmd)
+			os.Exit(1)
+		}
+		id := args[1]
+		var resp map[string]interface{}
+		var code int
+		var err error
+		switch subCmd {
+		case "approve":
+			resp, code, err = udsClient.Approve(id)
+		case "reject":
+			resp, code, err = udsClient.Reject(id)
+		case "wait_more":
+			resp, code, err = udsClient.WaitMore(id)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "错误: %v（治理面=UDS——daemon 未运行则连接失败）\n", err)
+			os.Exit(1)
+		}
+		switch code {
+		case 200:
+			if subCmd == "wait_more" {
+				fmt.Printf("审批窗口已延长一个完整窗口（已延期 %v 次——上限 3 次）\n", resp["extensions_used"])
+			} else {
+				state := ""
+				if resp["replayed"] == true {
+					state = "（幂等回放——该审批此前已裁决）"
+				}
+				fmt.Printf("已%s: %s %s\n", map[string]string{"approve": "批准", "reject": "拒绝"}[subCmd], id, state)
+			}
+		case 404:
+			fmt.Fprintf(os.Stderr, "审批不存在或已过期: %s\n", id)
+			os.Exit(1)
+		case 409:
+			fmt.Fprintf(os.Stderr, "冲突: %v\n", resp["error"])
+			os.Exit(1)
+		default:
+			fmt.Fprintf(os.Stderr, "非预期响应: HTTP %d %v\n", code, resp)
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "未知子命令: %s\n", subCmd)
 		os.Exit(1)
