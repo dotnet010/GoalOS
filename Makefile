@@ -8,6 +8,8 @@ test:
 
 race:
 	go test -count=1 -timeout 120s -race ./...
+	@echo "=== prototype 族（构建 tag 隔离——不进发布二进制；W7 T2 出数闸=R-1478③） ==="
+	go test -count=1 -timeout 60s -tags prototype ./prototype/
 
 lint:
 	go vet ./...
