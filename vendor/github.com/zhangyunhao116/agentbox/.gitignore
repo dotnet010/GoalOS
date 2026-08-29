@@ -1,0 +1,64 @@
+# Compiled binary (only the root-level CLI binary, not cmd/agentbox/ source dir)
+/agentbox
+
+# Test binary
+*.test
+
+# Example binaries
+/agentsim
+/approval
+/benchmark
+/classifier
+/codemod
+/codereview
+/darwin
+/devworkflow
+/envutil
+/filesystem
+/gitops
+/healthcheck
+/manager
+/minimal
+/multicommand
+/network
+/networkaccess
+/pathutil
+/projectinit
+/projectscaffold
+/researchflow
+/ruleanalysis
+/sandbox-bench
+/security
+/timeout
+/trustlevel9
+/wrap
+
+# Windows executables
+*.exe
+
+# Coverage output
+*.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/bin/
+/dist/
+
+# Benchmark reports (generated on test servers)
+/benchmarks/
+
+# Misc
+/EOF
+all_commands_merged.json
+all_execute_commands.json
+execute_commands_all_raw.json

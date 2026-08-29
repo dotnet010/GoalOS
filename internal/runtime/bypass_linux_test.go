@@ -7,5 +7,6 @@ package runtime
 import "testing"
 
 func TestRuntime_Bypass_SyscallDenied_Linux(t *testing.T) {
-	runBypassProbe(t, "TC-RT-001b", nil)
+	// 转绿窗口（任务 5.2 收敛落地——agentbox 承载）：Provider 真实注册
+	runBypassProbe(t, "TC-RT-001b", NewAgentboxProvider(t.TempDir(), t.TempDir(), "linux"))
 }

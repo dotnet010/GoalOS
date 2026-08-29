@@ -49,17 +49,10 @@ func runBypassProbe(t *testing.T, tc string, p Provider) {
 		t.Fatalf("%s：Precheck 边界验证失败（边界建立但未生效）: %v", tc, err)
 	}
 
-	// 探针组（Option B 语义——会议 #256）：写禁闭+敏感目录禁读+网络禁闭
+	// 探针组（Option B 语义——会议 #256；探针形态 per 平台——platformProbeSet 族表
+	// 由平台文件注入：darwin=touch/cat/nc；linux/windows=agentbox 承载形态）
 	home, _ := os.UserHomeDir()
-	probes := []struct{ name, binary, args string }{
-		// 探针①：直接写工作区外路径（绕过能力代理——不经任何协议层）
-		{"direct write outside workspace", "/usr/bin/touch", filepath.Join(home, ".goalos-bypass-probe-" + tc)},
-		// 探针②：读敏感目录（读开放语义的显式收口面——密钥/凭证防线）
-		{"sensitive dir read ~/.ssh", "/bin/cat", filepath.Join(home, ".ssh")},
-		// 探针③：connect 出站（127.0.0.1:9 无监听——EPERM「Operation not permitted」与
-		// ECONNREFUSED「Connection refused」文本可分辨，nc -v 强制输出）
-		{"outbound connect 127.0.0.1:9", "/usr/bin/nc", "-v -w 1 127.0.0.1 9"},
-	}
+	probes := platformProbeSet(tc, home)
 	for _, probe := range probes {
 		res, err := guard.Execute(ctx, ExecuteRequest{
 			ActionID: tc + "-" + probe.name, ActionType: "process.exec",
@@ -108,8 +101,20 @@ func assertBoundaryDenied(t *testing.T, tc, what string, res ExecuteResult, err 
 	if strings.Contains(res.Output, "sandbox-exec:") {
 		t.Fatalf("%s：%s 为 execvp 级失败（边界从未生效的伪证——不计数）——Output=%q", tc, what, res.Output)
 	}
-	if !strings.Contains(res.Output, "Operation not permitted") {
-		t.Fatalf("%s：%s 非 OS 边界拒绝形态（应为子进程级 EPERM）——ExitCode=%d Output=%q err=%v",
-			tc, what, res.ExitCode, res.Output, err)
+	// 平台拒绝证据族（EACCES=Landlock/ACL 语义同 EPERM——TC-RT-001a/b 平台机制差异）：
+	// darwin=EPERM；linux=「Permission denied」EACCES（Landlock）/EPERM（seccomp）/代理 denied；
+	// windows=「Access is denied」。execvp 级假象排除已在上游断言。
+	deniedEvidence := []string{"Operation not permitted", "Permission denied", "Access is denied",
+		"request denied", "connection to blocked", "denied by filter"}
+	found := false
+	for _, ev := range deniedEvidence {
+		if strings.Contains(res.Output, ev) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("%s：%s 非 OS 边界拒绝形态（应为子进程级拒绝证据族 %v）——ExitCode=%d Output=%q err=%v",
+			tc, what, deniedEvidence, res.ExitCode, res.Output, err)
 	}
 }
