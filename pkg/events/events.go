@@ -127,6 +127,7 @@ const (
 	// wire 值小写蛇形；payload shape 见 07 事件注册表 §4/X.8（R-1362）。
 	TypeSecurityIncident          = "security_incident"           // 安全事件（密钥泄露/seccomp 违规/Provider 全超时/guard 不可用）。Publisher: 各核心模块。Payload: {severity: CRITICAL|WARN|INFO, module, detail}（07 X.8）
 	TypeRequirementAdded          = "requirement_added"           // 追加需求软入口（不直接改 DAG）。Publisher: Channel Adapter。Payload: {goal_id, requirement_text, source, added_at}（07 §4 R-1362）
+	TypeCompletionContractRecorded = "CompletionContractRecorded" // 完成契约版本落账（版本链——R-1597/R-1613）。Publisher: Mission Engine。Payload=CompletionContractRecordedPayload（07 §4 R-1414——本注册=07 注册的代码级落地，会议 #249 存在论钉死）
 	TypeBudgetAdjustmentRequested = "budget_adjustment_requested" // 预算调整请求。Publisher: Channel Adapter。Payload: {goal_id, requested_delta, reason}（07 §4 R-1362）
 	TypeStateMachineViolation     = "state_machine_violation"     // 非法迁移企图（终态后 wait_more 等）。Publisher: GoalRunner。Payload: {goal_id, event_type, current_state, expected_states, attempted_transition}（07 §4 R-1362）
 
