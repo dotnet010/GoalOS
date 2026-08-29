@@ -10,7 +10,6 @@ package runtime
 
 import (
 	"context"
-	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -20,10 +19,11 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/goalos/goalos/internal/sandbox"
 )
 
-//go:embed profile_restricted_darwin.sb
-var restrictedProfileDarwinSB string
+// profile 单一来源=internal/sandbox.RestrictedSeatbeltProfile()（R-1641③——禁止副本）。
 
 // darwinSeatbeltProvider 受限档 Provider（T1——Seatbelt 边界直接执行面）。
 type darwinSeatbeltProvider struct {
@@ -129,7 +129,7 @@ func (h *seatbeltHandle) Start(context.Context) error {
 		return fmt.Errorf("runtime: tmpDir 建立失败: %w", err)
 	}
 	h.profilePath = filepath.Join(h.p.tmpDir, h.id+".sb")
-	if err := os.WriteFile(h.profilePath, []byte(restrictedProfileDarwinSB), 0600); err != nil {
+	if err := os.WriteFile(h.profilePath, []byte(sandbox.RestrictedSeatbeltProfile()), 0600); err != nil {
 		return fmt.Errorf("runtime: profile 物化失败: %w", err)
 	}
 	h.state = HandleReady
