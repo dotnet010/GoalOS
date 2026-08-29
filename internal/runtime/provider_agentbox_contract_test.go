@@ -10,12 +10,19 @@ package runtime
 
 import (
 	"context"
+	"os"
 	"testing"
 )
 
 // TestRuntime_AgentboxProvider_Boundary（任务 5.1/5.2 平台实证）：
 // agentbox 承载的受限档——fs 禁闭+网络阻断双探针真实拒绝。
 func TestRuntime_AgentboxProvider_Boundary(t *testing.T) {
+	// 环境门禁（2026-08-29 windows-daily CI 实证）：agentbox Windows 沙箱在 GH runner 上
+	// 创建沙箱用户/改 ACL——共享 Temp 根级联 Access denied（同 runner 后续测试全灭）。
+	// 默认跳过；GOALOS_AGENTBOX_CI=1=隔离 runner 窗口（独立环境可并行——登记待实机调试）。
+	if os.Getenv("GOALOS_AGENTBOX_CI") != "1" {
+		t.Skip("环境门禁：agentbox 平台实证需隔离 runner（GOALOS_AGENTBOX_CI=1）——windows-daily 共享 Temp 级联事故实证")
+	}
 	ctx := context.Background()
 	platform := "linux"
 	if isWindowsRuntime() {
