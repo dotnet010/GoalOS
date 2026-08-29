@@ -8,7 +8,11 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	goruntime "runtime"
+	"sort"
 	"time"
+
+	"github.com/goalos/goalos/internal/sandbox"
 )
 
 // IssuanceInput 签发决策输入集（06 §1.3 四条件的事实源）。
@@ -163,4 +167,52 @@ func WorkloadHashOf(binaryPath string) (string, error) {
 	}
 	sum := sha256.Sum256(data)
 	return fmt.Sprintf("%x", sum), nil
+}
+
+// ─── ProfileDigest 计算（D-1 A 方案——会议 #257 PM 裁决）───
+// 签发侧缓存键=（能力集, risk, 平台, PolicyRevision）——命中不重跑派生管线（PM 效率约束）。
+// 复核侧纪律（PM 硬约束）：发放前复核永远独立重算——不读本缓存（本缓存仅供签发侧）。
+
+// policyRevisionOrDefault 策略版本（缺省=builtin-v1——R-1524 内置默认策略载体）。
+func (e *Engine) policyRevisionOrDefault() string {
+	if e.policyRevision != "" {
+		return e.policyRevision
+	}
+	return "builtin-v1"
+}
+
+// currentPlatformID 当前平台（PlatformID 族——darwin/linux/windows；信创=linux 构建标签族归 linux）。
+func currentPlatformID() sandbox.PlatformID {
+	switch goruntime.GOOS {
+	case "darwin":
+		return sandbox.PlatformDarwin
+	case "windows":
+		return sandbox.PlatformWindows
+	default:
+		return sandbox.PlatformLinux
+	}
+}
+
+// profileDigestCached 签发侧 ProfileDigest（D-1 A 方案落地）。
+// 缓存键=CanonicalKey(排序能力集+risk+平台+PolicyRevision)——PM 裁决四元组。
+// digest 失败=返回空串（验证层 invalid_fields 拒绝=fail-closed，不静默）。
+func (e *Engine) profileDigestCached(caps []string, riskLevel string, minIsolation string) string {
+	sortedCaps := append([]string{}, caps...)
+	sort.Strings(sortedCaps)
+	platform := currentPlatformID()
+	key := sandbox.CanonicalKey(append(sortedCaps, riskLevel, string(platform), e.policyRevisionOrDefault())...)
+	e.profileDigestMu.RLock()
+	cached, ok := e.profileDigestCache[key]
+	e.profileDigestMu.RUnlock()
+	if ok {
+		return cached
+	}
+	digest, _, err := sandbox.BuiltinProfileDigest(minIsolation, sortedCaps, platform, e.policyRevisionOrDefault())
+	if err != nil {
+		return ""
+	}
+	e.profileDigestMu.Lock()
+	e.profileDigestCache[key] = digest
+	e.profileDigestMu.Unlock()
+	return digest
 }

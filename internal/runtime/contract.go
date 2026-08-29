@@ -39,8 +39,10 @@ func (e *ContractError) Error() string {
 }
 
 // IsRejectReason 判定错误是否携带指定 reject_reason（TC-RT 族断言入口）。
+// errors.As 穿透包装层（执行门 fmt.Errorf %w 包装语义不破坏判定——R-1640② 落地实证）。
 func IsRejectReason(err error, reason string) bool {
-	if ce, ok := err.(*ContractError); ok {
+	var ce *ContractError
+	if errors.As(err, &ce) {
 		return ce.Reason == reason
 	}
 	return false

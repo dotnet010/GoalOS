@@ -227,7 +227,6 @@ func main() {
 
 	// ③Runtime 边界组合根（手工组合根纪律——会议 #257 调研决议：不引进 DI 框架）
 	runtimeBoundary := runtimeWiring(bus, home, cfg, gov, secretKey)
-	_ = runtimeBoundary
 
 	gov.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered"}`, time.Now().Format(time.RFC3339))
@@ -314,6 +313,10 @@ func main() {
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (%s)"}`, time.Now().Format(time.RFC3339), agentName)
 
 	runner := pluginrunner.New(bus, secretKey, nil) // R-660: tokenVerifier=nil→fallback 无撤销检查。Week 3 注入 Engine
+	// v0.3.1 执行门接线（R-1640②——契约验证强制+解析留痕；有密钥环境才激活）
+	if len(secretKey) > 0 {
+		runner.SetRuntimeGate(runtimeBoundary.verifier, runtimeBoundary.resolver, "builtin-v1")
+	}
 	runner.Start()
 	for _, p := range runner.DiscoveredPlugins() {
 		gov.RegisterCapabilities(p.Manifest.Name, p.Manifest.DeclaredCapabilities)

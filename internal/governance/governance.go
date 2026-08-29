@@ -73,6 +73,8 @@ type Engine struct {
 	trustedWorkloads []TrustedWorkloadView // 名单登记视图（daemon.yaml trusted_workloads——R-1508）
 	workloadHash   string              // 本守护进程主二进制 SHA-256 hex（WorkloadIdentity 运行时验证值——R-1561）
 	policyRevision string              // 策略版本（内置默认=builtin-v1——R-1524 策略载体）
+	profileDigestCache map[string]string // 签发侧 digest 缓存（D-1 PM 裁决：能力集+risk+平台+PolicyRevision 四元键）
+	profileDigestMu    sync.RWMutex
 
 	// Audit Engine: ring buffer (1000 entries) + async flush
 	auditBuf    []auditEntry
@@ -122,6 +124,7 @@ func New(bus *eventbus.EventBus, secretKey []byte) *Engine {
 		auditLogDir:      home + "/.goalos/logs/",
 		pendingApprovals: make(map[string]pendingApproval),
 		revokedTokens:    make(map[string]bool), // R-660: Token 撤销列表
+		profileDigestCache: make(map[string]string), // D-1 A 方案：签发侧 digest 缓存
 done:             make(chan struct{}),
 		policy: []PolicyRule{
 			{
@@ -179,18 +182,29 @@ func (e *Engine) fillV2Claims(claims *TokenClaims, actionType string, caps []str
 		rev = "builtin-v1"
 	}
 	claims.PolicyRevision = rev
-	asp, net, sw := ClassifyActionAttrs(actionType, caps)
+	asp, netFlag, swFlag := ClassifyActionAttrs(actionType, caps)
+	// D-2 冻结可观测（裁决待定期间行 3 旗标计入日志——不吞没不提升，两纪律兼顾）：
+	if netFlag || swFlag {
+		log.Printf("[governance] D-2 冻结注记：%s 命中行 3 分类旗标（net=%v sensitive_write=%v）——裁决前不提升 I3", actionType, netFlag, swFlag)
+	}
 	registered := MatchTrustedWorkload(e.trustedWorkloads, e.workloadHash, time.Now())
+	// D-2 过渡注记（会议 #257 呈报 PM——裁决前冻结）：行 3 两输入（涉网络出站/敏感路径写入）
+	// 暂缓接线——①egress 代理未实现+websearch 直出网实证：能力前缀归类会全灭 darwin 网络动作
+	// （R-1506「代理网络移出阶梯」与行 3 字面冲突）；②敏感写入需目标路径感知（签发侧 capability
+	// 族前缀过粗——fs.write 写工作区≠敏感写入）。裁决前=行 3 生产不命中（函数级测试仍覆盖行 3）。
 	dec := ComputeIssuanceDecision(IssuanceInput{
 		WorkloadRegistered:  registered,
 		CapsSubsetDeclared:  true, // Capability Engine 已在治理链上游判定 ⊆（本函数仅在通过后调用）
 		ArbitrarySubprocess: asp,
-		NetworkEgress:       net,
-		SensitivePathWrite:  sw,
+		NetworkEgress:       false, // D-2 冻结——裁决后接线
+		SensitivePathWrite:  false, // D-2 冻结——目标路径感知判定归执行侧
 		RiskLevel:           riskLevel,
 	})
 	claims.RequiresRealEnforcement = dec.RequiresRealEnforcement
 	claims.MinIsolation = dec.MinIsolation
+	// D-1 A 方案（会议 #257 PM 裁决）：ProfileDigest=内置基础 profile 符号形态摘要
+	// （sandbox.BuiltinProfileDigest——确定性同输入恒同值；签发侧缓存，复核侧独立重算）
+	claims.ProfileDigest = e.profileDigestCached(caps, riskLevel, dec.MinIsolation)
 }
 
 // SetAutonomyLevel 设置自治等级。autonomous→L3+自动放行。
