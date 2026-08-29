@@ -199,6 +199,36 @@ func main() {
 	gov.SetApprovalTimeout(time.Duration(cfg.Policy.ApprovalTimeout) * time.Second)
 	gov.SetTokenTTL(time.Duration(cfg.Policy.TokenTTL) * time.Second) // R-1059: 令牌执行窗口
 	gov.SetAutonomyLevel(cfg.Daemon.AutonomyLevel)
+
+	// v0.3.1 生产接线（任务 5.5 前置——R-1640②/会议 #255）：
+	// ①keyring 生产构造（secrets.key=首代际，kid=gen-1；代际窗口=token_ttl——R-1307）
+	if len(secretKey) > 0 {
+		kr := governance.NewKeyring(time.Duration(cfg.Policy.TokenTTL)*time.Second, time.Now)
+		if err := kr.AddGeneration("gen-1", secretKey); err != nil {
+			log.Printf(`{"level":"ERROR","msg":"Step 7b: keyring 首代际注册失败: %v"}`, err)
+		}
+		gov.SetKeyring(kr)
+	}
+	// ②WorkloadIdentity 名单+本进程哈希（R-1508/R-1561——artifact_hash 静态比对）
+	if len(cfg.Daemon.TrustedWorkloads) > 0 {
+		view := make([]governance.TrustedWorkloadView, 0, len(cfg.Daemon.TrustedWorkloads))
+		for _, w := range cfg.Daemon.TrustedWorkloads {
+			view = append(view, governance.TrustedWorkloadView{ArtifactHash: w.ArtifactHash, ExpiresAt: w.ExpiresAt})
+		}
+		gov.SetTrustedWorkloads(view)
+	}
+	if exePath, err := os.Executable(); err == nil {
+		if h, err := governance.WorkloadHashOf(exePath); err == nil {
+			gov.SetWorkloadHash(h)
+		} else {
+			log.Printf(`{"level":"WARN","msg":"Step 7b: 工作负载哈希计算失败: %v"}`, err)
+		}
+	}
+
+	// ③Runtime 边界组合根（手工组合根纪律——会议 #257 调研决议：不引进 DI 框架）
+	runtimeBoundary := runtimeWiring(bus, home, cfg, gov, secretKey)
+	_ = runtimeBoundary
+
 	gov.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered"}`, time.Now().Format(time.RFC3339))
 

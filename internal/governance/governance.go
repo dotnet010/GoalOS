@@ -68,6 +68,12 @@ type Engine struct {
 	tokenTTL        time.Duration // R-1059: 行动令牌执行窗口，独立于审批/执行超时。由 pendingMu 保护
 	seq             atomic.Int64
 
+	// v0.3.1 签发接线（任务 5.5 前置——R-1640②/05 §X.6.3 字段表）：
+	keyring        *Keyring            // 签名密钥族（IssuerKeyID 数据源——R-1389 代际窗口）
+	trustedWorkloads []TrustedWorkloadView // 名单登记视图（daemon.yaml trusted_workloads——R-1508）
+	workloadHash   string              // 本守护进程主二进制 SHA-256 hex（WorkloadIdentity 运行时验证值——R-1561）
+	policyRevision string              // 策略版本（内置默认=builtin-v1——R-1524 策略载体）
+
 	// Audit Engine: ring buffer (1000 entries) + async flush
 	auditBuf    []auditEntry
 	auditPos         int
@@ -139,6 +145,52 @@ done:             make(chan struct{}),
 	// 按 Priority 升序排序
 	sort.Slice(e.policy, func(i, j int) bool { return e.policy[i].Priority < e.policy[j].Priority })
 	return e
+}
+
+// ─── v0.3.1 签发接线 setter 群（任务 5.5 前置——R-1640②；daemon 组合根注入）───
+
+// SetKeyring 注入签名密钥族（IssuerKeyID 数据源——R-1389；06 §X.8 密钥纪律）。
+func (e *Engine) SetKeyring(kr *Keyring) { e.keyring = kr }
+
+// SetTrustedWorkloads 注入名单登记视图（签发决策表行 1 事实源——R-1508/R-1549）。
+func (e *Engine) SetTrustedWorkloads(list []TrustedWorkloadView) { e.trustedWorkloads = list }
+
+// SetWorkloadHash 注入本守护进程主二进制 SHA-256 hex（WorkloadIdentity 运行时验证值——R-1561）。
+func (e *Engine) SetWorkloadHash(hashHex string) { e.workloadHash = hashHex }
+
+// SetPolicyRevision 注入策略版本（缺省 builtin-v1——R-1524 策略载体）。
+func (e *Engine) SetPolicyRevision(rev string) { e.policyRevision = rev }
+
+// v2 签发信息装配（05 §X.6.3 字段表——SessionID/Nonce 本次生成；RRE/MinIsolation 经
+// 签发决策表；IssuerKeyID 经 keyring；PolicyRevision 经注入。ProfileDigest=签发时预留空串
+// ——生效 CompiledProfile 摘要的生产来源=D-1 决策项（会议 #257 呈报 PM），落地前
+// 验证层 ProfileDigest 比对步骤不得入生产强制路径）。
+func (e *Engine) fillV2Claims(claims *TokenClaims, actionType string, caps []string, riskLevel string) {
+	claims.SessionID = newSessionID()
+	nonce, _ := newNonceHex() // 32B crypto/rand hex
+	claims.Nonce = nonce
+	if e.keyring != nil {
+		if kid, _, err := e.keyring.SignKey(); err == nil {
+			claims.IssuerKeyID = kid
+		}
+	}
+	rev := e.policyRevision
+	if rev == "" {
+		rev = "builtin-v1"
+	}
+	claims.PolicyRevision = rev
+	asp, net, sw := ClassifyActionAttrs(actionType, caps)
+	registered := MatchTrustedWorkload(e.trustedWorkloads, e.workloadHash, time.Now())
+	dec := ComputeIssuanceDecision(IssuanceInput{
+		WorkloadRegistered:  registered,
+		CapsSubsetDeclared:  true, // Capability Engine 已在治理链上游判定 ⊆（本函数仅在通过后调用）
+		ArbitrarySubprocess: asp,
+		NetworkEgress:       net,
+		SensitivePathWrite:  sw,
+		RiskLevel:           riskLevel,
+	})
+	claims.RequiresRealEnforcement = dec.RequiresRealEnforcement
+	claims.MinIsolation = dec.MinIsolation
 }
 
 // SetAutonomyLevel 设置自治等级。autonomous→L3+自动放行。
@@ -321,6 +373,7 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 		caps := make([]string, len(requiredCaps))
 		for i, c := range requiredCaps { caps[i] = fmt.Sprint(c) }
 		claims := TokenClaims{GoalID: evt.GoalID, ActionID: actionID, Capabilities: caps, IssuedAt: now, ExpiresAt: now + ttl}
+		e.fillV2Claims(&claims, actionType, caps, riskLevel) // v0.3.1 接线（R-1640②）
 		if tok, err := IssueToken(claims, e.secretKey); err == nil { tokenStr = tok; tokenID = fmt.Sprintf("%s_token_%d", actionID, now) }
 	}
 	if tokenStr != "" {
@@ -368,6 +421,7 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 	now := time.Now().Unix()
 	if len(e.secretKey) > 0 {
 		claims := TokenClaims{GoalID: pending.goalID, ActionID: actionID, Capabilities: []string{pending.actionType}, IssuedAt: now, ExpiresAt: now + ttl}
+		e.fillV2Claims(&claims, pending.actionType, claims.Capabilities, pending.decision.Risk) // v0.3.1 接线（R-1640②）
 		if tok, err := IssueToken(claims, e.secretKey); err == nil {
 			decision.TokenStr = tok
 			decision.TokenID = fmt.Sprintf("%s_token_%d", actionID, now)
@@ -701,6 +755,15 @@ func (e *Engine) SetApprovalTimeout(d time.Duration) {
 	e.pendingMu.Lock()
 	e.approvalTimeout = d
 	e.pendingMu.Unlock()
+}
+
+// IsActionRevoked 撤销查询（R-1640② 接线——runtime 契约验证层吊销步骤的
+// 生产桥：现行撤销表=revokedTokens（actionID 前缀形态，handlePluginTerminated 写入）。
+// TokenStore 平行结构归 v0.4.0 统一（D2-REV-01 登记——两机制合一）。
+func (e *Engine) IsActionRevoked(actionID string) bool {
+	e.revokedMu.RLock()
+	defer e.revokedMu.RUnlock()
+	return e.revokedTokens[actionID+"_token_"]
 }
 
 // handlePluginTerminated 监听 PluginProcessTerminated 事件——撤销该 Plugin 的所有活跃 Token（R-660）。
