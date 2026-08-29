@@ -44,6 +44,7 @@ type Handler struct {
 	port             int
 	startTime        time.Time
 	configGen        atomic.Int64 // 配置版本号=Reload 代际自增计数（R-1380——X-GoalOS-Config-Version 头数据源 R-1325）
+	decidedApprovals map[string]decidedApproval // D-3（R-1644）：审批决策短期留痕——actionID=天然幂等键
 	onShutdown       func()
 }
 
@@ -121,6 +122,7 @@ func (h *Handler) UpdateActionStatus(goalID, actionID, actionType, status string
 func NewHandler() *Handler {
 	return &Handler{
 		Goals:            make(map[string]*GoalRecord),
+		decidedApprovals: make(map[string]decidedApproval),
 		actionResults:    make(map[string]interface{}),
 		pendingApprovals: make(map[string]PendingApproval),
 		artifacts:        make(map[string][]string),
@@ -158,6 +160,67 @@ func (h *Handler) RemovePendingApproval(actionID string) {
 	h.mu.Unlock()
 }
 
+// decidedApproval D-3 决策留痕（R-1644——Stripe 族=回放缓存的原结果；
+// K8s 族=决策记录可查）。TTL=policy.approval_timeout 尺度（清理=定期代际模式）。
+type decidedApproval struct {
+	Decision      string // "approved"|"rejected"
+	GoalID        string
+	VisibleState  string // 决策后 Goal 可见状态（F-04 形状数据源）
+	DecidedAt     time.Time
+}
+
+// decideApprovalReplay 重复提交判定（D-3 三形态——R-1644；纯读——写入=新裁决分支直写）：
+// 留痕中同决策=幂等回放（200+原结果——Stripe 族回放缓存原响应）；留痕中异决策=409 冲突；
+// 无留痕=真未知（404）。并发安全=调用方锁内（delete-in-lock 同锁域）。
+func (h *Handler) decideApprovalReplay(actionID, decision string) (prev decidedApproval, replay, conflict bool) {
+	prev, ok := h.decidedApprovals[actionID]
+	if !ok {
+		return decidedApproval{}, false, false
+	}
+	if prev.Decision == decision {
+		return prev, true, false
+	}
+	return prev, false, true
+}
+
+// visibleStateOf Goal 可见状态（决策后——无记录=「执行中」默认不虚构）。
+func (h *Handler) visibleStateOf(goalID string) string {
+	if g, ok := h.Goals[goalID]; ok && g.Status != "" {
+		return g.Status
+	}
+	return "执行中"
+}
+
+// CleanupDecidedApprovals 过期决策清理（TTL=审批窗口尺度——Linus 范围纪律：
+// 复用撤销清理代际模式；窗口内万级决策=MB 级封顶，Meyer DA 过）。
+func (h *Handler) CleanupDecidedApprovals(ttl time.Duration) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	cutoff := time.Now().Add(-ttl)
+	n := 0
+	for id, d := range h.decidedApprovals {
+		if d.DecidedAt.Before(cutoff) {
+			delete(h.decidedApprovals, id)
+			n++
+		}
+	}
+	return n
+}
+
+// RegisterPendingApproval 待审批项注册（治理事件链→API 面的登记点——测试与生产同路径）。
+// D-3 配套（R-1644）：审批幂等三形态契约测试的夹具注册口。
+func (h *Handler) RegisterPendingApproval(actionID, goalID, actionType string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.pendingApprovals[actionID] = PendingApproval{ActionID: actionID, GoalID: goalID, ActionType: actionType}
+}
+
+// RegisterPendingApprovalForTest 测试面注册（=RegisterPendingApproval 别名——
+// 显式命名=测试意图可读；生产调用=RegisterPendingApproval）。
+func RegisterPendingApprovalForTest(h *Handler, actionID, goalID string) {
+	h.RegisterPendingApproval(actionID, goalID, "test.action")
+}
+
 // HandleListApprovals 列出待审批 Action。GET /api/approvals。
 func (h *Handler) HandleListApprovals(w http.ResponseWriter, r *http.Request) {
 	h.mu.RLock()
@@ -170,52 +233,78 @@ func (h *Handler) HandleListApprovals(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleApprove 批准 Action。POST /api/approvals/:id/approve。
+// D-3（R-1644——会议 #259 裁决，兑现 R-1379/05 §2.2 承诺）：幂等三形态——
+// ①重复同决策=200+F-04 形状（回放缓存原结果——Stripe 族）；②重复冲突决策=409；
+// ③真未知/过期=404。delete-in-lock 并发安全语义不变。
 func (h *Handler) HandleApprove(w http.ResponseWriter, r *http.Request) {
+	h.serveApprovalDecision(w, r, "approved")
+}
+
+// serveApprovalDecision 审批决策统一服务（approve/reject 双端点收敛——D-3 裁决形态单一权威）。
+func (h *Handler) serveApprovalDecision(w http.ResponseWriter, r *http.Request, decision string) {
 	actionID := r.PathValue("id")
 	if actionID == "" {
 		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "缺少 action id")
 		return
 	}
 	h.mu.Lock()
-	pa, ok := h.pendingApprovals[actionID]
+	pa, pending := h.pendingApprovals[actionID]
 	delete(h.pendingApprovals, actionID)
+	var prev decidedApproval
+	var replay, conflict bool
+	var goalID, visibleState string
+	if pending {
+		goalID = pa.GoalID
+		visibleState = h.visibleStateOf(goalID)
+		h.decidedApprovals[actionID] = decidedApproval{
+			Decision: decision, GoalID: goalID, VisibleState: visibleState, DecidedAt: time.Now(),
+		}
+	} else {
+		prev, replay, conflict = h.decideApprovalReplay(actionID, decision)
+		goalID = prev.GoalID
+		visibleState = prev.VisibleState
+	}
 	h.mu.Unlock()
-	if !ok {
+
+	// ③真未知/过期=404（对从未存在的 id 是诚实回答）
+	if !pending && !replay && !conflict {
 		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "审批不存在或已过期")
 		return
 	}
-	// 发布 UserApprovedAction 事件（携带 goal_id）
-	if eventBus != nil {
-		eventBus.Publish(events.NewEvent(events.TypeUserApprovedAction, pa.GoalID, "api").WithPayload(map[string]interface{}{
-			"action_id": actionID,
-		}))
+	// ②重复冲突=409（Kees 硬语义——先批准后抢拒类竞态不粉饰）
+	if conflict {
+		writeJSON(w, http.StatusConflict, map[string]interface{}{
+			"error": map[string]string{
+				"code":    "decision_conflict",
+				"message": fmt.Sprintf("该审批已裁决为「%s」——冲突决策拒绝（决策不可覆写）", prev.Decision),
+			},
+		})
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "approved"})
+	// ①新裁决/幂等回放=200+F-04 形状（R-1324 单一形状对齐一并收口）
+	if pending && eventBus != nil {
+		evtType := events.TypeUserApprovedAction
+		payload := map[string]interface{}{"action_id": actionID}
+		if decision == "rejected" {
+			evtType = events.TypeActionCancelled
+			payload["reason"] = "user_rejected"
+		}
+		eventBus.Publish(events.NewEvent(evtType, goalID, "api").WithPayload(payload))
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":            true,
+		"goal_id":       goalID,
+		"visible_state": visibleState,
+		"updated_at":    time.Now().Format(time.RFC3339),
+		"decision":      decision,
+		"replayed":      replay, // 幂等回放标记（审计可读——非重复执行证据）
+	})
 }
 
 // HandleReject 拒绝 Action。POST /api/approvals/:id/reject。
+// D-3（R-1644）：幂等三形态同 approve——统一服务收敛（单一权威）。
 func (h *Handler) HandleReject(w http.ResponseWriter, r *http.Request) {
-	actionID := r.PathValue("id")
-	if actionID == "" {
-		writeError(w, http.StatusBadRequest, goalErr.CodeInvalidRequest, "缺少 action id")
-		return
-	}
-	h.mu.Lock()
-	pa, ok := h.pendingApprovals[actionID]
-	delete(h.pendingApprovals, actionID)
-	h.mu.Unlock()
-	if !ok {
-		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "审批不存在或已过期")
-		return
-	}
-	// 发布 ActionCancelled 事件（携带 goal_id）
-	if eventBus != nil {
-		eventBus.Publish(events.NewEvent(events.TypeActionCancelled, pa.GoalID, "api").WithPayload(map[string]interface{}{
-			"action_id": actionID,
-			"reason":    "user_rejected",
-		}))
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
+	h.serveApprovalDecision(w, r, "rejected")
 }
 
 // TrackResult 存储 Action 的执行结果。
