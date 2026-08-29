@@ -8010,3 +8010,16 @@ resolutions:
       - must_exist: "TestRuntimeGate_Enforcement"
         in_file: 12测试清单与规范.md
         reason: "12 清单 G 节必须登记执行门测试（R-1642）"
+  R-1643:
+    desc: "D-2 蓝图《网络出口策略与网域解耦》适配落地(会议 #258——PM 下发蓝图, 团队审议+实证+适配): ①网域二维治理模型采纳(internal/network/zone.go——netip+Unmap 防 IPv4-mapped 绕过, 三值=loopback/LAN/public); ②Kees 修正: data_sharing 免除仅 loopback, RFC1918 LAN 默认仍审查+daemon.yaml trust_lan 显式免除(LAN 可经网关代理出境——信任=管理员显式登记哲学); ③签发决策表行 3 拆分=行 3L/3P(命名避让解析表 3b 平台落差): 废除涉网硬绑 I3——行 3L 全本地=I2 不提升, 行 3P 任一公网=I2+data_sharing 审批排队(治理门替代档位门), 敏感路径写入=行 3s I3 目标路径感知解冻; ④macOS 机制=seatbelt 端口级放行(SBPL 无 CIDR/裸 IP 粒度——会前实证: 仅 (to tcp \"*:443\") 形态可用)+网域粒度=用户态分类器收口(internal/llm/zone_dialer.go——resolve→classify→直连锁定 IP 防 DNS 重绑定); 插件出站=端口级 OS 闸+manifest network_allowlist 安装期审核面; ⑤审批类型机制落地(Decision.ApprovalType 首值=data_sharing——needsApproval 接线); ⑥force_public_zone 配置(LLM 主段+multi_llm providers 段——内网代理穿透防御); ⑦TC-RT-012/013/051/101 转绿(101=httptest 形态适配); ⑧行 3 冻结补丁删除(蓝图行动指令 1——过渡形态终结); ⑨05 §X.6.4/06 §1.3 同步修订。蓝图与本仓冲突处=本裁决为准。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, 12测试清单与规范.md]
+    verify:
+      - must_exist: "R-1643"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1643"
+      - must_exist: "行 3L"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 签发决策表必须落行 3 拆分（R-1643③）"
+      - must_exist: "TC-RT-012"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 F 节必须登记 D-2 四测试（R-1643⑦）"

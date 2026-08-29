@@ -54,6 +54,9 @@ type DaemonConfig struct {
 	// SocketPath 是 UDS 治理通道路径（R-1322/R-1378）——审批族端点 UDS-only，
 	// 治理面不得暴露于 TCP。默认 "~/.goalos/run/daemon.sock"
 	SocketPath string `yaml:"socket_path"`
+	// TrustLAN 管理员显式信任局域网（R-1643② Kees 修正——data_sharing 免除=loopback 恒免/
+	// LAN 仅此开关免除；默认 false=LAN 仍触发审查——LAN 可经网关代理出境）。
+	TrustLAN bool `yaml:"trust_lan"`
 	// TrustedWorkloads 名单登记工作负载（05 §X.6.3 R-1508/R-1549——人工审核名单；
 	// T0 信任=本机管理员显式登记白名单的管理员信任决策，非发行者密码学认证——R-1619）。
 	// 启动校验四规则（R-1549③）：hex 格式非法/ISO8601 非法/条目重复→拒绝启动。
@@ -82,6 +85,9 @@ type MultiLLMProvider struct {
 	BaseURL    string   `yaml:"base_url"`
 	AllowedFor []string `yaml:"allowed_for"`
 	MaxTokens  int      `yaml:"max_tokens"` // [FIXED] 新增：模型上下文长度，默认 8192
+	// ForcePublicZone 强制公网域标记（R-1643——防内网代理透明穿透公网绕过 data_sharing
+	// 审查：如 Clash/vLLM 网关。LAN 端点配此开关=按公网对待）。
+	ForcePublicZone bool `yaml:"force_public_zone"`
 }
 
 // PolicyConfig 是运行时策略配置（v0.1.0）。
@@ -107,6 +113,8 @@ type LLMConfig struct {
 	Temperature   float32       `yaml:"temperature"`     // LLM 温度参数。0~2，默认 0.3
 	Timeout       time.Duration `yaml:"timeout"`         // 请求超时。默认 120s
 	PlanTimeout   time.Duration `yaml:"plan_timeout"`    // Plan 阶段超时。默认 600s
+	// ForcePublicZone 强制公网域标记（R-1643——同上，主 LLM 段）。
+	ForcePublicZone bool `yaml:"force_public_zone"`
 }
 
 // Default 返回默认配置。
