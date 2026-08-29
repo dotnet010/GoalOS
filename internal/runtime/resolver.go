@@ -109,14 +109,22 @@ func (r *Resolver) Resolve(in ResolveInput) (Selection, error) {
 	}
 	// 行 2：RRE=false 但名单登记缺失/未命中/已过期 → 按 true 重新判定（不静默留 T0——R-1549④）
 	rre := in.RequiresRealEnforcement
+	row2Hit := false
 	if !rre {
 		rre = true // 行 2 重判
+		row2Hit = true
 	}
 	// 行 3：RRE=true ∧ MinIsolation≤I3 ∧ 平台达成≥MinIsolation → T1 受限档
 	if rre && in.MinIsolation <= I3 {
 		platformMax := r.platformMax()
 		if platformMax >= in.MinIsolation {
-			sel := Selection{Tier: TierRestricted, Reason: "row3_restricted"}
+			reason := "row3_restricted"
+			if row2Hit {
+				// 行 2 命中事实保留（R-1550——依据行警告样式呈现的前提前提：
+				// 名单登记缺失/已过期=配置异常状态，不以正常决策行伪装——04 §14.2）
+				reason = "row2_restricted"
+			}
+			sel := Selection{Tier: TierRestricted, Reason: reason}
 			r.emit("RuntimeSelected", sel, "")
 			return sel, nil
 		}
