@@ -1,7 +1,8 @@
-;; profile_restricted_darwin.sb — 受限档（T1）Provider 的 Seatbelt 策略（任务 5.3）
-;; 单源承诺：本文件=受限档策略的演进权威（embed 进二进制）。
-;; 收敛欠债登记：sandbox/goalos-default.sb（根目录副本）与 executor_darwin.go 内联字符串
-;; 为待收敛副本——统一收敛到本文件=W5-6 后续（executor 插件路径切换时）。
+;; profile_darwin_restricted.sb — macOS 受限档（T1）Seatbelt 策略单一来源（R-1641③）
+;; 消费方：internal/runtime darwinSeatbeltProvider + internal/pluginrunner executor（同语义）。
+;; 禁止第三处副本——漂移即事故（E2 教训：根目录 sandbox/*.sb 三副本从未执行，已删除；
+;; 其变体意图登记于此：agent 变体=LLM API 网络白名单+允许子验证进程 fork；network 变体=
+;; 按 plugin.json network_allowlist 动态生成——变体实现归协作档/网络档 Provider 任务）。
 ;;
 ;; 语义定稿（会议 #256 证据包——SBPL 实证）：
 ;;   原「读白名单」形态在本机 macOS 上进程启动即 abort（dyld 系统面需求不可完整枚举——
