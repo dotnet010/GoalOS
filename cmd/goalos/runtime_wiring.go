@@ -8,6 +8,8 @@
 package main
 
 import (
+	"context"
+	goruntime "runtime"
 	"log"
 
 	"github.com/goalos/goalos/internal/config"
@@ -85,4 +87,37 @@ func runtimeWiring(bus *eventbus.EventBus, home string, cfg *config.Config, gov 
 			sel.Tier, sel.Reason, goalosruntime.DetectPlatformIsolation())
 	}
 	return rb
+}
+
+// presentStatus Runtime 呈现数据源（任务 5.5——04 §14.3 JSON 块+CLI 渲染输入）：
+// 实时计算=平台探测（DetectPlatformIsolation）+参考解析（典型受限档输入）+
+// 降级证据（Provider Capabilities.DegradedEvidence——R-1506 显式化）。
+// 每次调用实时重算（不缓存——状态面呈现必须反映当下，非历史快照）。
+func (rb *runtimeBoundary) presentStatus() map[string]interface{} {
+	platform := goruntime.GOOS
+	platformMax := goalosruntime.DetectPlatformIsolation()
+	var degraded []string
+	if p, err := rb.registry.AcquireProviderForTier(goalosruntime.TierRestricted.String()); err == nil {
+		if caps, err := p.Capabilities(context.Background()); err == nil {
+			degraded = caps.DegradedEvidence
+		}
+	}
+	sel, err := rb.resolver.Resolve(goalosruntime.ResolveInput{
+		RequiresRealEnforcement: true, MinIsolation: goalosruntime.I2,
+	})
+	if err != nil {
+		// 参考解析失败=当前平台无法承载受限档——呈现拒绝句（诚实，不虚构档位）
+		sel = goalosruntime.Selection{Tier: goalosruntime.TierRestricted, Reason: "no_candidate"}
+	}
+	pres := goalosruntime.PresentRuntime(sel, platform, degraded)
+	return map[string]interface{}{
+		"tier":            pres.Tier,
+		"tier_label":      pres.TierLabel,
+		"level_line":      pres.LevelLine,
+		"reason":          pres.Reason,
+		"reason_warning":  pres.ReasonWarning,
+		"degraded":        pres.Degraded,
+		"offline_capable": pres.OfflineCapable,
+		"platform_max":    platformMax.String(),
+	}
 }

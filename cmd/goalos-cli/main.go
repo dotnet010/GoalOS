@@ -84,6 +84,7 @@ func main() {
 			}
 			fmt.Printf("GoalOS Daemon: 运行中\n  PID: %.0f  端口: %.0f  活跃 Goal: %.0f  运行时间: %v\n",
 				status["pid"], status["port"], status["active_goals"], status["uptime"])
+			renderRuntimeBlock(status) // 任务 5.5——04 §14.1 执行保护块
 			return
 		}
 		goal, err := c.GetGoal(os.Args[2])
@@ -545,4 +546,30 @@ func startDaemon() error {
 		return fmt.Errorf("启动 Daemon 失败: %w", err)
 	}
 	return nil
+}
+
+// renderRuntimeBlock 执行保护块渲染（任务 5.5——04 §14.1 人类可读输出；
+// 词汇纪律 R-1477：只呈现 daemon 已映射的产品语义字段——CLI 不做工程词翻译）。
+// 行 2 命中=「注意：」警告样式前缀（R-1550——配置异常不以普通依据行伪装）。
+func renderRuntimeBlock(status map[string]interface{}) {
+	rt, ok := status["runtime"].(map[string]interface{})
+	if !ok {
+		return // daemon 未接线=诚实缺省（不虚构保护级别）
+	}
+	level, _ := rt["level_line"].(string)
+	reason, _ := rt["reason"].(string)
+	warning, _ := rt["reason_warning"].(bool)
+	degraded, _ := rt["degraded"].([]interface{})
+	degradedLine := "无"
+	if len(degraded) > 0 {
+		parts := make([]string, 0, len(degraded))
+		for _, d := range degraded {
+			parts = append(parts, fmt.Sprint(d))
+		}
+		degradedLine = strings.Join(parts, "；")
+	}
+	if warning {
+		reason = "注意：" + reason
+	}
+	fmt.Printf("\n执行保护\n  当前级别: %s\n  依据: %s\n  降级: %s\n", level, reason, degradedLine)
 }

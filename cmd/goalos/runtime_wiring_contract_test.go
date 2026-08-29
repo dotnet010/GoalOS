@@ -10,6 +10,8 @@ import (
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/governance"
 	goalosruntime "github.com/goalos/goalos/internal/runtime"
+	goruntime "runtime"
+	"strings"
 )
 
 // TestDaemon_RuntimeWiring_BoundaryUp 组合根接线断言：
@@ -58,5 +60,26 @@ func TestDaemon_RuntimeWiring_BoundaryUp(t *testing.T) {
 	_, err := rb.verifier.Verify("garbage.token.value")
 	if !goalosruntime.IsRejectReason(err, goalosruntime.RejectSignatureInvalid) {
 		t.Fatalf("伪 token 应=signature_invalid 拒绝，实际: %v", err)
+	}
+
+	// ⑤任务 5.5 呈现数据源（04 §14.3 块形状——status runtime 块全字段+
+	// 平台措辞：darwin=纵深防御注记/linux=原生强制隔离）
+	out := rb.presentStatus()
+	for _, key := range []string{"tier", "tier_label", "level_line", "reason", "reason_warning", "degraded", "offline_capable", "platform_max"} {
+		if _, ok := out[key]; !ok {
+			t.Fatalf("runtime 块缺字段 %q", key)
+		}
+	}
+	levelLine, _ := out["level_line"].(string)
+	if goruntime.GOOS == "darwin" && !strings.Contains(levelLine, "纵深防御") {
+		t.Fatalf("darwin 措辞=纵深防御注记（R-1479），实际 %q", levelLine)
+	}
+	reason, _ := out["reason"].(string)
+	if !strings.Contains(reason, "本机安全机制已验证通过") {
+		t.Fatalf("依据=映射表行 3 句（R-1527），实际 %q", reason)
+	}
+	tierLabel, _ := out["tier_label"].(string)
+	if tierLabel != "受限" {
+		t.Fatalf("产品词=受限（词汇纪律 R-1477），实际 %q", tierLabel)
 	}
 }

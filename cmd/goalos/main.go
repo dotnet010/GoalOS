@@ -380,6 +380,9 @@ func main() {
 	defer pidLock.Close()
 
 	api := daemon.NewHandler()
+	// 任务 5.5（04 §14.3）：Runtime 呈现数据源=组合根实时计算（平台探测+参考解析+
+	// 降级证据——强隔离档仅 I4 探测呈现 R-1599，v0.3.1 恒无）
+	api.SetRuntimePresentation(runtimeBoundary.presentStatus)
 	api.Metrics = mreg // v0.1.0 H8: 指标注册表
 	api.SetPort(cfg.Daemon.Port)
 	api.SetStartTime(startTime)
@@ -659,6 +662,7 @@ func buildHTTPMux(api *daemon.Handler, sse *daemon.SSEManager, cfg *config.Confi
 			http.Error(w, `{"error":{"code":"INTERNAL_ERROR","message":"`+err.Error()+`"}}`, http.StatusInternalServerError)
 			return
 		}
+		api.IncrementConfigGeneration() // R-1380：代际自增（X-GoalOS-Config-Version 数据源 R-1325）
 		// R-1058: 热重载参数经事件总线分发（nginx 代际模型）——组件自行订阅，
 		// 不再由 main 逐一直调（D-1: 手工接线每加一个参数就多一处遗漏点）。
 		bus.Publish(events.Event{

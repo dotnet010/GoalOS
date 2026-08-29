@@ -5,6 +5,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -38,9 +39,11 @@ type Handler struct {
 	Reviews          map[string][]*ReviewSummary // goalID → review summaries (R-846)
 	ReviewReports    map[string]*events.ReviewReport // reportKey(goalID+actionID) → full report
 	Metrics          *metrics.Registry   // v0.1.0 H8: Prometheus 指标注册表
+	runtimePresent   func() map[string]interface{} // v0.3.1 任务 5.5：Runtime 呈现数据源（R-1640②——组合根注入）
 	mu               sync.RWMutex
 	port             int
 	startTime        time.Time
+	configGen        atomic.Int64 // 配置版本号=Reload 代际自增计数（R-1380——X-GoalOS-Config-Version 头数据源 R-1325）
 	onShutdown       func()
 }
 
@@ -697,14 +700,30 @@ func (h *Handler) HandleDaemonRestart(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// SetRuntimePresentation 注入 Runtime 呈现数据源（任务 5.5——R-1640② 组合根接线；
+// nil=未接线=status 不带 runtime 块，诚实缺省）。
+func (h *Handler) SetRuntimePresentation(f func() map[string]interface{}) { h.runtimePresent = f }
+
+// IncrementConfigGeneration 配置代际自增（Reload 成功路径调用——R-1380 代际计数；
+// 初值=1（NewHandler 起步代际））。失败的重载不得自增（版本号=生效配置的身份）。
+func (h *Handler) IncrementConfigGeneration() { h.configGen.Add(1) }
+
 // HandleSystemStatus 系统状态。GET /api/system/status。
+// v0.3.1 任务 5.5（04 §14.3）：runtime 块=tier/tier_label/reason/degraded/offline_capable
+// （机器消费接口——工程枚举值保留，R-1548；人类可读呈现归 CLI 渲染层）。
 func (h *Handler) HandleSystemStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	// R-1325：X-GoalOS-Config-Version 响应头（代际计数——CLI 解析展示于 status 尾部）
+	w.Header().Set("X-GoalOS-Config-Version", fmt.Sprint(h.configGen.Load()))
+	out := map[string]interface{}{
 		"pid":          os.Getpid(),
 		"port":         h.port,
 		"uptime":       time.Since(h.startTime).String(),
 		"active_goals": len(h.Goals),
-	})
+	}
+	if h.runtimePresent != nil {
+		out["runtime"] = h.runtimePresent()
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // ─── 内部 ───
