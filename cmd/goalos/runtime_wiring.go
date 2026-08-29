@@ -8,9 +8,7 @@
 package main
 
 import (
-	"context"
 	"log"
-	goruntime "runtime"
 
 	"github.com/goalos/goalos/internal/config"
 	"github.com/goalos/goalos/internal/eventbus"
@@ -31,18 +29,9 @@ type runtimeBoundary struct {
 func runtimeWiring(bus *eventbus.EventBus, home string, cfg *config.Config, gov *governance.Engine, secretKey []byte) *runtimeBoundary {
 	rb := &runtimeBoundary{registry: goalosruntime.NewProviderRegistry()}
 
-	// ①平台 Provider 注册（darwin=Seatbelt 受限档——任务 5.3；linux/windows=任务 5.1/5.2
-	// 收敛前注册表保持空——骨架纪律 R-1468 诚实状态）
-	if goalosruntime.DetectPlatformIsolation() >= goalosruntime.I2 && goruntime.GOOS == "darwin" {
-		p := goalosruntime.NewDarwinSeatbeltProvider(home+"/Goals", "/tmp/goalos")
-		if err := p.Prepare(context.Background(), goalosruntime.RuntimePlan{PlanID: "daemon-boot", Tier: goalosruntime.TierRestricted}); err != nil {
-			log.Printf(`{"level":"WARN","msg":"Step 7c: darwin Provider Prepare 失败（诚实不注册）: %v"}`, err)
-		} else if err := rb.registry.RegisterChecked(p); err != nil {
-			log.Printf(`{"level":"WARN","msg":"Step 7c: darwin Provider 注册被拒: %v"}`, err)
-		} else {
-			log.Printf(`{"level":"INFO","msg":"Step 7c: darwin-seatbelt Provider 已注册（受限档 T1）"}`)
-		}
-	}
+	// ①平台 Provider 注册（per-OS 文件——darwin=Seatbelt 受限档任务 5.3；linux/windows=
+	// 任务 5.1/5.2 收敛前注册表保持空——骨架纪律 R-1468 诚实状态）
+	registerPlatformProvider(rb, home)
 
 	// ②解析器（平台探测+名单+RuntimeSelected/Rejected 事件发射——07 §4.14）
 	trusted := make([]goalosruntime.TrustedWorkload, 0, len(cfg.Daemon.TrustedWorkloads))
