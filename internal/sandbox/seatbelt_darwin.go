@@ -5,7 +5,11 @@
 // executor_darwin.go（插件路径）。禁止第三处副本——漂移即事故（E2 教训：副本从不执行）。
 package sandbox
 
-import _ "embed"
+import (
+	_ "embed"
+	"fmt"
+	"strings"
+)
 
 //go:embed profile_darwin_restricted.sb
 var restrictedDarwinSB string
@@ -14,3 +18,27 @@ var restrictedDarwinSB string
 // 写禁闭+敏感目录禁读+网络禁闭+子进程禁+读全域开放；参数=WORKSPACE_DIR/TMP_DIR/HOME_DIR/
 // TARGET_BINARY 四处 -D 注入；SBPL 按真实路径匹配——调用方必须先 EvalSymlinks 规范化）。
 func RestrictedSeatbeltProfile() string { return restrictedDarwinSB }
+
+// 网络授权变体锚点（单源文件内的网络节——漂移即 fail-closed）。
+const networkSectionAnchor = "(deny network*)"
+
+// RestrictedSeatbeltProfileForNetwork 网络授权变体（R-1643 裁决④——D-2 蓝图 macOS 机制适配）：
+// networkAuthorized=true（契约含网络能力且审批已过——data_sharing 上游已审）时，
+// 网络节从全拒替换为「默认拒出站+端口级放行 tcp 443/80」。
+// 实证纪律：SBPL 无 CIDR/裸 IP 粒度（会议 #258 会前实证）——OS 层=端口面；
+// 网域粒度=用户态分类器收口（cloudllm/LLM 出站）+插件 manifest network_allowlist 安装期审核面。
+// fail-closed：单源锚点缺失（文件漂移）=返回错误，绝不静默产出。
+func RestrictedSeatbeltProfileForNetwork(networkAuthorized bool) (string, error) {
+	if !networkAuthorized {
+		return restrictedDarwinSB, nil
+	}
+	if !strings.Contains(restrictedDarwinSB, networkSectionAnchor) {
+		return "", fmt.Errorf("sandbox: 受限档 profile 网络节锚点缺失（单源漂移——fail-closed 不产出）")
+	}
+	variant := strings.Replace(restrictedDarwinSB, networkSectionAnchor, `;; 网络授权变体（R-1643）：默认拒出站+端口级放行（SBPL 无 CIDR 粒度——实证）
+;; 网域粒度不归本层（用户态分类器收口+manifest 审核面）
+(deny network-outbound)
+(allow network-outbound (to tcp "*:443"))
+(allow network-outbound (to tcp "*:80"))`, 1)
+	return variant, nil
+}

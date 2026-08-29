@@ -45,6 +45,10 @@ type Decision struct {
 	Approval   string // "AUTO" | "GRANTED" | "DENIED" | "TIMEOUT"
 	TokenID    string // Capability Token ID
 	TokenStr   string // Capability Token 字符串（JWT）
+	// v0.3.1 签发决策入载体（R-1640②/R-1643——审计/事件同链）：
+	RequiresRealEnforcement bool   // 签发决策表产出（06 §1.3）
+	MinIsolation            string // I 族 wire 值
+	ApprovalType            string // 审批类型（""=默认行为审批；data_sharing=数据外发审查——R-1643 行 3P）
 }
 
 // auditEntry 审计记录。
@@ -73,6 +77,7 @@ type Engine struct {
 	trustedWorkloads []TrustedWorkloadView // 名单登记视图（daemon.yaml trusted_workloads——R-1508）
 	workloadHash   string              // 本守护进程主二进制 SHA-256 hex（WorkloadIdentity 运行时验证值——R-1561）
 	policyRevision string              // 策略版本（内置默认=builtin-v1——R-1524 策略载体）
+	trustLAN       bool                // 管理员显式信任 LAN（daemon.yaml trust_lan——Kees 修正 R-1643②）
 	profileDigestCache map[string]string // 签发侧 digest 缓存（D-1 PM 裁决：能力集+risk+平台+PolicyRevision 四元键）
 	profileDigestMu    sync.RWMutex
 
@@ -164,11 +169,40 @@ func (e *Engine) SetWorkloadHash(hashHex string) { e.workloadHash = hashHex }
 // SetPolicyRevision 注入策略版本（缺省 builtin-v1——R-1524 策略载体）。
 func (e *Engine) SetPolicyRevision(rev string) { e.policyRevision = rev }
 
+// SetTrustLAN 注入 LAN 显式信任（R-1643②——data_sharing 免除=loopback 恒免/LAN 仅此开关免除）。
+func (e *Engine) SetTrustLAN(trust bool) { e.trustLAN = trust }
+
 // v2 签发信息装配（05 §X.6.3 字段表——SessionID/Nonce 本次生成；RRE/MinIsolation 经
 // 签发决策表；IssuerKeyID 经 keyring；PolicyRevision 经注入。ProfileDigest=签发时预留空串
 // ——生效 CompiledProfile 摘要的生产来源=D-1 决策项（会议 #257 呈报 PM），落地前
 // 验证层 ProfileDigest 比对步骤不得入生产强制路径）。
-func (e *Engine) fillV2Claims(claims *TokenClaims, actionType string, caps []string, riskLevel string) {
+// computeIssuance 签发决策唯一计算点（R-1643——一次计算，审批触发与双签发路径同值）。
+// 事实源：ClassifyActionAttrs（能力族）+IsSensitivePathWrite（目标路径感知）+
+// ClassifyEndpointsZone（端点网域——空集/主机名=公网保守）+名单匹配+Risk 引擎产出。
+func (e *Engine) computeIssuance(actionType, target string, requiredCaps []interface{}, riskLevelPre string, endpoints []string) IssuanceDecision {
+	caps := make([]string, len(requiredCaps))
+	for i, c := range requiredCaps {
+		caps[i] = fmt.Sprint(c)
+	}
+	asp, netFlag, _ := ClassifyActionAttrs(actionType, caps)
+	homeDir, _ := os.UserHomeDir()
+	risk := riskLevelPre
+	if risk == "" {
+		risk = e.evaluateRisk(actionType) // 调用点已评估时以载荷为准（risk_level_pre 快照——R-1604）
+	}
+	return ComputeIssuanceDecision(IssuanceInput{
+		WorkloadRegistered:  MatchTrustedWorkload(e.trustedWorkloads, e.workloadHash, time.Now()),
+		CapsSubsetDeclared:  true, // Capability Engine 已在治理链上游判定 ⊆（本函数仅在通过后调用）
+		ArbitrarySubprocess: asp,
+		NetworkEgress:       netFlag,
+		NetworkZone:         ClassifyEndpointsZone(endpoints),
+		TrustLAN:            e.trustLAN,
+		SensitivePathWrite:  IsSensitivePathWrite(target, homeDir), // 目标路径感知（R-1643 解冻——D-2 落地）
+		RiskLevel:           risk,
+	})
+}
+
+func (e *Engine) fillV2Claims(claims *TokenClaims, dec IssuanceDecision, caps []string, riskLevel string) {
 	claims.SessionID = newSessionID()
 	nonce, _ := newNonceHex() // 32B crypto/rand hex
 	claims.Nonce = nonce
@@ -182,24 +216,7 @@ func (e *Engine) fillV2Claims(claims *TokenClaims, actionType string, caps []str
 		rev = "builtin-v1"
 	}
 	claims.PolicyRevision = rev
-	asp, netFlag, swFlag := ClassifyActionAttrs(actionType, caps)
-	// D-2 冻结可观测（裁决待定期间行 3 旗标计入日志——不吞没不提升，两纪律兼顾）：
-	if netFlag || swFlag {
-		log.Printf("[governance] D-2 冻结注记：%s 命中行 3 分类旗标（net=%v sensitive_write=%v）——裁决前不提升 I3", actionType, netFlag, swFlag)
-	}
-	registered := MatchTrustedWorkload(e.trustedWorkloads, e.workloadHash, time.Now())
-	// D-2 过渡注记（会议 #257 呈报 PM——裁决前冻结）：行 3 两输入（涉网络出站/敏感路径写入）
-	// 暂缓接线——①egress 代理未实现+websearch 直出网实证：能力前缀归类会全灭 darwin 网络动作
-	// （R-1506「代理网络移出阶梯」与行 3 字面冲突）；②敏感写入需目标路径感知（签发侧 capability
-	// 族前缀过粗——fs.write 写工作区≠敏感写入）。裁决前=行 3 生产不命中（函数级测试仍覆盖行 3）。
-	dec := ComputeIssuanceDecision(IssuanceInput{
-		WorkloadRegistered:  registered,
-		CapsSubsetDeclared:  true, // Capability Engine 已在治理链上游判定 ⊆（本函数仅在通过后调用）
-		ArbitrarySubprocess: asp,
-		NetworkEgress:       false, // D-2 冻结——裁决后接线
-		SensitivePathWrite:  false, // D-2 冻结——目标路径感知判定归执行侧
-		RiskLevel:           riskLevel,
-	})
+	// 签发决策=上游已计算（handleActionScheduled 唯一计算点——双路径同值）
 	claims.RequiresRealEnforcement = dec.RequiresRealEnforcement
 	claims.MinIsolation = dec.MinIsolation
 	// D-1 A 方案（会议 #257 PM 裁决）：ProfileDigest=内置基础 profile 符号形态摘要
@@ -286,13 +303,30 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 	e.pendingMu.Lock()
 	autonomy := e.autonomyLevel
 	e.pendingMu.Unlock()
-	needsApproval := (riskGE(riskLevel, "L3") || policyResult == "APPROVAL_REQUIRED") && autonomy != "autonomous"
+	// 签发决策唯一计算点（R-1643——两签发路径同值；行 3L/3P 网域分流）：
+	// target_endpoints 载体=ActionScheduled payload（scheduler 补充接线前=空→公网保守，
+	// fail-closed 数据可能出境）；敏感写入=目标路径感知（IsSensitivePathWrite）。
+	var endpoints []string
+	if eps, ok := evt.Payload["target_endpoints"].([]interface{}); ok {
+		for _, ep := range eps {
+			if s, ok := ep.(string); ok {
+				endpoints = append(endpoints, s)
+			}
+		}
+	}
+	issDec := e.computeIssuance(actionType, target, requiredCaps, riskLevelPre, endpoints)
+
+	// R-1643 行 3P：ZonePublic 涉网动作=data_sharing 审批入队（治理门——废除涉网硬绑 I3）
+	needsApproval := (riskGE(riskLevel, "L3") || policyResult == "APPROVAL_REQUIRED" || issDec.ApprovalType == "data_sharing") && autonomy != "autonomous"
 
 	decision := Decision{
 		Policy:     policyResult,
 		Capability: capResult,
 		Risk:       riskLevel,
 		Approval:   "AUTO",
+		RequiresRealEnforcement: issDec.RequiresRealEnforcement,
+		MinIsolation:            issDec.MinIsolation,
+		ApprovalType:            issDec.ApprovalType,
 	}
 
 	// 记录审计
@@ -387,7 +421,7 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 		caps := make([]string, len(requiredCaps))
 		for i, c := range requiredCaps { caps[i] = fmt.Sprint(c) }
 		claims := TokenClaims{GoalID: evt.GoalID, ActionID: actionID, Capabilities: caps, IssuedAt: now, ExpiresAt: now + ttl}
-		e.fillV2Claims(&claims, actionType, caps, riskLevel) // v0.3.1 接线（R-1640②）
+		e.fillV2Claims(&claims, issDec, caps, riskLevel) // v0.3.1 接线（R-1640②/R-1643 唯一计算点同值）
 		if tok, err := IssueToken(claims, e.secretKey); err == nil { tokenStr = tok; tokenID = fmt.Sprintf("%s_token_%d", actionID, now) }
 	}
 	if tokenStr != "" {
@@ -435,7 +469,11 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 	now := time.Now().Unix()
 	if len(e.secretKey) > 0 {
 		claims := TokenClaims{GoalID: pending.goalID, ActionID: actionID, Capabilities: []string{pending.actionType}, IssuedAt: now, ExpiresAt: now + ttl}
-		e.fillV2Claims(&claims, pending.actionType, claims.Capabilities, pending.decision.Risk) // v0.3.1 接线（R-1640②）
+		e.fillV2Claims(&claims, IssuanceDecision{ // 审批路径=快照决策还原（R-1054 固化语义——不重算）
+			RequiresRealEnforcement: pending.decision.RequiresRealEnforcement,
+			MinIsolation:            pending.decision.MinIsolation,
+			ApprovalType:            pending.decision.ApprovalType,
+		}, claims.Capabilities, pending.decision.Risk) // v0.3.1 接线（R-1640②/R-1643 唯一计算点同值）
 		if tok, err := IssueToken(claims, e.secretKey); err == nil {
 			decision.TokenStr = tok
 			decision.TokenID = fmt.Sprintf("%s_token_%d", actionID, now)

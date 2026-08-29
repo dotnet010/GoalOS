@@ -8,28 +8,34 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"path/filepath"
 	goruntime "runtime"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/goalos/goalos/internal/network"
 	"github.com/goalos/goalos/internal/sandbox"
 )
 
 // IssuanceInput 签发决策输入集（06 §1.3 四条件的事实源）。
 type IssuanceInput struct {
-	WorkloadRegistered    bool     // 名单登记命中且未过期（trusted_workloads——R-1549 运行时匹配产出）
-	CapsSubsetDeclared    bool     // capability ⊆ 契约声明集（Capability Engine 评估产出）
-	ArbitrarySubprocess   bool     // 含 shell.execute/生成代码（产生任意子进程）
-	NetworkEgress         bool     // 涉网络出站（capability 含 web.*/browser.*/net.* 族）
-	SensitivePathWrite    bool     // 涉敏感路径写入
-	RiskLevel             string   // 风险级 R0-R5（Risk Engine 产出）
-	PolicyExplicitI4      bool     // 治理策略显式声明 I4（policies.yaml——v0.3.1 无载体=false）
+	WorkloadRegistered  bool   // 名单登记命中且未过期（trusted_workloads——R-1549 运行时匹配产出）
+	CapsSubsetDeclared  bool   // capability ⊆ 契约声明集（Capability Engine 评估产出）
+	ArbitrarySubprocess bool   // 含 shell.execute/生成代码（产生任意子进程）
+	NetworkEgress       bool   // 涉网络出站（capability 含 web.*/browser.*/net.* 族）
+	NetworkZone         string // 端点网域最细值（"loopback"/"lan"/"public"/""=无网络——R-1643 行 3L/3P 分流；缺失=public 保守）
+	TrustLAN            bool   // 管理员显式信任 LAN（daemon.yaml trust_lan——Kees 修正：默认 false=LAN 仍审查）
+	SensitivePathWrite  bool   // 涉敏感路径写入（目标路径感知——D-2 落地解冻）
+	RiskLevel           string // 风险级 R0-R5（Risk Engine 产出）
+	PolicyExplicitI4    bool   // 治理策略显式声明 I4（policies.yaml——v0.3.1 无载体=false）
 }
 
 // IssuanceDecision 签发决策产出（ExecutionContract v2 两字段）。
 type IssuanceDecision struct {
 	RequiresRealEnforcement bool   // T0 适用性唯一判据
 	MinIsolation            string // I 族 wire 值（I1/I2/I3/I4——I5=拒绝归解析层 R-1602）
+	ApprovalType            string // 审批类型（""=默认；data_sharing=数据外发审查——R-1643 行 3P 治理门）
 }
 
 // 任意子进程动作族（06 §1.3 行 2「shell.execute/生成代码」）。
@@ -45,11 +51,13 @@ var networkEgressCaps = []string{"web.", "browser.", "net.", "http."}
 // 敏感路径写入能力族（行 3「敏感路径写入」——目标路径判定归执行侧，签发侧按能力族）。
 var sensitiveWriteCaps = []string{"fs.write", "fs.delete"}
 
-// ComputeIssuanceDecision 签发决策表（按序求值首个匹配生效——06 §1.3）。
+// ComputeIssuanceDecision 签发决策表（按序求值首个匹配生效——06 §1.3；R-1643 行 3 拆分）。
 // 行 1：名单登记 ∧ caps⊆声明集 ∧ 无任意子进程 → {false, I1}
 // 行 2：含 shell.execute/生成代码/未认证主体（名单外=未认证主体——兜底入本行） → {true, I2}
-// 行 3：涉网络出站或敏感路径写入 → {true, I3}
-// 行 4：风险级 R≥4 或治理策略显式声明 → {true, I4}
+// 行 3s：敏感路径写入（目标路径感知 IsSensitivePathWrite） → {true, I3}
+// 行 3P：涉网 ∩ 端点公网（或缺失保守/LAN 未信任） → {true, I2, data_sharing}（治理门——废除涉网硬绑 I3）
+// 行 3L：涉网 ∩ 端点全本地（loopback 恒免/LAN 经 trust_lan 免） → {true, I2}（档位不提升——R-1506 同构）
+// 行 4：风险级 R≥4 或治理策略显式声明 → {true, I4}（RI-1：风险级最高优先——先于 3s/3P/3L 求值）
 func ComputeIssuanceDecision(in IssuanceInput) IssuanceDecision {
 	// 行 1（T0 准入——静态判定；RRE=false⇒MinIsolation≤I1 签发不变量 R-1601）
 	if in.WorkloadRegistered && in.CapsSubsetDeclared && !in.ArbitrarySubprocess {
@@ -62,9 +70,24 @@ func ComputeIssuanceDecision(in IssuanceInput) IssuanceDecision {
 	if riskAtLeast(in.RiskLevel, "R4") || in.PolicyExplicitI4 {
 		return IssuanceDecision{RequiresRealEnforcement: true, MinIsolation: "I4"}
 	}
-	// 行 3
-	if in.NetworkEgress || in.SensitivePathWrite {
+	// 行 3s：敏感路径写入（目标路径感知——D-2 落地解冻）→ I3
+	if in.SensitivePathWrite {
 		return IssuanceDecision{RequiresRealEnforcement: true, MinIsolation: "I3"}
+	}
+	// 行 3 网域拆分（R-1643——D-2 蓝图：废除涉网硬绑 I3，治理门替代档位门）：
+	// 行 3P：网络出站 ∩ 任一端点公网 → I2 不提升 + data_sharing 审批排队
+	//        （端点缺失/主机名未解析=按公网保守——fail-closed 数据可能出境）
+	if in.NetworkEgress && in.NetworkZone != "lan" && in.NetworkZone != "loopback" {
+		// "public" 或缺失/未知（""=无端点信息）——一律按公网保守（fail-closed）
+		return IssuanceDecision{RequiresRealEnforcement: true, MinIsolation: "I2", ApprovalType: "data_sharing"}
+	}
+	// 行 3L：网络出站 ∩ 全端点本地 → I2 不提升档位；审批免除=loopback 恒免/
+	//        LAN 仅 trust_lan=true 免除（Kees 修正 R-1643②——LAN 可经网关代理出境）
+	if in.NetworkEgress && in.NetworkZone == "lan" && !in.TrustLAN {
+		return IssuanceDecision{RequiresRealEnforcement: true, MinIsolation: "I2", ApprovalType: "data_sharing"}
+	}
+	if in.NetworkEgress {
+		return IssuanceDecision{RequiresRealEnforcement: true, MinIsolation: "I2"}
 	}
 	// 行 2（含兜底：名单外=未认证主体）
 	return IssuanceDecision{RequiresRealEnforcement: true, MinIsolation: "I2"}
@@ -215,4 +238,43 @@ func (e *Engine) profileDigestCached(caps []string, riskLevel string, minIsolati
 	e.profileDigestCache[key] = digest
 	e.profileDigestMu.Unlock()
 	return digest
+}
+
+// ─── 网域分流与敏感路径判定（R-1643——D-2 蓝图落地）───
+
+// ClassifyEndpointsZone 端点集网域（行 3L/3P 分流输入）：
+// 任一端点 ZonePublic→"public"；全 local（loopback/LAN）→"local"；空集/主机名未解析→"public"
+// （fail-closed：无端点信息=按公网对待——数据可能出境；主机名不阻塞式解析——DNS 在审批
+// 路径不可阻塞调用，主机名端点按公网保守，直连 IP 判定归执行侧 DNS 重绑定防御）。
+func ClassifyEndpointsZone(endpoints []string) string {
+	if len(endpoints) == 0 {
+		return "public" // 有网络能力但无端点信息=保守（fail-closed 数据可能出境）
+	}
+	hasLAN := false
+	for _, ep := range endpoints {
+		switch network.ClassifyIPString(ep) {
+		case network.ZonePublic:
+			return "public" // 任一公网=公网（最严胜出）
+		case network.ZoneLAN:
+			hasLAN = true
+		}
+	}
+	if hasLAN {
+		return "lan"
+	}
+	return "loopback"
+}
+
+// IsSensitivePathWrite 敏感路径写入判定（目标路径感知——D-2 解冻后的真实语义：
+// target 落在 $HOME/.ssh/.aws/.goalos/.config 之下=敏感写入；工作区写入≠敏感写入）。
+func IsSensitivePathWrite(target, homeDir string) bool {
+	if target == "" || homeDir == "" {
+		return false
+	}
+	for _, d := range []string{"/.ssh", "/.aws", "/.goalos", "/.config"} {
+		if strings.HasPrefix(target, filepath.Join(homeDir, d)) {
+			return true
+		}
+	}
+	return false
 }

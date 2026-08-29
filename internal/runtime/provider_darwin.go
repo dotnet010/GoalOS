@@ -93,10 +93,23 @@ func (p *darwinSeatbeltProvider) Acquire(_ context.Context, req LeaseRequest) (R
 	if p.state != ProviderPrepared {
 		return nil, fmt.Errorf("runtime: Provider 未 Prepare（状态=%v）", p.state)
 	}
+	// R-1643 裁决④：契约声明网络能力→profile 网络授权变体（data_sharing 审批已在治理上游完成——
+	// 无契约/无网络能力=全拒变体，fail-closed）
+	netCaps := false
+	if req.Contract != nil {
+		for _, c := range req.Contract.Claims().Capabilities {
+			for _, prefix := range []string{"web.", "browser.", "net.", "http."} {
+				if strings.HasPrefix(c, prefix) {
+					netCaps = true
+				}
+			}
+		}
+	}
 	return &seatbeltHandle{
 		id:    fmt.Sprintf("sb-%d", time.Now().UnixNano()),
 		p:     p,
 		state: HandleAcquired,
+		netCaps: netCaps,
 	}, nil
 }
 
@@ -108,6 +121,7 @@ type seatbeltHandle struct {
 	state       HandleState
 	profilePath string
 	activeCmd   *exec.Cmd // 当前执行进程（Interrupt/Pause/Resume 对象）
+	netCaps     bool      // 契约声明网络能力（R-1643 裁决④——profile 变体选择数据源）
 }
 
 func (h *seatbeltHandle) ID() string { return h.id }
@@ -128,8 +142,13 @@ func (h *seatbeltHandle) Start(context.Context) error {
 	if err := os.MkdirAll(h.p.tmpDir, 0700); err != nil {
 		return fmt.Errorf("runtime: tmpDir 建立失败: %w", err)
 	}
+	// R-1643 裁决④：按契约网络能力选变体（授权=端口级放行 tcp 443/80；未授权=全拒）
+	profile, err := sandbox.RestrictedSeatbeltProfileForNetwork(h.netCaps)
+	if err != nil {
+		return fmt.Errorf("runtime: profile 变体产出失败（单源漂移 fail-closed）: %w", err)
+	}
 	h.profilePath = filepath.Join(h.p.tmpDir, h.id+".sb")
-	if err := os.WriteFile(h.profilePath, []byte(sandbox.RestrictedSeatbeltProfile()), 0600); err != nil {
+	if err := os.WriteFile(h.profilePath, []byte(profile), 0600); err != nil {
 		return fmt.Errorf("runtime: profile 物化失败: %w", err)
 	}
 	h.state = HandleReady

@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -52,6 +53,34 @@ func NewCloudLLMClient(baseURL, apiKey, model string, maxTokens int) *CloudLLMCl
 		cfg.BaseURL = baseURL
 	}
 
+	return newCloudLLMClientWithHTTP(cfg, model, baseURL, apiKey, maxTokens, nil)
+}
+
+// NewCloudLLMClientWithZone 网域感知变体（R-1643 裁决④——D-2 蓝图 §2.4）：
+// zoneDialer 非 nil 时 HTTP 传输层挂接网域感知拨号（DNS 重绑定防御=解析后直连锁定 IP；
+// force_public_zone 覆盖=内网代理端点按公网标记）。
+func NewCloudLLMClientWithZone(baseURL, apiKey, model string, maxTokens int, zoneDialer *llm.ZoneDialer) *CloudLLMClient {
+	var cfg openai.ClientConfig
+	if baseURL == "" {
+		cfg = openai.DefaultAnthropicConfig(apiKey, "https://api.anthropic.com/v1")
+	} else {
+		cfg = openai.DefaultConfig(apiKey)
+		cfg.BaseURL = baseURL
+	}
+	var httpClient *http.Client
+	if zoneDialer != nil {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.DialContext = zoneDialer.DialContext
+		httpClient = &http.Client{Transport: transport}
+	}
+	return newCloudLLMClientWithHTTP(cfg, model, baseURL, apiKey, maxTokens, httpClient)
+}
+
+// newCloudLLMClientWithHTTP 共享构造尾段（两构造函数收敛点）。
+func newCloudLLMClientWithHTTP(cfg openai.ClientConfig, model, baseURL, apiKey string, maxTokens int, httpClient *http.Client) *CloudLLMClient {
+	if httpClient != nil {
+		cfg.HTTPClient = httpClient
+	}
 	return &CloudLLMClient{
 		model:     model,
 		client:    openai.NewClientWithConfig(cfg),

@@ -24,6 +24,7 @@ import (
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/governance"
 	"github.com/goalos/goalos/internal/healthcheck"
+	"github.com/goalos/goalos/internal/llm"
 	"github.com/goalos/goalos/internal/metrics"
 	"github.com/goalos/goalos/internal/missionengine"
 	"github.com/goalos/goalos/internal/persona"
@@ -124,8 +125,12 @@ func main() {
 				status := scheduler.CheckProviderHealth(pc, p.APIKey)
 				if status.Healthy {
 					healthyCount++
+					// R-1643 裁决④：网域感知拨号（DNS 重绑定防御+force_public_zone 覆盖标记）
+					zd := llm.NewZoneDialer(p.ForcePublicZone, func(m llm.ZoneMark) {
+						log.Printf("[Daemon] LLM 出站网域: host=%s ip=%s zone=%s forced=%v", m.Host, m.IP, m.Zone, m.ForcedPublic)
+					})
 					providers = append(providers, scheduler.ProviderClient{Name: p.Name, Model: p.Model,
-						Client: missionengine.NewCloudLLMClient(p.BaseURL, p.APIKey, p.Model, maxTokens)})
+						Client: missionengine.NewCloudLLMClientWithZone(p.BaseURL, p.APIKey, p.Model, maxTokens, zd)})
 					log.Printf("[Daemon] MultiLLM provider ✅ %s/%s: %s", p.Name, p.Model, status.Message)
 				} else {
 					log.Printf("[Daemon] MultiLLM provider ❌ %s/%s: %s — skipped for this session", p.Name, p.Model, status.Message)
@@ -196,6 +201,7 @@ func main() {
 		log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err)
 	}
 	gov := governance.New(bus, secretKey)
+	gov.SetTrustLAN(cfg.Daemon.TrustLAN) // R-1643②——data_sharing 免除=loopback 恒免/LAN 仅此开关免
 	gov.SetApprovalTimeout(time.Duration(cfg.Policy.ApprovalTimeout) * time.Second)
 	gov.SetTokenTTL(time.Duration(cfg.Policy.TokenTTL) * time.Second) // R-1059: 令牌执行窗口
 	gov.SetAutonomyLevel(cfg.Daemon.AutonomyLevel)
