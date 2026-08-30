@@ -1,0 +1,35 @@
+# AppContainer å†³å®šæ€§æµ‹è¯•+ACL æµ‹ç»˜ GREEN ç•™ç—•ï¼ˆ2026-08-31ï¼Œé¡¾é—®å¤å®¡ç¬¬ 1 æ¡ï¼‰
+# æœºå™¨: WIN11 Pro for Workstations 26200ï¼ˆéç®¡ç†å‘˜æ€ï¼‰
+# commit: e4a8d22b2f5325c3cd3ce342d2cd98b2229fcb6d+working tree
+# å‘½ä»¤: go test -tags prototype -v -run 'TestAppContainer_DynamicBinary|TestAppContainer_ACLMap' ./prototype/
+
+=== RUN   TestAppContainer_ACLMap
+    appcontainer_aclmap_windows_test.go:52: è¯» temp-file    = æ‹’ï¼ˆexit=0ï¼‰
+    appcontainer_aclmap_windows_test.go:52: è¯» home-file    = æ‹’ï¼ˆexit=0ï¼‰
+    appcontainer_aclmap_windows_test.go:52: è¯» ssh-config   = æ‹’ï¼ˆexit=0ï¼‰
+    appcontainer_aclmap_windows_test.go:52: è¯» sys32-hosts  = å…è®¸ï¼ˆexit=0ï¼‰
+    appcontainer_aclmap_windows_test.go:69: æ‰§è¡Œ temp-exe   = å…è®¸ï¼ˆexit=0 out="hello-ac-ok"ï¼‰
+    appcontainer_aclmap_windows_test.go:69: æ‰§è¡Œ home-exe   = å…è®¸ï¼ˆexit=0 out="hello-ac-ok"ï¼‰
+    appcontainer_aclmap_windows_test.go:69: æ‰§è¡Œ sys32-cmd  = æ‹’ï¼ˆexit=2147942487 out=""ï¼‰
+    appcontainer_aclmap_windows_test.go:79: å†™ temp-file    = æ‹’ï¼ˆexit=1ï¼‰
+    appcontainer_aclmap_windows_test.go:79: å†™ home-file    = æ‹’ï¼ˆexit=1ï¼‰
+--- PASS: TestAppContainer_ACLMap (1.39s)
+=== RUN   TestAppContainer_DynamicBinary
+    appcontainer_dynamic_windows_test.go:115: AppContainer SID=S-1-15-2-134527428-3935279614-301710076-1687354473-323222763-423030452-2924267449
+    appcontainer_dynamic_windows_test.go:141: A æœªæˆäºˆæ‰§è¡Œ=å…è®¸ï¼ˆ"hello-ac-ok"ï¼‰
+    appcontainer_dynamic_windows_test.go:146: A æœªæˆäºˆè¯»æ•°æ®=æ‹’ç»ï¼ˆæ‰§è¡Œâ‰ è¯»â€”â€”è¿è¡ŒæœŸé¢æˆç«‹ï¼‰
+    appcontainer_dynamic_windows_test.go:149: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_DynamicBinary2250142695\001\workspace grant (OI)(CI)(M) â†’ ÒÑ´¦ÀíµÄÎÄ¼ş: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_DynamicBinary2250142695\001\workspace
+        ÒÑ³É¹¦´¦Àí 1 ¸öÎÄ¼ş; ´¦Àí 0 ¸öÎÄ¼şÊ±Ê§°Ü
+    appcontainer_dynamic_windows_test.go:163: B æˆäºˆåå·¥ä½œåŒºè¯»+å†™=åˆæ³•
+    appcontainer_dynamic_windows_test.go:177: C å†™å·¥ä½œåŒºå¤–=æ‹’ç»ï¼ˆæˆäºˆä¸æ‰©é¢ï¼‰
+    appcontainer_dynamic_windows_test.go:184: D æœªæˆäºˆå·¥å…·æ•°æ®è¯»=æ‹’ç»
+    appcontainer_dynamic_windows_test.go:185: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_DynamicBinary2250142695\001\usertool grant (OI)(CI)(RX) â†’ ÒÑ´¦ÀíµÄÎÄ¼ş: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_DynamicBinary2250142695\001\usertool
+        ÒÑ³É¹¦´¦Àí 1 ¸öÎÄ¼ş; ´¦Àí 0 ¸öÎÄ¼şÊ±Ê§°Ü
+    appcontainer_dynamic_windows_test.go:191: D æˆäºˆ RX åå·¥å…·æ•°æ®è¯»=é€šï¼ˆ"hello-ac-ok\nREAD-OK: payload"ï¼‰
+    appcontainer_dynamic_windows_test.go:192: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_DynamicBinary2250142695\001\usertool remove â†’ ÒÑ´¦ÀíµÄÎÄ¼ş: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_DynamicBinary2250142695\001\usertool
+        ÒÑ³É¹¦´¦Àí 1 ¸öÎÄ¼ş; ´¦Àí 0 ¸öÎÄ¼şÊ±Ê§°Ü
+    appcontainer_dynamic_windows_test.go:192: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_DynamicBinary2250142695\001\workspace remove â†’ ÒÑ´¦ÀíµÄÎÄ¼ş: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_DynamicBinary2250142695\001\workspace
+        ÒÑ³É¹¦´¦Àí 1 ¸öÎÄ¼ş; ´¦Àí 0 ¸öÎÄ¼şÊ±Ê§°Ü
+--- PASS: TestAppContainer_DynamicBinary (1.40s)
+PASS
+ok  	github.com/goalos/goalos/prototype	3.140s
