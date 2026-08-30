@@ -70,6 +70,10 @@ jobs:
           bash scripts/check-doc-completeness.sh
           bash scripts/check-error-codes.sh
           bash scripts/check-risk-table.sh
+          # 任务 8.5（会议 #237 Linus——发版前版本号不得落后）：tag↔CanonicalVersion 硬闸。
+          # tag 上下文本工作流天然具备（on.push.tags=v*）→ 不等即红；不入 make ci
+          # （本地无 tag 上下文恒 SKIP，入列=无牙占位）。事故史=常量滞留 0.1.3 三版本。
+          bash scripts/check-version-sync.sh
 
   release:
     needs: test
