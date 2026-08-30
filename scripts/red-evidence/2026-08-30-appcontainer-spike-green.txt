@@ -1,0 +1,17 @@
+# AppContainer 第一性 spike GREEN 留痕（2026-08-30）
+# 机器: WIN11 Pro for Workstations 26200（非管理员态）
+# commit: 4d716c21e8081be73f011b1e6c1872449269e6a9+working tree
+# 命令: go test -tags prototype -v -run TestAppContainer_FirstPrinciples ./prototype/
+# 五断言: ④边界内执行✓ ③写C:\Windows=拒✓ ②读~/.ssh=拒✓ ①出站=WSAEACCES✓ ⑤边界内读System32✓
+# 对照组: 容器外同探针=超时语义（非 WSAEACCES）——拒绝来自 AppContainer 边界非路由
+
+=== RUN   TestAppContainer_FirstPrinciples
+    appcontainer_windows_test.go:196: ④边界内执行=成功输出 "spike-ok"
+    appcontainer_windows_test.go:207: ③写 C:\Windows=拒绝（"\xb5\xb1ǰĿ¼\xce\xdeЧ\xa1\xa3\r\n\xbeܾ\xf8\xb7\xc3\xceʡ\xa3"）
+    appcontainer_windows_test.go:221: ②读 ~/.ssh/config=拒绝（"\xb5\xb1ǰĿ¼\xce\xdeЧ\xa1\xa3\r\n\xbeܾ\xf8\xb7\xc3\xceʡ\xa3"）
+    appcontainer_windows_test.go:238: ①出站 192.0.2.1:80=WSAEACCES 拒绝（"\xd2\xd4һ\xd6ַ\xc3\xce\xcaȨ\xcf\u07b2\xbb\xd4\xca\xd0\xed\xb5ķ\xbdʽ\xd7\xf6\xc1\xcbһ\xb8\xf6\xb7\xc3\xce\xca\xcc\u05fd\xd3\xd7ֵĳ\xa2\xcaԡ\xa3 192.0.2.1:80"）
+    appcontainer_windows_test.go:245: ⑤边界内读 System32=成功（959 字节）
+    appcontainer_windows_test.go:250: 对照组（容器外）出站结果: "\xd3\xc9\xd3\xda\xc1\xac\xbdӷ\xbd\xd4\xdaһ\xb6\xceʱ\xbc\xe4\xba\xf3û\xd3\xd0\xd5\xfdȷ\xb4\U00038d3b\xf2\xc1\xac\xbdӵ\xc4\xd6\xf7\xbb\xfaû\xd3з\xb4Ӧ\xa3\xac\xc1\xac\xbdӳ\xa2\xca\xd4ʧ\xb0ܡ\xa3 192.0.2.1:80"
+--- PASS: TestAppContainer_FirstPrinciples (21.87s)
+PASS
+ok  	github.com/goalos/goalos/prototype	22.253s
