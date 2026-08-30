@@ -12,6 +12,8 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -73,9 +75,23 @@ func (p *agentboxProvider) Capabilities(context.Context) (ProviderCapability, er
 func (p *agentboxProvider) Prepare(_ context.Context, _ RuntimePlan) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	// WritableRoots 必须先存在——Windows ACL 授予（addAllowACE→GetNamedSecurityInfoW）
+	// 对不存在路径直接失败，Exec 期才炸（2026-08-30 Windows 实机前置发现）。
+	for _, root := range []string{p.workspace, p.tmpDir} {
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			return fmt.Errorf("%w: WritableRoot 创建失败 %s: %w", ErrNoBackend, root, err)
+		}
+	}
 	cfg := agentbox.DefaultConfig()
 	cfg.Classifier = passthroughClassifier{} // 单一治理权威——透传
 	cfg.Filesystem.WritableRoots = []string{p.workspace, p.tmpDir}
+	// Windows DefaultConfig DenyWrite 含 home——工作区默认在用户目录下（生产接线
+	// home\Goals / 测试 t.TempDir）时前缀冲突=Manager 构造失败=受限档整档不可用
+	// （2026-08-30 Win11 实机实证，TC-RT-001a 先红）。裁决：剔除与 WritableRoots
+	// 前缀冲突的 DenyWrite 条目（仅 home 会命中），系统目录 deny 保留；安全性不依赖
+	// 被剔条目——Tier1=Low IL 写阻（home 对象=Medium IL 天然拒写），Tier2=沙箱用户
+	// 对他人 profile 无 DACL 权限；DenyRead（~/.ssh 等凭证目录）不受影响。
+	cfg.Filesystem.DenyWrite = filterConflictingDenyWrite(cfg.Filesystem.DenyWrite, cfg.Filesystem.WritableRoots)
 	cfg.Network.Mode = agentbox.NetworkBlocked // 受限档默认=网络全拒（授权变体=D-2 网络族后续窗口）
 	cfg.FallbackPolicy = agentbox.FallbackStrict // fail-closed——无静默降级（R-1368 同构纪律）
 	mgr, err := agentbox.NewManager(cfg)
@@ -197,6 +213,35 @@ func res_stdout(res *agentbox.ExecResult, err error) string {
 		return res.Stdout + res.Stderr
 	}
 	return res.Stdout
+}
+
+// filterConflictingDenyWrite 剔除与 WritableRoots 冲突的 DenyWrite 条目。
+// 冲突判定与 agentbox 校验器同规则（config.go validateFilesystem）：
+// deny==root 或 deny 是 root 的前缀祖先 → 该 deny 条目使配置非法，剔除；
+// 其余条目（Windows=系统目录族）原样保留。Linux/macOS 默认 deny 表不含 home
+// →对本平台为无操作。
+func filterConflictingDenyWrite(deny, roots []string) []string {
+	kept := make([]string, 0, len(deny))
+	for _, d := range deny {
+		conflict := false
+		for _, r := range roots {
+			absD, absR := d, r
+			if !filepath.IsAbs(absD) {
+				absD, _ = filepath.Abs(absD)
+			}
+			if !filepath.IsAbs(absR) {
+				absR, _ = filepath.Abs(absR)
+			}
+			if absR == absD || strings.HasPrefix(absR, absD+string(filepath.Separator)) {
+				conflict = true
+				break
+			}
+		}
+		if !conflict {
+			kept = append(kept, d)
+		}
+	}
+	return kept
 }
 
 func statusFromExit(code int) string {
