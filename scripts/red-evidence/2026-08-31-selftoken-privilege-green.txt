@@ -1,0 +1,16 @@
+# 复审③机器裁决 GREEN 留痕（2026-08-31）——自我收窄免特权例外实证
+# 机器: WIN11 Pro for Workstations 26200（非管理员态）
+# commit: 668c21fb5a3e09c51bd0128e9e2008bd49b20720+working tree
+# 命令: go test -tags prototype -v -run TestSelfRestrictedToken_PrivilegeExemption ./prototype/
+# 前置: 当前 token 无 SeAssignPrimaryTokenPrivilege/SeImpersonatePrivilege/SeIncreaseQuotaPrivilege（启用态全缺席）
+# 归因链: v1=5（OpenProcessToken 访问权卫生）→v2=竞态空读→v3=0xC0000142（token 配方缺 LUA/WRITE_RESTRICTED/LowIL）→v4 双变体转绿
+
+=== RUN   TestSelfRestrictedToken_PrivilegeExemption
+    selftoken_windows_test.go:191: 前置①：当前 token 无 SeAssignPrimaryTokenPrivilege（启用态）=钉死
+    selftoken_windows_test.go:192: 前置②：SeImpersonatePrivilege 持有=false；SeIncreaseQuotaPrivilege 持有=false
+    selftoken_windows_test.go:204: 变体 A（Go exec 路径）=成功："self-restrict-ok"——API 层+可用性层双绿
+    selftoken_windows_test.go:242: 变体 B：CreateProcessAsUserW 调用=成功——API 层例外成立（无特权持有下赋值主 token）
+    selftoken_windows_test.go:253: 变体 B 可用性层：子进程 exit=3221225794 输出=""（0xC0000142=DLL 初始化失败族——token 配方问题非特权墙）
+--- PASS: TestSelfRestrictedToken_PrivilegeExemption (0.09s)
+PASS
+ok  	github.com/goalos/goalos/prototype	1.160s
