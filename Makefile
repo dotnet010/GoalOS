@@ -1,5 +1,14 @@
 .PHONY: build test lint race deadcode clean install-plugin release ci build-xinchuang
 
+# EXE_EXT：Windows 下插件产物带 .exe 后缀（update_plugin_signatures.go 按平台
+# 补 .exe 解析产物——裸名输出=工具找不到=签名跳闸空转，releasecheck 红）。
+# 2026-08-31 实机实证：Windows 本地 make ci 假红根因。
+ifeq ($(OS),Windows_NT)
+EXE_EXT := .exe
+else
+EXE_EXT :=
+endif
+
 build:
 	go build ./...
 
@@ -37,8 +46,8 @@ all: lint race deadcode test build
 # （linux/amd64+xinchuang 信创变体, -tags xinchuang 显式传参）。
 ci: lint build
 	@echo "=== Building plugins (releasecheck 前置——发布规范 #9 本地签名一致性) ==="
-	@go build -trimpath -buildvcs=false -o plugins/capability/shell-executor/plugin-shell ./cmd/plugin-shell
-	@go build -trimpath -buildvcs=false -o plugins/capability/websearch/plugin-websearch ./cmd/plugin-websearch
+	@go build -trimpath -buildvcs=false -o plugins/capability/shell-executor/plugin-shell$(EXE_EXT) ./cmd/plugin-shell
+	@go build -trimpath -buildvcs=false -o plugins/capability/websearch/plugin-websearch$(EXE_EXT) ./cmd/plugin-websearch
 	@go run scripts/update_plugin_signatures.go
 	@echo "=== Running CI check scripts ==="
 	@bash scripts/check-anti-cheat.sh . || exit 1

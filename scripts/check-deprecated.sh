@@ -17,7 +17,8 @@
 # 检查范围:
 #   开发文档/ 顶层规范文档 *.md（01~11/00统一术语表/规范类）
 #   排除: 会议纪要.md（历史记录可合法引用旧语义）、*.bak.md、开发计划/（过程文档）、
-#         待审议规范/（草稿）
+#         待审议规范/（草稿）、顾问报告存档*.md（R-1658 原文存档——引用禁语原文=存档
+#         合法内容，如顾问原文引用「Windows 已达真 I3」禁语恰为 R-1656 来源）
 #   正文扫描: 跳过 frontmatter+修改记录区域（修改记录可合法描述"清除某旧语义"，
 #             复用 check-resolution-propagation.sh 的正文提取契约）
 #   兼容: repo-only 模式（GitHub Actions 无 开发文档）→ 显式降级跳过 exit 0
@@ -78,7 +79,11 @@ readonly DEPRECATED_PATTERNS=(
     "Failed(user_stopped)"
     "(^|[^[:alnum:]_])goalos +(status|list|log)([^[:alnum:]_]|$)"
     "(^|[^[:alnum:]_])PipelineWaiting([^[:alnum:]_]|$)"
+    "Windows[^\n]*(真 ?I3|已达 ?I3|双面齐备)"
 )
+# R-1656（会议 #262——顾问复审⑤采纳加牙）: Windows+真I3/已达I3/双面齐备 组合禁称——
+# 06 §1.3 修订落稿前，任何文档不得声称 Windows 已达真 I3（T1-WinAC 无 seccomp
+# 等价物——R-1652 v2）。阶梯语义收口=06 §1.3 修订任务（届时本模式随修订移除）。
 
 # ─── L 命名族废弃模式（R-1114：独立 L0-L5 记号——前后均为非词字符或行首/行尾）───
 readonly L_PATTERN='(^|[^[:alnum:]_])L[0-5]([^[:alnum:]_]|$)'
@@ -189,6 +194,7 @@ done < <(
     find "$DOC_DIR" -maxdepth 1 -name '*.md' -type f \
         ! -name '*.bak.md' \
         ! -name '会议纪要.md' \
+        ! -name '顾问报告存档*.md' \
         -print 2>/dev/null | sort
 )
 

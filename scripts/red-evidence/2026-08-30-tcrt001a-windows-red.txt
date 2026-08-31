@@ -1,0 +1,15 @@
+# TC-RT-001a Windows 实机 RED 留痕（2026-08-30）
+# 机器: WIN11 Pro for Workstations 26200（用户实机，非 CI runner）
+# commit: 4b5fe9bcfa06a1d0ddb4a1914caf3d592e6d4bcf
+# 命令: GOALOS_AGENTBOX_CI=1 go test -v -count=1 -run 'TestRuntime_AgentboxProvider_Boundary|TestRuntime_Bypass_SyscallDenied_Windows' ./internal/runtime/
+# go version: go version go1.25.14 windows/amd64
+
+=== RUN   TestRuntime_Bypass_SyscallDenied_Windows
+    bypass_windows_test.go:18: TC-RT-001a：Prepare 失败: runtime: 无可用后端: agentbox Manager 构造失败: agentbox: invalid configuration: Filesystem: WritableRoots "C:\\Users\\carmack\\AppData\\Local\\Temp\\TestRuntime_Bypass_SyscallDenied_Windows2095833821\\001" conflicts with DenyWrite "C:\\Users\\carmack"; Filesystem: WritableRoots "C:\\Users\\carmack\\AppData\\Local\\Temp\\TestRuntime_Bypass_SyscallDenied_Windows2095833821\\002" conflicts with DenyWrite "C:\\Users\\carmack"
+--- FAIL: TestRuntime_Bypass_SyscallDenied_Windows (0.00s)
+=== RUN   TestRuntime_AgentboxProvider_Boundary
+    provider_agentbox_contract_test.go:33: 平台机制不可用（诚实降级非缺陷——CI 环境内核/权限限制）: runtime: 无可用后端: agentbox Manager 构造失败: agentbox: invalid configuration: Filesystem: WritableRoots "C:\\Users\\carmack\\AppData\\Local\\Temp\\TestRuntime_AgentboxProvider_Boundary1988565750\\001" conflicts with DenyWrite "C:\\Users\\carmack"; Filesystem: WritableRoots "C:\\Users\\carmack\\AppData\\Local\\Temp\\TestRuntime_AgentboxProvider_Boundary1988565750\\002" conflicts with DenyWrite "C:\\Users\\carmack"
+--- SKIP: TestRuntime_AgentboxProvider_Boundary (0.00s)
+FAIL
+FAIL	github.com/goalos/goalos/internal/runtime	1.003s
+FAIL

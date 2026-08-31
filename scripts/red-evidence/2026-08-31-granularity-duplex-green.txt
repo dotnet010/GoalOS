@@ -1,0 +1,30 @@
+# 顾问第五轮修复机器裁决 GREEN 留痕（2026-08-31）
+# 机器: WIN11 Pro for Workstations 26200（非管理员态）
+# commit: 5e82a47f837ef794df7ef0083379be7007f835ff+working tree
+# ①具名能力粒度：cap-node 携带→读 node 通/读 python 拒（选择性=D-1 按声明编译能力集）
+# ②双单向管道并发转发：2 客户端并发×双向全链，响应归属全对（R-1662 未根治→已实证根治）
+
+=== RUN   TestAppContainer_CapabilityGranularity
+    appcontainer_fix2_windows_test.go:39: cap-python=S-1-15-3-1024-213804040-3041601632-1140405956-2701691191-3629452433-3285923098-2325876592-3827271365
+        cap-node  =S-1-15-3-1024-318138433-1927609193-3740909099-2954364216-2147921738-2751366396-3880017849-2993901997
+    appcontainer_fix2_windows_test.go:51: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_CapabilityGranularity3131910319\001\pytool grant (OI)(CI)(RX) → �Ѵ������ļ�: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_CapabilityGranularity3131910319\001\pytool
+        �ѳɹ����� 1 ���ļ�; ���� 0 ���ļ�ʱʧ��
+    appcontainer_fix2_windows_test.go:53: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_CapabilityGranularity3131910319\001\nodetool grant (OI)(CI)(RX) → �Ѵ������ļ�: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_CapabilityGranularity3131910319\001\nodetool
+        �ѳɹ����� 1 ���ļ�; ���� 0 ���ļ�ʱʧ��
+    appcontainer_fix2_windows_test.go:62: S1 携带 cap-node 读 node=通
+    appcontainer_fix2_windows_test.go:67: S1 携带 cap-node 读 python=拒（选择性成立——D-1 按声明编译能力集落地）
+    appcontainer_fix2_windows_test.go:75: S2 携带双能力读 python=通（按需声明=按需获得）
+    appcontainer_fix2_windows_test.go:76: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_CapabilityGranularity3131910319\001\nodetool remove → �Ѵ������ļ�: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_CapabilityGranularity3131910319\001\nodetool
+        �ѳɹ����� 1 ���ļ�; ���� 0 ���ļ�ʱʧ��
+    appcontainer_fix2_windows_test.go:76: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_CapabilityGranularity3131910319\001\pytool remove → �Ѵ������ļ�: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_CapabilityGranularity3131910319\001\pytool
+        �ѳɹ����� 1 ���ļ�; ���� 0 ���ļ�ʱʧ��
+--- PASS: TestAppContainer_CapabilityGranularity (1.36s)
+=== RUN   TestAppContainer_DuplexPipeForwarder
+    appcontainer_fix2_windows_test.go:223: relay1: 双管道已连接
+    appcontainer_fix2_windows_test.go:223: relay0: 双管道已连接
+    appcontainer_fix2_windows_test.go:317: 客户端 0 并发全链=通（"FWD2-ECHO: ping-ac-0"——归属正确）
+    appcontainer_fix2_windows_test.go:317: 客户端 1 并发全链=通（"FWD2-ECHO: ping-ac-1"——归属正确）
+    appcontainer_fix2_windows_test.go:326: ②双单向管道并发转发=根治实证（2 客户端并发×双向，归属全对）
+--- PASS: TestAppContainer_DuplexPipeForwarder (3.40s)
+PASS
+ok  	github.com/goalos/goalos/prototype	5.182s

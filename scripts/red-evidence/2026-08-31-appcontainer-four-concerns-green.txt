@@ -1,0 +1,31 @@
+# 顾问四疑虑机器裁决 GREEN 留痕（2026-08-31）
+# 机器: WIN11 Pro for Workstations 26200（非管理员态）
+# commit: 420a9e47d28abc2fd781fbb3a0015ec94f3c3e5e+working tree
+# 命令: go test -tags prototype -v -run 'TestAppContainer_(DependencyLoad|Loopback|ProfileLifecycle)' ./prototype/
+
+=== RUN   TestAppContainer_ProfileLifecycle
+    appcontainer_profile_windows_test.go:45: P1 实机：活进程持 profile 时删除=成功（HRESULT S_OK）——顾问预警的句柄锁阻断在本构建（26200）未出现；残留风险面=崩溃未来得及删，非删除被阻塞
+    appcontainer_profile_windows_test.go:78: P2 Job 绞杀=生效（子进程 exit=0）
+    appcontainer_profile_windows_test.go:94: P3 退避重试删除=收敛（第 1 次成功）
+    appcontainer_profile_windows_test.go:103: P4 终态核验=通过（重建+再删成功——profile 生命周期闭环无泄漏）
+--- PASS: TestAppContainer_ProfileLifecycle (2.31s)
+=== RUN   TestAppContainer_DependencyLoad
+    appcontainer_toolchain_windows_test.go:117: 靶标: python=C:\Users\carmack\AppData\Local\Programs\Python\Python312\python.exe node=C:\Program Files\nodejs\node.exe
+    appcontainer_toolchain_windows_test.go:125: A1 python 未授予=失败（exit=3221225781 0xC0000135）out=""
+    appcontainer_toolchain_windows_test.go:129: icacls C:\Users\carmack\AppData\Local\Programs\Python\Python312 grant (OI)(CI)(RX) → �Ѵ������ļ�: C:\Users\carmack\AppData\Local\Programs\Python\Python312
+        �ѳɹ����� 1 ���ļ�; ���� 0 ���ļ�ʱʧ��
+    appcontainer_toolchain_windows_test.go:135: A2 python 授予后=跑通（"py-ac-ok 3 12"）
+    appcontainer_toolchain_windows_test.go:141: B1 node 未授予=跑通（Program Files 在默认读面内）
+    appcontainer_toolchain_windows_test.go:146: icacls C:\Users\carmack\AppData\Local\Programs\Python\Python312 remove → �Ѵ������ļ�: C:\Users\carmack\AppData\Local\Programs\Python\Python312
+        �ѳɹ����� 1 ���ļ�; ���� 0 ���ļ�ʱʧ��
+--- PASS: TestAppContainer_DependencyLoad (19.17s)
+=== RUN   TestAppContainer_Loopback
+    appcontainer_toolchain_windows_test.go:165: S1 同进程自拨 127.0.0.1 = 通（exit=0 out="LOOPBACK-SELF-OK"）
+    appcontainer_toolchain_windows_test.go:178: S2 同 AC 跨进程互连 = 通（dialer exit=0 out="DIAL-OK"）
+    appcontainer_toolchain_windows_test.go:181: S2 listener 侧输出="LISTENING\nACCEPT-OK"
+    appcontainer_toolchain_windows_test.go:196: S3 宿主听+AC 拨 = 拒（exit=3 out="DIAL-FAIL: dial tcp 127.0.0.1:18732: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond."）
+    appcontainer_toolchain_windows_test.go:210: S4 AC 听+宿主拨 = 拒（dialErr=dial tcp 127.0.0.1:18733: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.）
+    appcontainer_toolchain_windows_test.go:213: S4 listener 侧输出="LISTENING"
+--- PASS: TestAppContainer_Loopback (7.03s)
+PASS
+ok  	github.com/goalos/goalos/prototype	28.967s
