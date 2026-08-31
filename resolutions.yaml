@@ -8069,3 +8069,154 @@ resolutions:
       - must_exist: "check-version-sync.sh"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 tag 闸脚本名（R-1647③）"
+
+  # ═══════════════════════════════════════════════════════════════
+  # 会议 #262~#266: Windows 强隔离重构评审系列（2026-08-31）
+  # 证据链: scripts/red-evidence/2026-08-3[01]-*.txt（九组机器裁决留痕）
+  # ═══════════════════════════════════════════════════════════════
+
+  R-1648:
+    desc: "Windows 受限档基座=AppContainer（会议 #262——agentbox 受限令牌路线废弃）: 依据三分层（v3）——已实证=「不打扰」（零 UAC 五断言+动态二进制四相实测）/方向判断=剩余成本（profile 残留清理+CI 实证+复标定）明显小于账户路线三税/设计上可证（待证）=CI 可证性（R-1654 smoke 转绿后升级已证）。证据等级=部分子项已实证（R-1663 纪律适用）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1648"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1648"
+      - must_exist: "T1-WinAC"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 T1-WinAC 独立档（R-1652 v2——R-1648 基座的档位语义）"
+  R-1649:
+    desc: "分类器修正包（会议 #262）: fs.write 触发判定位置感知（Linux=路径前缀/Windows=已知文件夹+绝对路径）+档案表成员目录读拒绝（规则引擎）+UNC 路径显式拒绝。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1649"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1649"
+  R-1650:
+    desc: "FD3 用户态 broker 承接+CGNAT 成员校验语义（会议 #262 v1/#264 v2/#266 v3）: 受限档 FD3=daemon 侧 broker 透明中继；CGNAT 100.64.0.0/10 不整段划 LOCAL——只认 tailnet 真实 peer（tailscaled 本机查询），fail-closed（查不到=ZonePublic）；Quad100 等保留地址天然排除。证据等级=规格裁决（文献级）+成员校验单测=施工项。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1650"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1650"
+      - must_exist: "CGNAT"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 CGNAT 成员校验语义（R-1650 v3）"
+  R-1651:
+    desc: "顾问账户方案拒绝项登记（会议 #262）: machine-wide DPAPI 形态+单进程转录形态——拒绝理由各附实证锚点。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1651"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1651"
+  R-1652:
+    desc: "阶梯语义收口（会议 #262 v1/#263 v2/#264 补充③）: 06 §1.3 修订前禁止「Windows 已达真 I3」表述；T1-WinAC 独立档（读写双禁闭+网络禁闭+进程硬化+win32k 子集过滤，无 seccomp 等价物）；MinIsolation=I3 契约在 Windows=fail-closed 拒绝（RTM 族错误+人类可读理由）；档位比较禁线性序=能力谓词集（HasSyscallFilter 等）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1652"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1652"
+      - must_exist: "fail-closed 拒绝"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 I3 契约 Windows fail-closed 语义（R-1652 v2②）"
+  R-1653:
+    desc: "动态二进制/资源兜底实证通过（会议 #262 续场 1——顾问复审①决定性 RED）: 「执行≠读」分离（启动面=父 token 打开 image/运行期=AC token）；四相全绿+ACLMap 九格测绘；分离语义写入 08 沙箱章节 Windows 段。证据等级=已实证。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1653"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1653"
+      - must_exist: "执行≠读"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记「执行≠读」分离语义（R-1653）"
+  R-1654:
+    desc: "CI spike 登记（会议 #262 续场 1——顾问复审④）: windows-daily 增 AppContainer smoke 作业（管理员态机制可用性实证；非管理员面=实机/用户环境，两面不互相冒充）。证据等级=施工项（登记待跑）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1654"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1654"
+  R-1655:
+    desc: "账户路线修正账（会议 #262 续场 1 v1/续场 2 v2 机器裁决）: ①per-user DPAPI 采纳②真实 SID 机制采纳③CreateProcessAsUserW 自我收窄免特权例外=机器裁决成立（前置断言三特权缺席+双变体归因分离——变体 A Go exec 路径 API+可用性双绿）——「特权断链」税目撤销，账户路线成本四税→三税（UAC/凭据持久化/系统残留）；CreateProcessWithLogonW 零特权性=文献级待实机补证。证据等级=已实证（例外成立）/文献级（CreateProcessWithLogonW 环节）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1655"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1655"
+  R-1656:
+    desc: "I3 禁称机检化（会议 #262 续场 1）: 06 §1.3 修订前「Windows+真 I3/已达 I3/双面齐备」组合入 check-deprecated.sh 警示档——承诺过闸不过嘴。disposition: 生效"
+    files: [会议纪要.md, check-deprecated.sh]
+    verify:
+      - must_exist: "R-1656"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1656"
+      - must_exist: "R-1656"
+        in_file: check-deprecated.sh
+        reason: "check-deprecated.sh 必须登记 R-1656 禁称模式（机检接线）"
+  R-1657:
+    desc: "决议依据证据等级标注纪律（会议 #262 续场 3——顾问第三轮隐藏问题①）: 决议「依据」栏每条必须标注四值之一=已实证/方向判断/设计上可证（待证）/文献级；未标注=决议不完整退回。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1657"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1657"
+      - must_exist: "证据等级"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须含证据等级标注（R-1657 自我适用）"
+  R-1658:
+    desc: "外部输入转录纪律（会议 #262 续场 3——顾问第三轮隐藏问题②）: 评审对象=原文逐字附档（不转译压缩）/引用=原文锚点/概括必标并附原文出处；入架构会议规范阶段 1+会议纪要模板。本次自我适用=《顾问报告存档-2026-08-31-Windows强隔离重构评审系列.md》。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1658"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1658"
+      - must_exist: "顾问报告存档-2026-08-31"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须引用顾问报告原文存档（R-1658 自我适用）"
+  R-1659:
+    desc: "最小运行时授权集（会议 #263 v1/#264 v2/#265 v3 定稿）: 每工具链一具名能力（DeriveCapabilitySidsFromName(GoalOS-TC-<toolchain>)——纯名称派生零残留），Resolver 按 Action 声明能力集挑选携带（SE_GROUP_ENABLED——Attributes=0=静默无效实机实锤）；授予=具名能力 SID RX 幂等一次授予长期有效；写面=session 包 SID 粒度不变；默认读面=System32+Program Files 不重复授予；授予失败=fail-closed。证据等级=已实证（python 0xC0000135 实锤+粒度选择性 S1 拒/S2 通）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1659"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1659"
+      - must_exist: "0xC0000135"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记依赖加载失败签名实证（R-1659 证据锚点）"
+  R-1660:
+    desc: "回环语义裁决（会议 #263 v1/#264 v2）: 同 AC 内回环=放行（OS 原生语义不加码）；沙箱↔宿主回环=默认断；宿主服务访问（Ollama 族）=沙箱内回环转发器承接（agent 代码直连 localhost 无感知，秒级超时坑构造性消除）；CheckNetIsolation LoopbackExempt=管理员税明确不采用。证据等级=已实证（四场景矩阵+转发全链）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1660"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1660"
+      - must_exist: "回环转发器"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记沙箱内回环转发器承接形态（R-1660 v2③）"
+  R-1661:
+    desc: "Profile 生命周期规格（会议 #263 v1/#264 v2）: 子进程必入 Job（KILL_ON_JOB_CLOSE 内核级绞杀）；清理=DeleteAppContainerProfile+退避重试（上限 10 次）；残留兜底=profile 命名确定化（GoalOS-AC-<session>）+sweep 双触发（daemon 启动+session 异常终止事件即时清理）；幂等=重复删除错误码可识别。证据等级=机制已实证（本构建）/看门狗触发接线=施工项。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1661"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1661"
+  R-1662:
+    desc: "broker 管道并发形态（会议 #264 v1 注记/#265 v2 根治实证）: 双单向管道（每连接 Req/Resp 各一独立句柄——消灭同步句柄全双工互卡）；并发实证标准=≥2 客户端并发+归属断言；「顺序单请求」形态不得引用为并发能力证据。证据等级=已实证（2 客户端并发×双向全链绿）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1662"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1662"
+      - must_exist: "双单向管道"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记双单向管道形态（R-1662 v2）"
+  R-1663:
+    desc: "决议结论词聚合纪律（会议 #265——顾问第五轮通用建议采纳）: 决议标题/结论词诚实度=子项证据等级取最低——全部子项「已实证」才可写「通过/采纳」；任一子项为「施工项/未决/文献级」→结论词必须写「部分解决（子项 X=施工项）」；落档入架构会议规范决议格式节+会议纪要模板；机检挂接=check-resolution-propagation 扩展（登记施工项）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1663"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1663"
+      - must_exist: "部分解决"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须含「部分解决」结论词纪律（R-1663）"
