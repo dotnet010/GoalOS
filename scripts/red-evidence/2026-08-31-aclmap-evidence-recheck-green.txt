@@ -1,0 +1,17 @@
+# ACLMap 全格证据口径复查 GREEN 留痕（2026-08-31，复审隐藏问题②顺带项）
+# commit: d5006219610f1abbbb405f05420ec8fd824700c4+working tree
+# 修正: 读/写「拒」格全部升级为 OS 拒绝证据文本断言（非 exit code/成功缺席）；
+#       执行矩阵语义诚实化（能走到=启动成功，只可记录允许；exit=进程自身语义）
+
+    appcontainer_aclmap_windows_test.go:56: 读 temp-file    = 拒（证据="\xb5\xb1ǰĿ¼\xce\xdeЧ\xa1\xa3\r\n\xbeܾ\xf8\xb7\xc3\xceʡ\xa3"）
+    appcontainer_aclmap_windows_test.go:56: 读 home-file    = 拒（证据="\xb5\xb1ǰĿ¼\xce\xdeЧ\xa1\xa3\r\n\xbeܾ\xf8\xb7\xc3\xceʡ\xa3"）
+    appcontainer_aclmap_windows_test.go:56: 读 ssh-config   = 拒（证据="\xb5\xb1ǰĿ¼\xce\xdeЧ\xa1\xa3\r\n\xbeܾ\xf8\xb7\xc3\xceʡ\xa3"）
+    appcontainer_aclmap_windows_test.go:50: 读 sys32-hosts  = 允许（内容命中/exit=0）
+    appcontainer_aclmap_windows_test.go:73: 执行 temp-exe   = 允许（启动面成立——CreateProcess 成功；exit=0 为进程自身语义 out="hello-ac-ok"）
+    appcontainer_aclmap_windows_test.go:73: 执行 home-exe   = 允许（启动面成立——CreateProcess 成功；exit=0 为进程自身语义 out="hello-ac-ok"）
+    appcontainer_aclmap_windows_test.go:73: 执行 sys32-cmd  = 允许（启动面成立——CreateProcess 成功；exit=2147942487 为进程自身语义 out=""）
+    appcontainer_aclmap_windows_test.go:87: 写 temp-file    = 拒（证据="\xb5\xb1ǰĿ¼\xce\xdeЧ\xa1\xa3\r\n\xbeܾ\xf8\xb7\xc3\xceʡ\xa3"）
+    appcontainer_aclmap_windows_test.go:87: 写 home-file    = 拒（证据="\xb5\xb1ǰĿ¼\xce\xdeЧ\xa1\xa3\r\n\xbeܾ\xf8\xb7\xc3\xceʡ\xa3"）
+--- PASS: TestAppContainer_ACLMap (2.00s)
+PASS
+ok  	github.com/goalos/goalos/prototype	2.581s
