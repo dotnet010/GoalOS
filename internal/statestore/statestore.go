@@ -13,11 +13,14 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/goalos/goalos/pkg/events"
 )
@@ -239,7 +242,25 @@ func (s *Store) SaveSnapshot(goalID string, state *GoalState) error {
 		return fmt.Errorf("statestore: 编码 snapshot 失败: %w", err)
 	}
 	f.Close()
-	return os.Rename(tmp, path)
+	return renameWithRetry(tmp, path)
+}
+
+// renameWithRetry Windows 瞬态文件锁防护（2026-08-31 实机实证——
+// TestWaitMore_ExtendsGoalRunnerTimeout 红：Defender/索引器扫描新建 .tmp 期间
+// rename=Access is denied 瞬态；agentbox acl.go F3 同族同修法）。
+// 瞬态拒绝短退避重试；非权限错误立即返回（不掩盖真实故障）。
+func renameWithRetry(oldpath, newpath string) error {
+	err := os.Rename(oldpath, newpath)
+	if err == nil || !errors.Is(err, fs.ErrPermission) {
+		return err
+	}
+	for i := 0; i < 5; i++ {
+		time.Sleep(time.Duration(20*(i+1)) * time.Millisecond)
+		if err = os.Rename(oldpath, newpath); err == nil || !errors.Is(err, fs.ErrPermission) {
+			return err
+		}
+	}
+	return err
 }
 
 // LoadLatestSnapshot 加载最新的快照（seq 最大）。
@@ -299,6 +320,6 @@ func (s *Store) SaveState(goalID string, state *GoalState) error {
 	}
 	f.Close()
 
-	// 原子 rename——崩溃安全
-	return os.Rename(tmp, path)
+	// 原子 rename——崩溃安全（renameWithRetry=Windows 瞬态锁防护，见该函数注记）
+	return renameWithRetry(tmp, path)
 }
