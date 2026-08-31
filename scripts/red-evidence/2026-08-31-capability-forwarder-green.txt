@@ -1,0 +1,43 @@
+# 顾问隐藏问题①②修复机制机器裁决 GREEN 留痕（2026-08-31）
+# 机器: WIN11 Pro for Workstations 26200（非管理员态）
+# commit: e1bb32a2de8352ecbc4594a7f61432bb69774f95+working tree
+# ①稳定能力 SID 共享授予：S-1-15-3-* 族（DeriveCapabilitySidsFromName/kernelbase.dll）
+#   +SE_GROUP_ENABLED 属性=访问检查承认（Attributes=0=静默无效——关键实机发现）
+#   对照组（无 cap）=拒 / 实验组读=通 / 写=拒（RX 不扩面）
+# ②沙箱内回环转发全链：AC 客户端→AC 转发器→命名管道(AAP 授权)→宿主中继→echo→原路返回
+#   归因链：os.OpenFile 管道→syscall 原语→仍卡死→PipeIso 单进程通→并发双工疑死锁→
+#   顺序请求-响应形态通（生产 broker 形态=overlap/双管道——登记设计注记）
+
+=== RUN   TestAppContainer_SharedCapabilityGrant
+    appcontainer_fix_windows_test.go:109: session SID=S-1-15-2-2181430896-2243687573-3150735047-1164414800-506104365-73561902-2089544245 稳定能力 SID=S-1-15-3-1024-3201758146-3793696381-1710600795-4087158868-543041193-833576390-2453614679-1178639652
+    appcontainer_fix_windows_test.go:122: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_SharedCapabilityGrant3072107120\001\tool grant (OI)(CI)(RX) → �Ѵ������ļ�: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_SharedCapabilityGrant3072107120\001\tool
+        �ѳɹ����� 1 ���ļ�; ���� 0 ���ļ�ʱʧ��
+    appcontainer_fix_windows_test.go:130: 对照组：无能力 SID 读工具数据=拒（授予是因——变量隔离成立）
+    appcontainer_fix_windows_test.go:138: 实验组：能力 SID 读工具数据=通（"hello-ac-ok\nREAD-OK: payload"）——稳定 SID 一次授予长期有效机制成立
+    appcontainer_fix_windows_test.go:143: 实验组：写工具目录=拒（RX 不扩面——写面仍 session 粒度）
+    appcontainer_fix_windows_test.go:144: icacls C:\Users\carmack\AppData\Local\Temp\TestAppContainer_SharedCapabilityGrant3072107120\001\tool remove → �Ѵ������ļ�: C:\Users\carmack\AppData\Local\Temp\TestAppContainer_SharedCapabilityGrant3072107120\001\tool
+        �ѳɹ����� 1 ���ļ�; ���� 0 ���ļ�ʱʧ��
+--- PASS: TestAppContainer_SharedCapabilityGrant (0.96s)
+=== RUN   TestAppContainer_LoopbackForwarder
+    appcontainer_fix_windows_test.go:330: relay: 管道已连接
+    appcontainer_fix_windows_test.go:336: relay: 后端 echo 已连
+    appcontainer_fix_windows_test.go:345: relay: 收到请求 7 字节
+    appcontainer_fix_windows_test.go:361: relay: 响应已回写 7 字节
+    appcontainer_fix_windows_test.go:404: 全链=通（"FWD-ECHO: ping-ac"）——沙箱内 loopback 转发承接宿主服务机制成立（Ollama 场景解法实证）
+    appcontainer_fix_windows_test.go:408: 转发器侧输出="FWD-LISTENING\nFWD-ACCEPTED\nFWD-PIPE-OPEN\nFWD-C2P-READ n=7\nFWD-C2P-WROTE n=7\nFWD-RELAYED"
+--- PASS: TestAppContainer_LoopbackForwarder (3.62s)
+=== RUN   TestPipeIsoDuplex
+    pipeiso2_windows_test.go:82: client 已写
+    pipeiso2_windows_test.go:85: client 读到="srv-hi"
+    pipeiso2_windows_test.go:90: server 结果=ok
+--- PASS: TestPipeIsoDuplex (0.30s)
+=== RUN   TestPipeIso
+    pipeiso_windows_test.go:31: server: connected
+    pipeiso_windows_test.go:54: client: opened
+    pipeiso_windows_test.go:59: client: wrote 7 bytes
+    pipeiso_windows_test.go:38: server: read 7 bytes
+    pipeiso_windows_test.go:44: server: echoed 7 bytes
+    pipeiso_windows_test.go:65: client: read back 7 bytes="ping-01"
+--- PASS: TestPipeIso (0.50s)
+PASS
+ok  	github.com/goalos/goalos/prototype	5.953s
