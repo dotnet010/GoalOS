@@ -58,14 +58,14 @@ func main() {
 }
 `
 
-// buildDynamicBinary 测试期实时构建「运行时动态选择」二进制（go 工具链在场=本测试前提）。
-func buildDynamicBinary(t *testing.T, dir, name string) string {
+// buildBinary 测试期实时构建动态二进制（go 工具链在场=本测试前提）。
+func buildBinary(t *testing.T, dir, name, source string) string {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
 	src := filepath.Join(dir, name+".go")
-	if err := os.WriteFile(src, []byte(helloSource), 0644); err != nil {
+	if err := os.WriteFile(src, []byte(source), 0644); err != nil {
 		t.Fatal(err)
 	}
 	exe := filepath.Join(dir, name+".exe")
@@ -74,6 +74,12 @@ func buildDynamicBinary(t *testing.T, dir, name string) string {
 		t.Fatalf("动态二进制构建失败（go 工具链前提）: %v\n%s", err, out)
 	}
 	return exe
+}
+
+// buildDynamicBinary 兼容包装（hello 探针源）。
+func buildDynamicBinary(t *testing.T, dir, name string) string {
+	t.Helper()
+	return buildBinary(t, dir, name, helloSource)
 }
 
 // sidString AppContainer SID→字符串（icacls *SID 语法载体）。
