@@ -46,6 +46,14 @@ func applySandboxExec(cmd *exec.Cmd) bool {
 	if tmpDir == "" {
 		tmpDir = "/tmp/goalos"
 	}
+	// SBPL 按真实路径匹配——四处 -D 注入前统一 firmlink 规范化
+	//（对齐 provider_darwin.go 生产面 convention；profile 契约=WORKSPACE_DIR/
+	// TMP_DIR/HOME_DIR/TARGET_BINARY 四参——缺参=profile 编译失败 fail-closed）。
+	for _, p := range []*string{&workspace, &tmpDir} {
+		if c, err := filepath.EvalSymlinks(*p); err == nil {
+			*p = c
+		}
+	}
 
 	// 受限档 profile=单一来源（R-1641③——internal/sandbox embed；禁止内联副本）
 	profile := sandbox.RestrictedSeatbeltProfile()
@@ -61,14 +69,22 @@ func applySandboxExec(cmd *exec.Cmd) bool {
 
 	// 获取 HOME 路径用于 Seatbelt 参数
 	homeDir, _ := os.UserHomeDir()
+	if c, err := filepath.EvalSymlinks(homeDir); err == nil {
+		homeDir = c
+	}
 
-	// 重写命令为 sandbox-exec
+	// 重写命令为 sandbox-exec（四参注入——profile 契约面，缺参=编译失败）
 	origPath := cmd.Path
+	if c, err := filepath.EvalSymlinks(origPath); err == nil {
+		origPath = c
+	}
 	origArgs := cmd.Args
 	cmd.Path = "/usr/bin/sandbox-exec"
 	cmd.Args = append([]string{
 		"sandbox-exec",
 		"-f", profilePath,
+		"-D", "WORKSPACE_DIR=" + workspace,
+		"-D", "TMP_DIR=" + tmpDir,
 		"-D", "HOME_DIR=" + homeDir,
 		"-D", "TARGET_BINARY=" + origPath,
 		"--",

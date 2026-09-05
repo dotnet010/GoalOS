@@ -18,4 +18,6 @@ func rawCloneThread(flags uintptr) (tid uintptr, errno uintptr)
 // cloneChildExit 是 rawCloneThread 的子进程落点——以裸 SYS_EXIT 终止当前
 // 线程，不执行任何 Go/栈操作。仅由 rawclone_linux_*.s 跳转，永不从 Go 代码调用。
 // （声明为满足 go vet asmdecl 对汇编符号的 Go 声明校验。）
+//
+//lint:ignore U1000 汇编跳转目标（rawclone_linux_*.s）——无 Go 调用方属设计使然
 func cloneChildExit()

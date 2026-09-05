@@ -474,10 +474,10 @@ func (h *winACHandle) Precheck(ctx context.Context) error {
 	if code == 0 || !strings.Contains(out, "PROBE-ERRNO=") || strings.Contains(out, "PROBE-ERRNO=0") {
 		return fmt.Errorf("runtime: Precheck fs 探针未被拒（写 home 成功=AC 边界失效）——out=%q", out)
 	}
-	// ②网络探针：出站必拒（零 capability——ERRNO=10013 族）
+	// ②网络探针：出站必拒（零 capability——ERRNO=WSAEACCES 族）
 	code, out = h.execInContainer(ctx, probeSelfExe(), []string{"__goalos-probe", "dial", "192.0.2.1:80"})
 	if code == 0 || strings.Contains(out, "PROBE-ERRNO=0") {
-		return fmt.Errorf("runtime: Precheck 网络探针未被拒（出站成功=零 capability 失效）——out=%q", out)
+		return fmt.Errorf("runtime: Precheck 网络探针未被拒（出站成功=零 capability 失效=边界失效）——out=%q", out)
 	}
 	h.mu.Lock()
 	if h.state == HandleReleased || h.state == HandleDestroyed {

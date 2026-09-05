@@ -44,5 +44,19 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
           staticcheck ./...
 
+      # U1000/SA4006 按构建上下文判定——单 GOOS 静态检查=其他平台符号面盲检
+      #（2026-09-06 实证事故：windows-daily 连红 4 次未察+linux/darwin 各压潜在项）。
+      - name: Staticcheck（跨 GOOS——linux/darwin 符号面）
+        shell: bash
+        run: |
+          GOOS=linux staticcheck ./...
+          GOOS=darwin staticcheck ./...
+
       - name: Test（Windows 适用子集——build-tag 分平台）
         run: go test -count=1 -timeout 120s ./internal/... ./pkg/...
+
+      # R-1654：AppContainer smoke 显式作业——管理员态（runneradmin）机制可用性实证。
+      # 非管理员面=实机/用户环境（red-evidence 族）——两面不互相冒充。
+      # verbose 出数=每次运行留完整探针证据链（ERRNO 数字族）。
+      - name: WinAC smoke（R-1654——AppContainer 机制 CI 实证：契约五面+TC-RT-001a 生产基座旁路）
+        run: go test -count=1 -v -timeout 180s -run "TestWinACProvider|TestRuntime_Bypass_SyscallDenied_Windows" ./internal/runtime/
