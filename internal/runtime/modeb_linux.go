@@ -34,7 +34,6 @@ type modeBConfig struct {
 	workspace  string   // 完全读写
 	tmpDir     string   // 完全读写
 	toolchains []string // 只读+执行（R-1659 v3 授权集——Linux 形态）
-	allowNet   bool     // true=不装 seccomp 网络过滤（协作档族——预留）
 }
 
 // modeBAvailable 实证式能力探测（不问静态声明——landlock ABI 版本查询+架构）。
@@ -219,7 +218,7 @@ func llAddPathRule(ruleset int, g llGrant) error {
 	access := g.access
 	var st syscall.Stat_t
 	if err := syscall.Fstat(fd, &st); err != nil {
-		return fmt.Errorf("Fstat %s: %w", real, err)
+		return fmt.Errorf("fstat %s: %w", real, err)
 	}
 	if st.Mode&syscall.S_IFDIR == 0 {
 		access &= uint64(llExec | llWriteFile | llReadFile | llTruncate)
