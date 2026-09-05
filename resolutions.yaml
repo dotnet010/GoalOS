@@ -8130,7 +8130,7 @@ resolutions:
         in_file: 会议纪要.md
         reason: "会议纪要必须登记「执行≠读」分离语义（R-1653）"
   R-1654:
-    desc: "CI spike 登记（会议 #262 续场 1——顾问复审④）: windows-daily 增 AppContainer smoke 作业（管理员态机制可用性实证；非管理员面=实机/用户环境，两面不互相冒充）。证据等级=施工项（登记待跑）。disposition: 生效"
+    desc: "CI spike 登记（会议 #262 续场 1——顾问复审④；#270 实证转正）: windows-daily 增 AppContainer smoke 作业（管理员态机制可用性实证；非管理员面=实机/用户环境，两面不互相冒充）。落地形态（#270）：显式 WinAC smoke 步（契约五面 verbose 出数）+TC-RT-001a 改挂生产 WinAC 基座（dual 双态断言——管理员态 runner 实测走「Precheck 通过→全探针矩阵」分支）；同场根治 windows-daily 连红 4 次观测盲区事故（staticcheck U1000 按构建上下文判定——bypass 助手定义面=使用面拆文件+staticcheck 跨 GOOS 步结构性堵洞）。证据等级=已实证（run e2eab9d success——scripts/red-evidence/2026-09-06-windows-daily-green.txt）。disposition: 生效"
     files: [会议纪要.md]
     verify:
       - must_exist: "R-1654"

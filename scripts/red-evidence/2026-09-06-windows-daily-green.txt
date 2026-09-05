@@ -1,0 +1,40 @@
+# windows-daily 根治+WinAC smoke CI 实证（2026-09-06——会议 #270）
+
+## 事故面（观测盲区实锤）
+
+windows-daily 自 d053caa（#267 首提）起**连红 4 次无人察觉**（0e0480d 绿→
+d053caa/4613b00/9045a41/f496e7d 全红）——本机无 gh CLI=run 状态零观测。
+断点=staticcheck 步（windows-daily 独有，make ci 不含 deadcode 目标=本地闸口差）：
+`internal\runtime\bypass_shared_test.go:18:6: func runBypassProbeDual is unused (U1000)`
+——U1000 按**构建上下文**判定：dual 助手仅 linux 引用，windows 上下文未用即红。
+
+## 根治（结构性，非点修）
+
+1. **bypass 助手按构建上下文拆文件**——shared=矩阵+断言（三平台共用）/
+   dual=linux||windows（bypass_dual_test.go）/单态=darwin 独占（bypass_darwin_test.go）。
+   定义面=使用面构造性对齐，同类 U1000 不可能再现。
+2. **TC-RT-001a 改挂生产 WinAC Provider**（agentbox 随 R-1648 换血退役）+dual 双态
+   断言+拆 GOALOS_AGENTBOX_CI 门禁（WinAC 非管理员本机已实证，无需隔离窗）。
+3. **windows-daily 增显式 WinAC smoke 作业**（R-1654 承载）+**staticcheck 跨 GOOS 步**
+   （GOOS=linux/darwin——单宿主静态检查=其他平台符号面盲检，结构性堵盲区）。
+4. 跨 GOOS 潜伏项同清（staticcheck 三 GOOS 本地全绿后才推）：
+   - executor_linux.go verifySeccompLoaded 零调用删除（R-1664 孤儿化遗留）
+   - modeb_linux.go allowNet 死字段删+Fstat→fstat（ST1005）
+   - rawclone_linux.go cloneChildExit lint:ignore（汇编跳转目标，asmdecl 声明需要）
+   - **executor_darwin.go 四参注入修复**：SBPL profile 契约=WORKSPACE_DIR/TMP_DIR/
+     HOME_DIR/TARGET_BINARY 四 (param) 引用，pluginrunner 路径仅注二参=profile
+     编译必败潜在 bug（SA4006 钓出）——对齐 provider_darwin 生产面+EvalSymlinks
+     规范化。**darwin 实机验证=诚实缺口登记**（本机无 mac，评审级修复）。
+
+## CI 实证（R-1654 管理员态机制可用性——转正）
+
+run 33984193069 后首个修复 run（分支 fix/windows-daily-u1000，SHA e2eab9d）：
+**conclusion=success**（2026-09-05T19:00Z 起跑）。作业日志实证：
+- `PASS: TestWinACProvider_Boundary / ToolchainGranularity / Lifecycle / D5Ordering / ProfileEntropy`（契约五面，windows-latest 管理员态 runner）
+- `PASS: TestRuntime_Bypass_SyscallDenied_Windows`——TC-RT-001a dual 日志
+  「Precheck 通过——平台有承载能力，进入全探针矩阵」=**管理员态 AppContainer
+  机制可用+三探针矩阵全拒**（home 写 ERROR_ACCESS_DENIED/.ssh 读拒/出站 WSAEACCES）
+- staticcheck 宿主+跨 GOOS 两步全绿
+
+非管理员面=本机实机（2026-09-06-winac-{provider,hardening}-green.txt）——
+两面分列不冒充（R-1654 原文纪律）。
