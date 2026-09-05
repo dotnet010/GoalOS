@@ -4,9 +4,16 @@
 // Windows 受限档基座；spike 证据链=scripts/red-evidence/2026-08-3*~09-01 族）。
 //
 // 决议落地映射：
-//   R-1661 v2 生命周期：session profile（GoalOS-AC-<goalID>-<actionID> 命名确定化）
-//     +Job KILL_ON_JOB_CLOSE（内核级绞杀不依赖 daemon 存活）+DeleteAppContainerProfile
-//     退避重试（上限 10 次）+重复 Release 幂等。
+//   R-1661 v2 生命周期：session profile（熵化一次性名）+Job KILL_ON_JOB_CLOSE
+//     （内核级绞杀不依赖 daemon 存活）+DeleteAppContainerProfile 退避重试
+//     （上限 10 次）+重复 Release 幂等。
+//   R-1667 v2 命名纪律（会议 #269 Jobs 裁决）：profile 名=GoalOS-AC-<action 前缀>
+//     -<crypto/rand 64bit 熵>——一次性资源（同名重建永久损坏实机纪律）；
+//     ALREADY_EXISTS=换名重试×3（严禁 derive 复用继承残留态）；其余失败=fail-closed
+//     带真实 HRESULT（pszDescription 不可为 NULL——幻影 profile 实锤归因）。
+//   R-1669 超时处决 fail-safe（会议 #269 Jobs 裁决）：execInContainer 超时路径
+//     TerminateProcess 后 2s bracket 确认物理死亡；未死=卡入不可中断内核态→
+//     tainted 标记→Release 焊死 FreeSid/DeleteProfile（宁泄露不 UAF）。
 //   R-1659 v3 具名能力：DeriveCapabilitySidsFromName("GoalOS-TC-<name>") 纯名称派生
 //     （零 profile 实体零残留）——工具链目录 RX 一次授予（幂等）；session 容器
 //     Capabilities[] 按契约声明携带（SE_GROUP_ENABLED——=0 静默无效实机实锤）。
@@ -14,15 +21,20 @@
 //   R-1653：执行≠读分离（启动面=CreateProcess 父 token；运行期=AC token）。
 //   F6：子进程 CWD 显式=workspace（继承 daemon CWD 不可读=「当前目录无效」实机实证）。
 //   R-1666：Precheck=原生探针（__goalos-probe——ERRNO 数字证据）。
+//   R-1668（会议 #268）：锁只护 state——执行体与绞杀全在锁外+wg 在飞计数
+//     （Execute 全程持锁=Release 绞杀死锁实机实锤）。
 package runtime
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -39,7 +51,6 @@ var (
 
 	procCreateAppContainerProfile     = winACUserenv.NewProc("CreateAppContainerProfile")
 	procDeleteAppContainerProfile     = winACUserenv.NewProc("DeleteAppContainerProfile")
-	procDeriveAppContainerSidFromName = winACUserenv.NewProc("DeriveAppContainerSidFromAppContainerName")
 	procDeriveCapabilitySidsFromName  = winACKernelbase.NewProc("DeriveCapabilitySidsFromName")
 	procSetEntriesInAclW              = winACAdvapi.NewProc("SetEntriesInAclW")
 )
@@ -83,34 +94,40 @@ type trusteeW struct {
 
 // ─── profile/SID 原语 ───
 
-// winACCreateProfile 创建 AppContainer profile（幂等——已存在则派生 SID）。
-// 实机实锤（2026-09-06 Debug3）：pszDescription 不可为 NULL——=0 则 create 静默
-// E_INVALIDARG(0x80070057)，若盲目 derive 兜底=产出幻影 profile（derive 纯哈希
-// 恒成功不要求 profile 存在），下游 spawn 报 file-not-found 且难以归因。
-// 故兜底仅限「已存在」(0x800700B7)；其余失败=立即报错带真实 HRESULT（fail-closed）。
-func winACCreateProfile(name string) (*windows.SID, error) {
-	namePtr, err := windows.UTF16PtrFromString(name)
-	if err != nil {
-		return nil, fmt.Errorf("profile 名含 NUL: %w", err)
+// winACCreateProfileFresh 创建 AppContainer profile——熵化命名+撞名有界重试
+//（R-1667 v2——会议 #269 Jobs 裁决）：
+//   - 名=GoalOS-AC-<action 净化前缀≤24>-<crypto/rand 64bit 熵 16hex>——profile 名
+//     是一次性资源（同名重建永久损坏实机纪律），熵后缀构造性防撞；
+//   - ALREADY_EXISTS（0x800700B7）=偶发撞名→换新名重试（上限 3 次）——
+//     严禁 derive 复用（继承前序残留注册表/包虚拟化脏状态）；
+//   - 其余任何失败=立即 fail-closed 带真实 HRESULT。
+// 历史教训（2026-09-06 实机实锤）：pszDescription 不可为 NULL——=0 则 create
+// 静默 E_INVALIDARG；若再叠「全失败 derive 兜底」=产出幻影 profile（derive 纯哈希
+// 恒成功不要求实体存在），下游 spawn 报 file-not-found 且归因被误导。
+func winACCreateProfileFresh(actionID string) (string, *windows.SID, error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		var entropy [8]byte // 64bit——session 粒度防撞充裕
+		if _, err := rand.Read(entropy[:]); err != nil {
+			return "", nil, fmt.Errorf("熵源失败: %w", err)
+		}
+		name := fmt.Sprintf("GoalOS-AC-%s-%s", winACSanitizeN(actionID, 24), hex.EncodeToString(entropy[:]))
+		namePtr, err := windows.UTF16PtrFromString(name)
+		if err != nil {
+			return "", nil, fmt.Errorf("profile 名含 NUL: %w", err)
+		}
+		var sid *windows.SID
+		r1, _, callErr := procCreateAppContainerProfile.Call(
+			uintptr(unsafe.Pointer(namePtr)), uintptr(unsafe.Pointer(namePtr)),
+			uintptr(unsafe.Pointer(namePtr)), 0, 0, uintptr(unsafe.Pointer(&sid)))
+		if r1 == 0 {
+			return name, sid, nil
+		}
+		if uint32(r1) == 0x800700B7 { // HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)=偶发撞名
+			continue
+		}
+		return "", nil, fmt.Errorf("CreateAppContainerProfile %s: HRESULT=0x%08X: %v（fail-closed——R-1667 v2）", name, uint32(r1), callErr)
 	}
-	var sid *windows.SID
-	r1, _, err := procCreateAppContainerProfile.Call(
-		uintptr(unsafe.Pointer(namePtr)), uintptr(unsafe.Pointer(namePtr)),
-		uintptr(unsafe.Pointer(namePtr)), 0, 0, uintptr(unsafe.Pointer(&sid)))
-	if r1 == 0 {
-		return sid, nil
-	}
-	if uint32(r1) != 0x800700B7 { // HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)
-		return nil, fmt.Errorf("CreateAppContainerProfile %s: HRESULT=0x%08X: %v", name, uint32(r1), err)
-	}
-	// 已存在=派生（幂等——profile 创建非幂等，派生恒成功）
-	sid = nil
-	r1, _, err = procDeriveAppContainerSidFromName.Call(
-		uintptr(unsafe.Pointer(namePtr)), uintptr(unsafe.Pointer(&sid)))
-	if r1 != 0 {
-		return nil, fmt.Errorf("DeriveAppContainerSid: %v", err)
-	}
-	return sid, nil
+	return "", nil, fmt.Errorf("profile 撞名重试 3 次耗尽（fail-closed——R-1667 v2）")
 }
 
 // winACDeleteProfile 删除（退避重试——R-1661 v2②；幂等=不存在不炸）。
@@ -334,10 +351,8 @@ func (p *winACProvider) Acquire(_ context.Context, req LeaseRequest) (RuntimeHan
 	if !p.prepared {
 		return nil, fmt.Errorf("%w: Prepare 未调用", ErrNoBackend)
 	}
-	// profile 名=一次性唯一（2026-09-01 实机实证：DeleteAppContainerProfile 后同名
-	// 重建=永久损坏窗口（20s+ 永不恢复——包仓库名碑化）；尾部纳秒戳=防同名重用）
-	profile := fmt.Sprintf("GoalOS-AC-%s-%s-%d", winACSanitize(req.GoalID), winACSanitize(req.ActionID), time.Now().UnixNano())
-	sid, err := winACCreateProfile(profile)
+	// profile=熵化一次性名（R-1667 v2——撞名换新有界重试，derive 复用兜底已全删）
+	profile, sid, err := winACCreateProfileFresh(req.ActionID)
 	if err != nil {
 		return nil, fmt.Errorf("runtime: AppContainer profile 创建失败: %w", err)
 	}
@@ -389,8 +404,8 @@ func winACSelectCaps(capSids map[string]*windows.SID, contract *VerifiedContract
 	return caps
 }
 
-// winACSanitize profile 名净化（AppContainer 名=字母数字有限字符集，长度封顶 40）。
-func winACSanitize(s string) string {
+// winACSanitizeN profile 段净化（AppContainer 名=字母数字有限字符集）+长度封顶。
+func winACSanitizeN(s string, maxLen int) string {
 	var b strings.Builder
 	for _, r := range s {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
@@ -398,8 +413,8 @@ func winACSanitize(s string) string {
 		}
 	}
 	out := b.String()
-	if len(out) > 40 {
-		out = out[:40]
+	if len(out) > maxLen {
+		out = out[:maxLen]
 	}
 	if out == "" {
 		out = "x"
@@ -422,6 +437,11 @@ type winACHandle struct {
 	// 2026-09-06 实机实锤：Execute 全程持锁时 Release 锁死（sleeper 睡满全程），
 	// 故锁只护 state，执行体与绞杀全在锁外。
 	wg sync.WaitGroup
+	// tainted=不可杀进程实锤标记（R-1669——会议 #269 Jobs 裁决）：execInContainer
+	// 超时路径 TerminateProcess+2s bracket 仍未物理死亡=进程卡入不可中断内核态——
+	// 此时严禁 FreeSid/DeleteProfile（宁承受单次句柄泄露，绝不在存活进程下释放
+	// SID=UAF 焊死）。atomic：exec 锁外路径写，Release wg.Wait 后读（happens-after）。
+	tainted atomic.Bool
 }
 
 func (h *winACHandle) ID() string { return "winac-" + h.profile }
@@ -585,7 +605,15 @@ func (h *winACHandle) execInContainer(_ context.Context, binary string, args []s
 	wait, err := windows.WaitForSingleObject(pi.Process, 120000)
 	if err != nil || wait != 0 {
 		_ = windows.TerminateProcess(pi.Process, 1)
-		return -1, "WINAC-FATAL: 等待失败/超时"
+		// R-1669 物理死亡 bracket：TerminateProcess 异步——2s 内未死=进程卡入
+		// 不可中断内核/驱动态，标记 tainted（Release 跳过 FreeSid/DeleteProfile——
+		// 宁泄露句柄绝不在存活进程下释放 SID，UAF 焊死）。
+		ev, werr := windows.WaitForSingleObject(pi.Process, 2000)
+		if werr != nil || ev != windows.WAIT_OBJECT_0 {
+			h.tainted.Store(true)
+			return -1, fmt.Sprintf("WINAC-FATAL: 等待超时且强杀 2s bracket 未确认物理死亡（ev=%d werr=%v——内核态 wedge，句柄已 tainted，Release 泄露式跳过回收）", ev, werr)
+		}
+		return -1, "WINAC-FATAL: 等待失败/超时（已强杀并确认物理死亡）"
 	}
 	var code uint32
 	_ = windows.GetExitCodeProcess(pi.Process, &code)
@@ -610,10 +638,19 @@ func (h *winACHandle) Release(context.Context) error {
 	windows.CloseHandle(h.job) // KILL_ON_JOB_CLOSE=内核级绞杀（先绞杀再等收尾——反序=白等在飞超时）
 	h.wg.Wait()                // 在飞 execInContainer 收尾后方可 FreeSid/收 ACE
 	var errs []string
+	// ACE 回收不受 taint 影响（收窄存活进程访问面=安全方向；不触碰 SID 内存/profile 实体）
 	for _, root := range []string{h.p.workspace, h.p.tmpDir} {
 		if err := winACRevokeACE(root, h.sid); err != nil {
 			errs = append(errs, err.Error())
 		}
+	}
+	if h.tainted.Load() {
+		// R-1669 fail-safe：不可杀进程仍在存活——FreeSid/DeleteProfile 焊死跳过
+		//（宁泄露单次句柄+profile 残留，绝不在存活进程下释放=UAF 构造性不可能）。
+		// 泄露面=注册表 Mappings 项+Packages 虚拟化目录（profile 名熵化一次性，零复用零污染后续 session）。
+		// state 已于本函数顶部锁内翻转=HandleReleased（幂等不受损）。
+		return fmt.Errorf("runtime: CRITICAL 句柄 tainted（不可杀进程存活）——已泄露式跳过 profile/SID 回收（R-1669 fail-safe；泄露 profile=%s 需人工核查）",
+			h.profile)
 	}
 	if err := winACDeleteProfile(h.profile); err != nil {
 		errs = append(errs, err.Error())

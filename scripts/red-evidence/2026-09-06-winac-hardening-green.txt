@@ -1,0 +1,35 @@
+# WinAC 硬化包转绿证据（2026-09-06——会议 #269 Jobs 裁决落地）
+
+顾问外部审计四条 → PM 定性（外部参考，内部独立裁决，Jobs 把关）→ 实现层独立裁决
+（存档：开发文档/顾问报告存档-2026-08-31-Windows强隔离重构评审系列.md 末节）→
+Jobs 以规范全文裁决。本文件=落地后转绿实证。
+
+## 裁决落点 vs 顾问原案
+
+| 顾问项 | 裁决 | 落点 |
+|---|---|---|
+| ①UUID 命名+禁复用 | **采纳变体（超顾问案）** | 熵化命名 GoalOS-AC-<action≤24>-<64bit 熵16hex>；ALREADY_EXISTS=换新名重试×3→fail-closed；derive 兜底全删（proc 变量同删） |
+| ②TerminateJobObject+Wait 串行回收 | **主架构不采纳+收窄采纳** | KILL_ON_JOB_CLOSE 维持（daemon 崩溃仍绞杀——顾问形态崩溃即孤儿=降级）；收窄=超时路径 TerminateProcess 后 2s bracket+未确认死亡=tainted→Release 焊死 FreeSid/DeleteProfile（宁泄露不 UAF——Jobs 规范硬性条款） |
+| ③绑定 windows.ERROR_ACCESS_DENIED | **采纳** | 测试断言绑常量（5/10013 魔数退役）；PROBE-ERRNO 数字线不动（R-1666）；probe 合成码 22→-3（负数域——不借 POSIX EINVAL） |
+| ④TestS4 谓词化解耦 | **维持议程制** | 零代码（L 级重估=Jobs 决议事项，#268 议程已登记；顾问误读——测试是要求 L2/L3 非硬编码 L1） |
+
+## 转绿实证（Win11 26200 非管理员，Go 1.25.14）
+
+```
+=== RUN   TestWinACProvider_Boundary            --- PASS (0.77s)
+=== RUN   TestWinACProvider_ToolchainGranularity --- PASS (0.47s)
+=== RUN   TestWinACProvider_Lifecycle            --- PASS (0.67s)
+=== RUN   TestWinACProvider_D5Ordering           --- PASS (0.02s)
+=== RUN   TestWinACProvider_ProfileEntropy       --- PASS (0.08s)
+    熵名样本: "GoalOS-AC-entropy-a-7008655089ae2a43" / "GoalOS-AC-entropy-a-c8c2727508a8ec21"
+```
+
+闸口：vet/build/11 检查脚本/xinchuang/linux 交叉编译/全量测试 27 包绿
+（TestS4 Windows 静态 L1=既存平台条件项——④议程制在册；check-resolution-propagation
+S-token 段=python3 Store stub exit 49 本地病灶，CI Linux 为准）。
+
+## 诚实缺口（不虚报绿）
+
+- ALREADY_EXISTS 撞名重试路径：熵空间 2^64 机器不可强制撞名=构造性免证（评审级）。
+- tainted 路径：内核态 wedge 需驱动级注入=不可机器复现（评审级覆盖；真发生时
+  行为=CRITICAL 错误+泄露式跳过——fail-safe 方向正确性由设计论证承载）。
