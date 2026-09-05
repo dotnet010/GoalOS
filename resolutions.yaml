@@ -8220,3 +8220,35 @@ resolutions:
       - must_exist: "部分解决"
         in_file: 会议纪要.md
         reason: "会议纪要必须含「部分解决」结论词纪律（R-1663）"
+
+  # ═══ 会议 #267: tag CI 实证场+双引擎收敛（2026-09-01）═══
+  R-1664:
+    desc: "双引擎动态收敛——Linux 受限档基座（会议 #267）: 能力探测实证式（不问 agentbox Available() 静态声明）；模式 A=agentbox（userns 可用）/模式 B=免 userns（landlock+seccomp——AppArmor 不拦三原语，goalos-test 实机确认）；双不可用=fail-closed。模式 B 布防=四大暗坑（LockOSThread+TSYNC/socket+socketpair domain 白名单仅 AF_UNIX/标准运行时集/home 链 READ_DIR）+P0/P1（网络 syscall 解耦/白名单非黑名单/O_NOFOLLOW ELOOP 熔断/继承 FD 清理/能力语义分列/FS 粒度/架构熔断）。抽象套接字诚实声明=模式 B 激活时 daemon 输出（CVE-2020-15257 族）。证据等级=已实证（goalos-test 九探针+TC-RT-001b 模式 B 闭环）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1664"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1664"
+      - must_exist: "双引擎"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记双引擎收敛（R-1664）"
+  R-1665:
+    desc: "tag 燃尽纪律（会议 #267）: 同名 tag 不同内容永久禁止复用——不依赖「module path 恰好不匹配」的偶然状态证成（日后一致化/改名后纪律不松动）。v0.3.1=燃尽号（首跑红=闸口有效实证的历史记录）；发 v0.3.2。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1665"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1665"
+      - must_exist: "燃尽"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 tag 燃尽纪律（R-1665）"
+  R-1666:
+    desc: "探针原生 errno 化——脚本运行时禁令（会议 #267——PM 指令立刻根治不登记）: PowerShell/cmd 探针全退役（企业组策略 ExecutionPolicy/AppLocker/CLM 面=探针自崩≠边界生效）；纯 Go 自 re-exec __goalos-probe（write/read/dial）输出 PROBE-ERRNO=<n> 数字证据——双平台同构，本地化文本/GBK hack/C locale 假设全物理删除（GBK 大白话：中文 Windows 进程报错是 GBK 字节流，英文 Access is denied 匹配不上 被拒绝访问。——真拒绝曾被误判非边界拒绝形态）。证据等级=已实证。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1666"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1666"
+      - must_exist: "PROBE-ERRNO"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 PROBE-ERRNO 数字证据形态（R-1666）"

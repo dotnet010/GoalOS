@@ -28,6 +28,7 @@ import (
 	"github.com/goalos/goalos/internal/metrics"
 	"github.com/goalos/goalos/internal/missionengine"
 	"github.com/goalos/goalos/internal/persona"
+	"github.com/goalos/goalos/internal/runtime/probe"
 	"github.com/goalos/goalos/internal/pluginrunner"
 	"github.com/goalos/goalos/internal/scheduler"
 	"github.com/goalos/goalos/internal/skills"
@@ -40,6 +41,18 @@ const (
 )
 
 func main() {
+	// 子命令拦截（R-1666/R-1664——re-exec 自身=零外部二进制）：
+	// __goalos-probe=原生探针（errno 数字证据）；__goalos-modeb=模式 B 沙箱施加器
+	// （Linux——免 userns landlock+seccomp；其他平台不应出现，出现即拒）。
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "__goalos-probe":
+			os.Exit(probe.Main(os.Args[2:]))
+		case "__goalos-modeb":
+			modebEntry()
+		}
+	}
+
 	startTime := time.Now()
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Println("[Daemon] GoalOS starting...")

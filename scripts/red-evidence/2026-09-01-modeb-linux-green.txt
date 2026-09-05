@@ -1,0 +1,18 @@
+# 模式 B 免 userns 沙箱 GREEN 留痕（2026-09-01）
+# 机器: goalos-test Ubuntu 24.04 kernel 6.8.0-139（AppArmor 限 userns=1——模式 B 目标环境）
+# commit: d053caa4abc321a228369636231f05d5c1e5965a+working tree
+# 命令: prototype-linux.test -test.run TestModeB_Spike（GOOS=linux 交叉编译 scp 传输）
+
+=== RUN   TestModeB_Spike
+    modeb_linux_test.go:445: 沙箱输出:
+        PROBE ws-write OK
+        PROBE home-write DENIED errno=13
+        PROBE ssh-read DENIED errno=13
+        PROBE inet-dial DENIED errno=13
+        PROBE socketpair-inet DENIED errno=13
+        PROBE unix-loop OK
+        PROBE dyn-bin OK out="ok.txt"
+        PROBE symlink-escape DENIED errno=13
+        PROBE grandchild DENIED errno=13
+--- PASS: TestModeB_Spike (0.01s)
+PASS
