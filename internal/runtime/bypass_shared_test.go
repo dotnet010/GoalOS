@@ -137,9 +137,11 @@ func runBypassProbeMatrix(t *testing.T, tc string, guard *HandleGuard) {
 	}
 }
 
-// assertBoundaryDenied 断言请求被 OS 边界拒绝（子进程级 EPERM 形态）。
+// assertBoundaryDenied 断言请求被 OS 边界拒绝（R-1666——ERRNO 数字证据族）。
 // 反虚假绿（2026-08-29 实证事故——execvp 假象）：输出含 "sandbox-exec:" 前缀=
 // 边界从未生效（进程未启动），一律不计为边界证据；成功执行=边界失效=CRITICAL。
+// 原生探针形态（2026-09-01）：PROBE-ERRNO=0=泄漏=CRITICAL；PROBE-ERRNO=<非零>
+// =OS 拒绝（数字证据——本地化文本零依赖）；探针行缺席=形态违规=红。
 func assertBoundaryDenied(t *testing.T, tc, what string, res ExecuteResult, err error) {
 	t.Helper()
 	if err == nil && res.ExitCode == 0 {
@@ -148,25 +150,12 @@ func assertBoundaryDenied(t *testing.T, tc, what string, res ExecuteResult, err 
 	if strings.Contains(res.Output, "sandbox-exec:") {
 		t.Fatalf("%s：%s 为 execvp 级失败（边界从未生效的伪证——不计数）——Output=%q", tc, what, res.Output)
 	}
-	// 平台拒绝证据族（EACCES=Landlock/ACL 语义同 EPERM——TC-RT-001a/b 平台机制差异）：
-	// darwin=EPERM；linux=「Permission denied」EACCES（Landlock）/EPERM（seccomp）/代理 denied；
-	// windows=「Access is denied」+GBK 本地化形态（"\xbe\xdc\xbe\xf8"=GBK「拒绝」——
-	// 中文 Windows 子进程 stderr=GBK 字节流，UTF-8 字面量匹配不上——2026-08-31 实机实证）。
-	// execvp 级假象排除已在上游断言。
-	deniedEvidence := []string{"Operation not permitted", "Permission denied", "Access is denied",
-		"request denied", "connection to blocked", "denied by filter",
-		"\xbe\xdc\xbe\xf8",   // GBK「拒绝」
-		"\xb5\xb1\xc7\xb0\xc4\xbf\xc2\xbc\xce\xde\xd0\xa7", // GBK「当前目录无效」（CWD 未授予面=边界证据族）
+	// 原生探针 ERRNO 断言（R-1666）——文本证据族全退役（GBK/本地化打地鼠根治）
+	if strings.Contains(res.Output, "PROBE-ERRNO=0") {
+		t.Fatalf("%s CRITICAL：%s 探针操作成功——边界失效（ERRNO=0=泄漏）——Output=%q", tc, what, res.Output)
 	}
-	found := false
-	for _, ev := range deniedEvidence {
-		if strings.Contains(res.Output, ev) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("%s：%s 非 OS 边界拒绝形态（应为子进程级拒绝证据族 %v）——ExitCode=%d Output=%q err=%v",
-			tc, what, deniedEvidence, res.ExitCode, res.Output, err)
+	if !strings.Contains(res.Output, "PROBE-ERRNO=") {
+		t.Fatalf("%s：%s 探针证据缺席（应含 PROBE-ERRNO=<n> 数字证据行）——ExitCode=%d Output=%q err=%v",
+			tc, what, res.ExitCode, res.Output, err)
 	}
 }

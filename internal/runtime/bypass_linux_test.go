@@ -14,5 +14,7 @@ package runtime
 import "testing"
 
 func TestRuntime_Bypass_SyscallDenied_Linux(t *testing.T) {
-	runBypassProbeDual(t, "TC-RT-001b", NewAgentboxProvider(t.TempDir(), t.TempDir(), "linux"))
+	// 双引擎收敛生产入口（R-1664——模式 A/B 实证选择；goalos-test Ubuntu 24.04
+	// AppArmor 默认环境=模式 B 全探针绿正证闭环）。
+	runBypassProbeDual(t, "TC-RT-001b", NewLinuxRestrictedProvider(t.TempDir(), t.TempDir()))
 }
