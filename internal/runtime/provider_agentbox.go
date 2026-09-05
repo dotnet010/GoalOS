@@ -156,20 +156,29 @@ func (h *agentboxHandle) Precheck(ctx context.Context) error {
 	if h.state != HandleReady && h.state != HandleRunning {
 		return ErrInvalidState
 	}
-	// ①fs 探针：写工作区外路径
+	// ①fs 探针：写用户 home（受限档必拒面——DenyWrite=home 契约；DAC 放行而
+	// 边界必拒=探测力真实。2026-08-31 Ubuntu 24.04 实机：写 /usr=DAC 平凡拒
+	// 假绿修正——S-266-01）。边界未生效（探针写成功）=fail-closed 拒绝
+	// 进入 Running（S-266-02——agentbox fail-open 姿态的 GoalOS 侧闸）。
 	res, err := h.p.mgr.ExecArgs(ctx, probeWriteBin(), probeWriteArgs())
 	if err != nil {
 		return fmt.Errorf("runtime: Precheck fs 探针执行失败: %w", err)
 	}
 	if res.ExitCode == 0 {
-		return fmt.Errorf("runtime: Precheck fs 探针未被 fs 禁闭拒绝（写工作区外成功=边界失效）——stdout=%q", res.Stdout)
+		// 探针文件已落到真实 home（边界缺席实锤）——尽力清理，不吞错也不放大
+		for _, a := range probeWriteArgs() {
+			if strings.Contains(a, "goalos-precheck-probe") {
+				_ = os.Remove(a)
+			}
+		}
+		return fmt.Errorf("runtime: Precheck fs 探针未被 fs 禁闭拒绝（写 home 成功=边界失效——平台无受限档承载能力，受限档不可用）——stdout=%q", res.Stdout)
 	}
 	// ②网络探针：出站连接必须被拒
 	res2, err := h.p.mgr.ExecArgs(ctx, probeNetBin(), probeNetArgs())
 	if err != nil {
 		return fmt.Errorf("runtime: Precheck 网络探针执行失败: %w", err)
 	}
-	if res2.ExitCode == 0 {
+	if res2.ExitCode == 0 || strings.Contains(res2.Stdout, "NET-LEAK") {
 		return fmt.Errorf("runtime: Precheck 网络探针未被拒绝（出站成功=NetworkBlocked 失效）——stdout=%q", res2.Stdout)
 	}
 	h.state = HandleRunning
