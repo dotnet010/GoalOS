@@ -1,0 +1,82 @@
+# WinAC Provider 排障→转绿证据链（2026-09-06）
+
+R-1648 Windows AppContainer Provider 施工。三面红→归因→修正→四面全绿全过程。
+
+## 红态（修正前）
+
+```
+=== RUN   TestWinACProvider_Boundary
+    provider_winac_windows_test.go:99: Precheck: runtime: Precheck fs 探针未被拒
+        ——out="WINAC-FATAL: CreateProcess: The system cannot find the file specified.
+        cmdline=\"C:\\...\\runtime.test.exe\" \"__goalos-probe\" \"write\" ... cwd=..."
+--- FAIL: TestWinACProvider_Boundary (0.01s)
+```
+ToolchainGranularity/Lifecycle 同形态红（Precheck 同一断点）。
+
+## 归因链（二分序列，全留痕）
+
+环境变量逐一面排除（同一测试进程内对照）：
+
+| 嫌疑面 | 实验 | 结果 |
+|---|---|---|
+| 机器态/环境劣化 | 同进程跑 Debug2（spike 保真复刻） | 全绿 err=nil——环境没变 |
+| profile 同名重建损坏 | 纳秒唯一名（已修） | 仍红——非此因 |
+| inherit 句柄/CWD/SUSPENDED/入 Job | Debug2 (g) 全保真 | 绿——非此因 |
+| 自二进制带参 spawn | Debug2 (f) runtime.test.exe+参数 | 绿——非此因 |
+| workspace/tmpDir ACE 授予 | Debug2 (c)/(d) 授予后 spawn | 绿——非此因 |
+| **profile 名长度（46 vs 34）** | Debug3 长度阶梯 | **全档 create 败——但长度无关** |
+| **create 第三参数 pszDescription** | Debug3 vs Debug2 直调对照 | **根因实锤** |
+
+## 根因①：pszDescription=NULL → 幻影 profile
+
+`CreateAppContainerProfile` 六参数中第三参数（pszDescription）**不可为 NULL**：
+
+- Debug2 直调传 `namePtr`（非 NULL）→ HRESULT=0x00000000 ✅
+- provider `winACCreateProfile` 传 `0` → **HRESULT=0x80070057（E_INVALIDARG）** ❌
+
+失败被 derive 兜底吞掉：`DeriveAppContainerSidFromAppContainerName` 是纯名称哈希、
+**恒成功、不要求 profile 存在**——产出语义完好（S-1-15-2-* 形态）但无实体的
+「幻影 profile SID」。SECURITY_CAPABILITIES 引用幻影 profile → CreateProcess 报
+`The system cannot find the file specified`（与「同名重建永久损坏」同失败形态——
+内核找不到 profile 实体）。
+
+Debug3 原始输出（长度阶梯 34/46/50/64 全败=长度无关实锤）：
+```
+len=34 create 败 HRESULT=0x80070057 —— derive 兜底=幻影 profile
+len=34 derive 成功但 spawn: The system cannot find the file specified.（幻影 profile 实锤）
+len=46 create 败 HRESULT=0x80070057（同上）……len=50/64 同
+```
+
+**修正**（provider_winac_windows.go winACCreateProfile）：
+1. 第三参数传 `namePtr`（非 NULL）；
+2. 兜底语义硬化——仅 `HRESULT=0x800700B7`（ERROR_ALREADY_EXISTS）准许 derive
+   兜底，其余失败立即报错带真实 HRESULT（幻影 profile 构造性不可能再现）。
+
+## 根因②：Execute 全程持锁 → Release 绞杀死锁
+
+根因①修后 Lifecycle 转红新形态：测试整跑 60.21s=sleeper 睡满全程——
+`Execute` 持 `h.mu` 全程（WaitForSingleObject 60s），`Release` 首句 `h.mu.Lock()`
+阻塞到 sleeper 自然结束，KILL_ON_JOB_CLOSE 绞杀窗口完全错过。
+
+**修正**：锁粒度拆分——`h.mu` 只护 state（校验/翻转瞬时完成）；Execute/Precheck
+锁内 `wg.Add(1)` 后解锁执行；Release 锁外 `CloseHandle(job)`（先绞杀）→
+`wg.Wait()`（等在飞收尾）→收 ACE/删 profile/FreeSid（防 use-after-free）。
+HandleGuard 无自带锁（纯前置校验委托 spi.go:146-238）——死锁确在 provider 层。
+
+## 转绿（修正后）
+
+```
+=== RUN   TestWinACProvider_Boundary            --- PASS (0.71s)
+    ①home 写 ERRNO=5 拒 ②~/.ssh 读拒 ③出站 ERRNO=10013 拒 ④workspace 写通
+=== RUN   TestWinACProvider_ToolchainGranularity --- PASS (0.45s)
+    未声明 toolchain=拒 / 声明 toolchain:pytool=通（具名能力 SID 粒度）
+=== RUN   TestWinACProvider_Lifecycle            --- PASS (0.66s——60.21s→0.66s)
+    sleep 60000 探针被 Job 绞杀（<10s 契约）+重复 Release 幂等
+=== RUN   TestWinACProvider_D5Ordering           --- PASS (0.02s)
+```
+
+抖动：Lifecycle ×20 连跑全绿（14.6s，0.73s/次稳定——并发面无 flake）。
+race 探测器本机不可用（无 gcc/CGO——windows build-tag 文件 CI race 亦覆盖不到，
+以设计纪律+高重复抖动代偿）。
+
+环境：Windows 11 Pro for Workstations 26200，非管理员态，Go 1.25.14。

@@ -8252,3 +8252,23 @@ resolutions:
       - must_exist: "PROBE-ERRNO"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 PROBE-ERRNO 数字证据形态（R-1666）"
+  R-1667:
+    desc: "Win32 profile 创建纪律——兜底 HRESULT 白名单化（会议 #268）: CreateAppContainerProfile pszDescription 不可为 NULL（=0 则 create 静默 E_INVALIDARG 0x80070057）；任何「失败→派生兜底」逻辑必须按 HRESULT 白名单触发（仅 ALREADY_EXISTS=0x800700B7）——全失败兜底=幻影 profile（derive 纯哈希恒成功不要求实体存在）→下游 spawn file-not-found 且错误消息误导归因（实机实锤）。适用=一切「创建→失败→旁路派生」形态 Win32 资源调用。证据等级=已实证（Debug3 阶梯+契约测试转绿，Win11 26200 实机——scripts/red-evidence/2026-09-06-winac-provider-green.txt）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1667"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1667"
+      - must_exist: "幻影 profile"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记幻影 profile 根因（R-1667）"
+  R-1668:
+    desc: "句柄锁粒度纪律——绞杀在锁外（会议 #268）: 持有「执行体+生命周期回收」双职责句柄——锁只护 state（校验/翻转瞬时）；执行体锁外运行+WaitGroup 在飞计数；Release=锁内翻 state→锁外绞杀（CloseHandle job）→wg.Wait 在飞收尾→资源回收（FreeSid/ACE/profile）。倒序（绞杀在锁内/全程持锁执行）=绞杀死锁（实机实锤 sleeper 睡满 60.21s，KILL_ON_JOB_CLOSE 窗口错过）。在飞 Execute 被绞杀=非零+部分输出（诚实失败不粉饰）。证据等级=已实证（Lifecycle 60.21s→0.66s+20× 抖动稳定）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1668"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1668"
+      - must_exist: "绞杀在锁外"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记绞杀在锁外纪律（R-1668）"

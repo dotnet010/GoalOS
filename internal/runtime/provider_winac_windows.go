@@ -1,0 +1,653 @@
+//go:build windows
+
+// provider_winac_windows.go——Windows AppContainer 受限档 Provider（R-1648——
+// Windows 受限档基座；spike 证据链=scripts/red-evidence/2026-08-3*~09-01 族）。
+//
+// 决议落地映射：
+//   R-1661 v2 生命周期：session profile（GoalOS-AC-<goalID>-<actionID> 命名确定化）
+//     +Job KILL_ON_JOB_CLOSE（内核级绞杀不依赖 daemon 存活）+DeleteAppContainerProfile
+//     退避重试（上限 10 次）+重复 Release 幂等。
+//   R-1659 v3 具名能力：DeriveCapabilitySidsFromName("GoalOS-TC-<name>") 纯名称派生
+//     （零 profile 实体零残留）——工具链目录 RX 一次授予（幂等）；session 容器
+//     Capabilities[] 按契约声明携带（SE_GROUP_ENABLED——=0 静默无效实机实锤）。
+//     写面=session 包 SID 粒度（workspace 授予 M，Release 回收）。
+//   R-1653：执行≠读分离（启动面=CreateProcess 父 token；运行期=AC token）。
+//   F6：子进程 CWD 显式=workspace（继承 daemon CWD 不可读=「当前目录无效」实机实证）。
+//   R-1666：Precheck=原生探针（__goalos-probe——ERRNO 数字证据）。
+package runtime
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+// ─── Win32 原语（userenv/kernelbase/advapi32——spike 实证归属） ───
+
+var (
+	winACUserenv    = windows.NewLazySystemDLL("userenv.dll")
+	winACKernelbase = windows.NewLazySystemDLL("kernelbase.dll")
+	winACAdvapi     = windows.NewLazySystemDLL("advapi32.dll")
+
+	procCreateAppContainerProfile     = winACUserenv.NewProc("CreateAppContainerProfile")
+	procDeleteAppContainerProfile     = winACUserenv.NewProc("DeleteAppContainerProfile")
+	procDeriveAppContainerSidFromName = winACUserenv.NewProc("DeriveAppContainerSidFromAppContainerName")
+	procDeriveCapabilitySidsFromName  = winACKernelbase.NewProc("DeriveCapabilitySidsFromName")
+	procSetEntriesInAclW              = winACAdvapi.NewProc("SetEntriesInAclW")
+)
+
+const (
+	procThreadAttributeSecurityCapabilities = 0x00020009
+	startfUseStdHandles                     = 0x00000100
+	extendedStartupinfoPresent              = 0x00080000
+	// EXPLICIT_ACCESS 形态
+	grantAccess  = 1
+	revokeAccess = 3
+	// Trustee
+	trusteeIsSid = 0
+	// 继承：SUB_CONTAINERS_AND_OBJECTS_INHERIT=(OI)(CI)
+	subContainersAndObjectsInherit = 0x3
+	// Job
+	jobObjectExtendedLimitInformation = 9
+)
+
+type winACSecurityCapabilities struct {
+	appContainerSid *windows.SID
+	capabilities    uintptr // *windows.SIDAndAttributes
+	capabilityCount uint32
+	reserved        uint32
+}
+
+// explicitAccessW EXPLICIT_ACCESS_W（amd64 布局 48B）。
+type explicitAccessW struct {
+	accessPermissions uint32
+	accessMode        int32
+	inheritance       uint32
+	trustee           trusteeW
+}
+type trusteeW struct {
+	multipleAccount       *trusteeW
+	multipleAccountOp     int32
+	trusteeForm           int32
+	trusteeType           int32
+	ptstrName             *uint16 // TrusteeForm=TRUSTEE_IS_SID 时=SID 指针
+}
+
+// ─── profile/SID 原语 ───
+
+// winACCreateProfile 创建 AppContainer profile（幂等——已存在则派生 SID）。
+// 实机实锤（2026-09-06 Debug3）：pszDescription 不可为 NULL——=0 则 create 静默
+// E_INVALIDARG(0x80070057)，若盲目 derive 兜底=产出幻影 profile（derive 纯哈希
+// 恒成功不要求 profile 存在），下游 spawn 报 file-not-found 且难以归因。
+// 故兜底仅限「已存在」(0x800700B7)；其余失败=立即报错带真实 HRESULT（fail-closed）。
+func winACCreateProfile(name string) (*windows.SID, error) {
+	namePtr, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return nil, fmt.Errorf("profile 名含 NUL: %w", err)
+	}
+	var sid *windows.SID
+	r1, _, err := procCreateAppContainerProfile.Call(
+		uintptr(unsafe.Pointer(namePtr)), uintptr(unsafe.Pointer(namePtr)),
+		uintptr(unsafe.Pointer(namePtr)), 0, 0, uintptr(unsafe.Pointer(&sid)))
+	if r1 == 0 {
+		return sid, nil
+	}
+	if uint32(r1) != 0x800700B7 { // HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)
+		return nil, fmt.Errorf("CreateAppContainerProfile %s: HRESULT=0x%08X: %v", name, uint32(r1), err)
+	}
+	// 已存在=派生（幂等——profile 创建非幂等，派生恒成功）
+	sid = nil
+	r1, _, err = procDeriveAppContainerSidFromName.Call(
+		uintptr(unsafe.Pointer(namePtr)), uintptr(unsafe.Pointer(&sid)))
+	if r1 != 0 {
+		return nil, fmt.Errorf("DeriveAppContainerSid: %v", err)
+	}
+	return sid, nil
+}
+
+// winACDeleteProfile 删除（退避重试——R-1661 v2②；幂等=不存在不炸）。
+func winACDeleteProfile(name string) error {
+	namePtr, perr := windows.UTF16PtrFromString(name)
+	if perr != nil {
+		return fmt.Errorf("profile 名含 NUL: %w", perr)
+	}
+	var last error
+	for i := 0; i < 10; i++ {
+		r1, _, err := procDeleteAppContainerProfile.Call(uintptr(unsafe.Pointer(namePtr)))
+		if r1 == 0 {
+			return nil
+		}
+		last = err
+		time.Sleep(200 * time.Millisecond)
+	}
+	// HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)=0x80070002=幂等通过（profile 不存在）
+	if errno, ok := last.(syscall.Errno); ok && uint32(errno)&0xFFFF == 0x7002 {
+		return nil
+	}
+	if last != nil && uint32(errnoOfErr(last))&0xFFFF == 0x0002 {
+		return nil
+	}
+	return fmt.Errorf("DeleteAppContainerProfile %s: %v", name, last)
+}
+
+func errnoOfErr(err error) uintptr {
+	if errno, ok := err.(syscall.Errno); ok {
+		return uintptr(errno)
+	}
+	return 0
+}
+
+// winACDeriveCapabilitySID 具名能力 SID（S-1-15-3-* 族——纯名称派生零残留）。
+func winACDeriveCapabilitySID(capName string) (*windows.SID, error) {
+	namePtr, perr := windows.UTF16PtrFromString(capName)
+	if perr != nil {
+		return nil, fmt.Errorf("能力名含 NUL: %w", perr)
+	}
+	var groupSids, capSids *windows.SID
+	var groupCount, capCount uint32
+	r1, _, err := procDeriveCapabilitySidsFromName.Call(
+		uintptr(unsafe.Pointer(namePtr)),
+		uintptr(unsafe.Pointer(&groupSids)), uintptr(unsafe.Pointer(&groupCount)),
+		uintptr(unsafe.Pointer(&capSids)), uintptr(unsafe.Pointer(&capCount)))
+	if r1 == 0 {
+		return nil, fmt.Errorf("DeriveCapabilitySidsFromName %s: %v", capName, err)
+	}
+	if capCount == 0 || capSids == nil {
+		return nil, fmt.Errorf("能力 SID 数组为空: %s", capName)
+	}
+	defer windows.LocalFree(windows.Handle(unsafe.Pointer(groupSids)))
+	first := *(**windows.SID)(unsafe.Pointer(capSids))
+	copied, copyErr := first.Copy()
+	windows.LocalFree(windows.Handle(unsafe.Pointer(capSids)))
+	if copyErr != nil {
+		return nil, copyErr
+	}
+	return copied, nil
+}
+
+// ─── ACL 授予/回收（SetEntriesInAclW 原生——R-1666 纪律：不借道 icacls 外壳） ───
+
+// winACGrantACE 幂等授予（已授予=跳过——GetNamedSecurityInfo 查重）。
+func winACGrantACE(path string, sid *windows.SID, perms uint32, inheritance uint32) error {
+	present, err := winACACEPresent(path, sid)
+	if err != nil {
+		return err
+	}
+	if present {
+		return nil
+	}
+	return winACSetEntries(path, sid, perms, inheritance, grantAccess)
+}
+
+// winACRevokeACE 回收（未授予=幂等通过）。
+func winACRevokeACE(path string, sid *windows.SID) error {
+	present, err := winACACEPresent(path, sid)
+	if err != nil {
+		return err
+	}
+	if !present {
+		return nil
+	}
+	return winACSetEntries(path, sid, 0, 0, revokeAccess)
+}
+
+// winACACEPresent 查 ACE 是否已授予该 SID。
+func winACACEPresent(path string, sid *windows.SID) (bool, error) {
+	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		return false, fmt.Errorf("GetNamedSecurityInfo %s: %w", path, err)
+	}
+	dacl, _, err := sd.DACL()
+	if err != nil {
+		return false, fmt.Errorf("DACL %s: %w", path, err)
+	}
+	if dacl == nil {
+		return false, nil
+	}
+	for i := uint32(0); i < uint32(dacl.AceCount); i++ {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(dacl, i, &ace); err != nil {
+			return false, err
+		}
+		aceSid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+		if windows.EqualSid(aceSid, sid) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// winACSetEntries SetEntriesInAclW 应用（grant/revoke）+SetNamedSecurityInfoW 提交。
+func winACSetEntries(path string, sid *windows.SID, perms uint32, inheritance uint32, mode int32) error {
+	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
+	if err != nil {
+		return fmt.Errorf("GetNamedSecurityInfo %s: %w", path, err)
+	}
+	oldDacl, _, err := sd.DACL()
+	if err != nil {
+		return fmt.Errorf("DACL %s: %w", path, err)
+	}
+	ea := explicitAccessW{
+		accessPermissions: perms,
+		accessMode:        mode,
+		inheritance:       inheritance,
+		trustee: trusteeW{
+			trusteeForm: trusteeIsSid,
+			ptstrName:   (*uint16)(unsafe.Pointer(sid)),
+		},
+	}
+	var newDacl *windows.ACL
+	r1, _, err := procSetEntriesInAclW.Call(
+		1, uintptr(unsafe.Pointer(&ea)),
+		uintptr(unsafe.Pointer(oldDacl)),
+		uintptr(unsafe.Pointer(&newDacl)))
+	if r1 != 0 {
+		return fmt.Errorf("SetEntriesInAclW %s: %v", path, err)
+	}
+	defer windows.LocalFree(windows.Handle(unsafe.Pointer(newDacl)))
+	if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION,
+		nil, nil, newDacl, nil); err != nil {
+		return fmt.Errorf("SetNamedSecurityInfo %s: %w", path, err)
+	}
+	return nil
+}
+
+// ─── Provider 主体 ───
+
+// winACProvider Windows AppContainer 受限档 Provider。
+type winACProvider struct {
+	workspace  string
+	tmpDir     string
+	toolchains map[string]string // 具名工具链（name→安装根——R-1659 v3）
+	capSids    map[string]*windows.SID
+	prepared   bool
+	mu         sync.Mutex
+}
+
+// NewWinACProvider 构造（toolchains=具名能力授权表 name→路径；nil=无工具链授予）。
+func NewWinACProvider(workspace, tmpDir string, toolchains map[string]string) Provider {
+	return &winACProvider{
+		workspace:  workspace,
+		tmpDir:     tmpDir,
+		toolchains: toolchains,
+		capSids:    map[string]*windows.SID{},
+	}
+}
+
+func (p *winACProvider) Name() string { return "winac-windows" }
+func (p *winACProvider) Tier() string { return "T1" } // T1-WinAC（R-1652 v2 独立档——wire=T1 族）
+
+// Prepare 一次性准备：WritableRoots 建目录+具名能力 SID 派生+工具链 RX 幂等授予。
+func (p *winACProvider) Prepare(_ context.Context, _ RuntimePlan) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, root := range []string{p.workspace, p.tmpDir} {
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			return fmt.Errorf("%w: WritableRoot 创建失败 %s: %w", ErrNoBackend, root, err)
+		}
+	}
+	// 具名能力 SID 派生+工具链目录 RX 一次授予（R-1659 v3——幂等长期有效零残留）
+	for name, path := range p.toolchains {
+		capSid, err := winACDeriveCapabilitySID("GoalOS-TC-" + name)
+		if err != nil {
+			return fmt.Errorf("%w: 能力 SID 派生失败 %s: %w", ErrNoBackend, name, err)
+		}
+		p.capSids[name] = capSid
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("%w: 工具链路径不存在 %s（%s）: %w", ErrNoBackend, name, path, err)
+		}
+		const genericReadExecute = windows.GENERIC_READ | windows.GENERIC_EXECUTE
+		if err := winACGrantACE(path, capSid, genericReadExecute, subContainersAndObjectsInherit); err != nil {
+			return fmt.Errorf("%w: 工具链授予失败 %s→%s: %w（fail-closed 禁止降级裸跑——R-1659③）", ErrNoBackend, name, path, err)
+		}
+	}
+	p.prepared = true
+	return nil
+}
+
+func (p *winACProvider) State(context.Context) (ProviderState, error) {
+	if p.prepared {
+		return ProviderPrepared, nil
+	}
+	return ProviderRegistered, nil
+}
+
+// Capabilities 能力快照（R-1652 v2 谓词分列——HasSyscallConfine 不自称）。
+func (p *winACProvider) Capabilities(context.Context) (ProviderCapability, error) {
+	return ProviderCapability{
+		Platform:          "windows-appcontainer",
+		AchievedIsolation: I2, // 读写双禁闭+网络禁闭+进程硬化+win32k 子集过滤；无 seccomp 等价物（不自称 I3）
+		WarmPool:          false,
+	}, nil
+}
+
+// Acquire 租约：session profile+Job（KILL_ON_JOB_CLOSE）+workspace/tmpDir 写面授予。
+func (p *winACProvider) Acquire(_ context.Context, req LeaseRequest) (RuntimeHandle, error) {
+	if !p.prepared {
+		return nil, fmt.Errorf("%w: Prepare 未调用", ErrNoBackend)
+	}
+	// profile 名=一次性唯一（2026-09-01 实机实证：DeleteAppContainerProfile 后同名
+	// 重建=永久损坏窗口（20s+ 永不恢复——包仓库名碑化）；尾部纳秒戳=防同名重用）
+	profile := fmt.Sprintf("GoalOS-AC-%s-%s-%d", winACSanitize(req.GoalID), winACSanitize(req.ActionID), time.Now().UnixNano())
+	sid, err := winACCreateProfile(profile)
+	if err != nil {
+		return nil, fmt.Errorf("runtime: AppContainer profile 创建失败: %w", err)
+	}
+	// Job（KILL_ON_JOB_CLOSE——内核级绞杀，R-1661 v2①）
+	job, err := windows.CreateJobObject(nil, nil)
+	if err != nil {
+		windows.FreeSid(sid)
+		return nil, fmt.Errorf("runtime: CreateJobObject: %w", err)
+	}
+	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
+	info.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+	if _, err := windows.SetInformationJobObject(job, jobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
+		windows.CloseHandle(job)
+		windows.FreeSid(sid)
+		return nil, fmt.Errorf("runtime: SetInformationJobObject: %w", err)
+	}
+	// 写面授予（session 包 SID 粒度——R-1659 v3④）：workspace+tmpDir=RWX+DELETE
+	const rwMask = windows.GENERIC_READ | windows.GENERIC_WRITE | windows.GENERIC_EXECUTE | windows.DELETE
+	for _, root := range []string{p.workspace, p.tmpDir} {
+		if err := winACGrantACE(root, sid, rwMask, subContainersAndObjectsInherit); err != nil {
+			windows.CloseHandle(job)
+			windows.FreeSid(sid)
+			_ = winACDeleteProfile(profile)
+			return nil, fmt.Errorf("runtime: 写面授予失败 %s: %w（fail-closed）", root, err)
+		}
+	}
+	return &winACHandle{
+		p: p, profile: profile, sid: sid, job: job,
+		state: HandleAcquired, goalID: req.GoalID,
+		caps: winACSelectCaps(p.capSids, req.Contract),
+	}, nil
+}
+
+// winACSelectCaps 按契约声明挑选具名能力（R-1659 v3②——"toolchain:<name>" 前缀映射；
+// SE_GROUP_ENABLED=4——Attributes=0 静默无效实机实锤）。
+func winACSelectCaps(capSids map[string]*windows.SID, contract *VerifiedContract) []windows.SIDAndAttributes {
+	var caps []windows.SIDAndAttributes
+	if contract == nil {
+		return caps
+	}
+	for _, cap := range contract.Claims().Capabilities {
+		if name, ok := strings.CutPrefix(cap, "toolchain:"); ok {
+			if sid, found := capSids[name]; found {
+				caps = append(caps, windows.SIDAndAttributes{Sid: sid, Attributes: 4})
+			}
+		}
+	}
+	return caps
+}
+
+// winACSanitize profile 名净化（AppContainer 名=字母数字有限字符集，长度封顶 40）。
+func winACSanitize(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if len(out) > 40 {
+		out = out[:40]
+	}
+	if out == "" {
+		out = "x"
+	}
+	return out
+}
+
+// winACHandle 执行句柄。
+type winACHandle struct {
+	p       *winACProvider
+	profile string
+	sid     *windows.SID
+	job     windows.Handle
+	state   HandleState
+	goalID  string
+	caps    []windows.SIDAndAttributes
+	mu      sync.Mutex
+	// wg 在飞 Execute 计数——Release 绞杀依赖：state 翻转与绞杀在锁外进行时，
+	// 须等在飞 execInContainer 收尾后才能 FreeSid/回收 ACE（防 use-after-free）。
+	// 2026-09-06 实机实锤：Execute 全程持锁时 Release 锁死（sleeper 睡满全程），
+	// 故锁只护 state，执行体与绞杀全在锁外。
+	wg sync.WaitGroup
+}
+
+func (h *winACHandle) ID() string { return "winac-" + h.profile }
+
+func (h *winACHandle) Start(context.Context) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.state != HandleAcquired {
+		return ErrInvalidState
+	}
+	h.state = HandleReady
+	return nil
+}
+
+// Precheck 边界实证（原生探针经 AC 执行——R-1666 ERRNO 数字断言；fail-closed）。
+func (h *winACHandle) Precheck(ctx context.Context) error {
+	h.mu.Lock()
+	if h.state != HandleReady && h.state != HandleRunning {
+		h.mu.Unlock()
+		return ErrInvalidState
+	}
+	h.wg.Add(1)
+	h.mu.Unlock()
+	defer h.wg.Done()
+	home, _ := os.UserHomeDir()
+	// ①fs 探针：写 home=必拒（受限档 DenyWrite=home 契约面）
+	probePath := filepath.Join(home, "goalos-winac-precheck.txt")
+	code, out := h.execInContainer(ctx, probeSelfExe(), []string{"__goalos-probe", "write", probePath})
+	_ = os.Remove(probePath)
+	if code == 0 || !strings.Contains(out, "PROBE-ERRNO=") || strings.Contains(out, "PROBE-ERRNO=0") {
+		return fmt.Errorf("runtime: Precheck fs 探针未被拒（写 home 成功=AC 边界失效）——out=%q", out)
+	}
+	// ②网络探针：出站必拒（零 capability——ERRNO=10013 族）
+	code, out = h.execInContainer(ctx, probeSelfExe(), []string{"__goalos-probe", "dial", "192.0.2.1:80"})
+	if code == 0 || strings.Contains(out, "PROBE-ERRNO=0") {
+		return fmt.Errorf("runtime: Precheck 网络探针未被拒（出站成功=零 capability 失效）——out=%q", out)
+	}
+	h.mu.Lock()
+	if h.state == HandleReleased || h.state == HandleDestroyed {
+		h.mu.Unlock()
+		return ErrInvalidState // 探针期间被 Release——不翻回 Running
+	}
+	h.state = HandleRunning
+	h.mu.Unlock()
+	return nil
+}
+
+// probeSelfExe 探针载体=自身二进制（R-1666 零外部运行时）。
+func probeSelfExe() string {
+	self, err := os.Executable()
+	if err != nil {
+		return `C:\Windows\System32\cmd.exe` // 必败方向（exec 失败=非零）
+	}
+	return self
+}
+
+// Execute 边界内执行（process.exec 唯一动词——CWD=workspace 显式设定 F6）。
+func (h *winACHandle) Execute(ctx context.Context, req ExecuteRequest) (ExecuteResult, error) {
+	h.mu.Lock()
+	if h.state != HandleRunning {
+		h.mu.Unlock()
+		return ExecuteResult{}, ErrInvalidState
+	}
+	h.wg.Add(1) // 锁内登记——Release 的 state 翻转与 Add 互斥，计数无漏
+	h.mu.Unlock()
+	defer h.wg.Done()
+	if req.ActionType != "process.exec" {
+		return ExecuteResult{}, fmt.Errorf("runtime: 受限档不支持的能力动词 %q（process.exec 唯一）", req.ActionType)
+	}
+	binary := req.Params["binary"]
+	if binary == "" {
+		return ExecuteResult{}, fmt.Errorf("runtime: process.exec 缺 binary 参数（代理层拒绝——未触 OS 边界）")
+	}
+	start := time.Now()
+	code, out := h.execInContainer(ctx, binary, strings.Fields(req.Params["args"]))
+	res := ExecuteResult{Output: out, ExitCode: code, Status: "success", Cost: time.Since(start)}
+	if code != 0 {
+		res.Status = "failed"
+	}
+	return res, nil
+}
+
+// execInContainer AppContainer 内执行（SUSPENDED 创建→入 Job→Resume——
+// 消灭先跑后入 job 的竞态窗口；输出=tmpDir 捕获文件继承句柄）。
+func (h *winACHandle) execInContainer(_ context.Context, binary string, args []string) (int, string) {
+	outFile := filepath.Join(h.p.tmpDir, fmt.Sprintf("winac-out-%d.txt", time.Now().UnixNano()))
+	defer os.Remove(outFile)
+	outPtr, perr := windows.UTF16PtrFromString(outFile)
+	if perr != nil {
+		return -1, "WINAC-FATAL: 捕获文件路径含 NUL"
+	}
+	sa := &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), InheritHandle: 1}
+	hOut, err := windows.CreateFile(outPtr, windows.GENERIC_WRITE, windows.FILE_SHARE_READ, sa,
+		windows.CREATE_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		return -1, "WINAC-FATAL: 捕获文件: " + err.Error()
+	}
+	defer windows.CloseHandle(hOut)
+
+	secCaps := winACSecurityCapabilities{appContainerSid: h.sid}
+	if len(h.caps) > 0 {
+		secCaps.capabilities = uintptr(unsafe.Pointer(&h.caps[0]))
+		secCaps.capabilityCount = uint32(len(h.caps))
+	}
+	attrList, err := windows.NewProcThreadAttributeList(1)
+	if err != nil {
+		return -1, "WINAC-FATAL: attrlist: " + err.Error()
+	}
+	defer attrList.Delete()
+	if err := attrList.Update(procThreadAttributeSecurityCapabilities, unsafe.Pointer(&secCaps), unsafe.Sizeof(secCaps)); err != nil {
+		return -1, "WINAC-FATAL: attr update: " + err.Error()
+	}
+
+	var siex windows.StartupInfoEx
+	siex.Cb = uint32(unsafe.Sizeof(siex))
+	siex.Flags = startfUseStdHandles
+	siex.StdOutput = hOut
+	siex.StdErr = hOut
+	siex.ProcThreadAttributeList = attrList.List()
+
+	// 命令行组装（引号包裹防空格断词）
+	cmdline := `"` + binary + `"`
+	for _, a := range args {
+		cmdline += ` "` + a + `"`
+	}
+	cmdPtr, perr := windows.UTF16PtrFromString(cmdline)
+	if perr != nil {
+		return -1, "WINAC-FATAL: 命令行含 NUL"
+	}
+	cwdPtr, perr := windows.UTF16PtrFromString(h.p.workspace) // F6：CWD 显式=workspace（已授予面）
+	if perr != nil {
+		return -1, "WINAC-FATAL: workspace 路径含 NUL"
+	}
+
+	if os.Getenv("GOALOS_WINAC_DEBUG") == "1" {
+		var s *uint16
+		if windows.ConvertSidToStringSid(h.sid, &s) == nil {
+			fmt.Printf("[winac-dbg] profile=%q sid=%q ws=%q tmp=%q caps=%d\n",
+				h.profile, windows.UTF16PtrToString(s), h.p.workspace, h.p.tmpDir, len(h.caps))
+			windows.LocalFree(windows.Handle(unsafe.Pointer(s)))
+		}
+	}
+
+	var pi windows.ProcessInformation
+	err = windows.CreateProcess(nil, cmdPtr, nil, nil, true,
+		windows.CREATE_SUSPENDED|extendedStartupinfoPresent|windows.CREATE_UNICODE_ENVIRONMENT,
+		nil, cwdPtr, &siex.StartupInfo, &pi)
+	if err != nil {
+		return -1, "WINAC-FATAL: CreateProcess: " + err.Error() + " cmdline=" + cmdline + " cwd=" + h.p.workspace
+	}
+	defer windows.CloseHandle(pi.Process)
+	defer windows.CloseHandle(pi.Thread)
+	// 入 Job 先于 Resume（KILL_ON_JOB_CLOSE 覆盖全生命周期——无竞态窗口）
+	if err := windows.AssignProcessToJobObject(h.job, pi.Process); err != nil {
+		windows.TerminateProcess(pi.Process, 1)
+		return -1, "WINAC-FATAL: AssignProcessToJobObject: " + err.Error()
+	}
+	if _, err := windows.ResumeThread(pi.Thread); err != nil {
+		return -1, "WINAC-FATAL: ResumeThread: " + err.Error()
+	}
+	wait, err := windows.WaitForSingleObject(pi.Process, 120000)
+	if err != nil || wait != 0 {
+		_ = windows.TerminateProcess(pi.Process, 1)
+		return -1, "WINAC-FATAL: 等待失败/超时"
+	}
+	var code uint32
+	_ = windows.GetExitCodeProcess(pi.Process, &code)
+	procFlushFileBuffersWinAC.Call(uintptr(hOut))
+	data, _ := os.ReadFile(outFile)
+	return int(code), string(data)
+}
+
+var procFlushFileBuffersWinAC = windows.NewLazySystemDLL("kernel32.dll").NewProc("FlushFileBuffers")
+
+// Release 清理（R-1661 v2）：翻 state→关 Job（绞杀在飞+全部子孙，锁外——
+// 锁内关=与在飞 Execute 死锁实锤）→等在飞收尾→收 ACE→删 profile（退避重试）
+// →幂等（二次调用=成功）。
+func (h *winACHandle) Release(context.Context) error {
+	h.mu.Lock()
+	if h.state == HandleReleased || h.state == HandleDestroyed {
+		h.mu.Unlock()
+		return nil // 幂等
+	}
+	h.state = HandleReleased
+	h.mu.Unlock()
+	windows.CloseHandle(h.job) // KILL_ON_JOB_CLOSE=内核级绞杀（先绞杀再等收尾——反序=白等在飞超时）
+	h.wg.Wait()                // 在飞 execInContainer 收尾后方可 FreeSid/收 ACE
+	var errs []string
+	for _, root := range []string{h.p.workspace, h.p.tmpDir} {
+		if err := winACRevokeACE(root, h.sid); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if err := winACDeleteProfile(h.profile); err != nil {
+		errs = append(errs, err.Error())
+	}
+	windows.FreeSid(h.sid)
+	if len(errs) > 0 {
+		return fmt.Errorf("runtime: Release 部分失败: %s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+// Interrupt/Pause/Resume——无长驻子进程面（Execute 同步生命周期），契约表语义。
+func (h *winACHandle) Interrupt(context.Context) error {
+	if h.state != HandleRunning {
+		return ErrInvalidState
+	}
+	return nil
+}
+
+func (h *winACHandle) Pause(context.Context) error {
+	if h.state != HandleRunning {
+		return ErrInvalidState
+	}
+	h.state = HandlePaused
+	return nil
+}
+
+func (h *winACHandle) Resume(context.Context) error {
+	if h.state != HandlePaused {
+		return ErrInvalidState
+	}
+	h.state = HandleRunning
+	return nil
+}
+
+// State 句柄状态（全态可调——契约表）。
+func (h *winACHandle) State() HandleState { return h.state }
