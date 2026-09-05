@@ -55,6 +55,16 @@ func Main(args []string) int {
 		if err == nil {
 			conn.Close()
 		}
+	case "sleep":
+		// 生命周期测试探针（Job 绞杀验证——长活子进程面）
+		ms, err := time.ParseDuration(args[1] + "ms")
+		if err != nil {
+			fmt.Println("PROBE-ERRNO=22") // EINVAL——参数非数字
+			return 1
+		}
+		time.Sleep(ms)
+		fmt.Println("PROBE-SLEPT")
+		return 0
 	default:
 		fmt.Println("PROBE-ERRNO=-2 unknown op")
 		return 1
