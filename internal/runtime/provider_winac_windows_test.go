@@ -1,15 +1,16 @@
 //go:build windows
 
 // provider_winac_windows_test.go——Windows AppContainer Provider 契约测试
-//（R-1648/R-1661 v2/R-1659 v3——R-571 测试先行：先红后绿）。
+//（R-1648/R-1661 v2/R-1659 v3/R-1667 v2/R-1669/R-1670——R-571 测试先行：先红后绿）。
 //
 // 契约面（决议逐字映射）：
 //  A. 边界矩阵：workspace 写=通；home 写=拒；~/.ssh 读=拒；出站=拒；
-//     ERRNO 数字证据（R-1666——本地化文本零依赖）。
+//     ERRNO 数字证据（R-1666）+Win32 原生常量绑定（R-1670——禁魔数字面量）。
 //  B. 具名能力粒度（R-1659 v3）：契约声明 toolchain=读通；未声明=拒。
-//  C. 生命周期（R-1661 v2）：Release=Job 绞杀（长活子进程被杀）+profile 删除
-//     （同名重建成功=旧 profile 消失）+重复 Release 幂等。
+//  C. 生命周期（R-1661 v2）：Release=Job 绞杀（长活子进程被杀）+重复 Release 幂等。
+//     R-1669 tainted fail-safe=内核态 wedge 不可机器复现——评审级覆盖（诚实缺口登记）。
 //  D. D-5 定序：Precheck 前 Execute=ErrInvalidState；Start 前 Precheck=ErrInvalidState。
+//  E. 熵化命名（R-1667 v2）：两次 Acquire=异名+格式 GoalOS-AC-<action≤24>-<16hex>。
 package runtime
 
 import (
@@ -17,11 +18,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/goalos/goalos/internal/governance"
+	"golang.org/x/sys/windows"
 )
 
 // winACTestProvider 测试构造（临时目录隔离——不碰真实 home\Goals）。
@@ -100,26 +103,26 @@ func TestWinACProvider_Boundary(t *testing.T) {
 	defer guard.Release(context.Background())
 
 	home, _ := os.UserHomeDir()
-	// ①home 写=拒（ERRNO=5=AccessDenied）
+	// ①home 写=拒（断言绑定 Win32 原生常量——R-1670：禁魔数字面量/POSIX 误读）
 	res := execProbe(t, guard, "__goalos-probe write "+filepath.Join(home, "goalos-winac-probe.txt"))
-	if errnoOf(t, res.Output) != 5 {
-		t.Fatalf("①home 写未按预期拒绝（应 ERRNO=5）: out=%q errno=%d", res.Output, errnoOf(t, res.Output))
+	if errnoOf(t, res.Output) != int(windows.ERROR_ACCESS_DENIED) {
+		t.Fatalf("①home 写未按预期拒绝（应 ERRNO=ERROR_ACCESS_DENIED）: out=%q errno=%d", res.Output, errnoOf(t, res.Output))
 	}
 	// ②~/.ssh 读=拒
 	sshCfg := filepath.Join(home, ".ssh", "config")
 	os.MkdirAll(filepath.Join(home, ".ssh"), 0700)
 	os.WriteFile(sshCfg, []byte("probe"), 0600)
 	res = execProbe(t, guard, "__goalos-probe read "+sshCfg)
-	if errnoOf(t, res.Output) != 5 {
-		t.Fatalf("②~/.ssh 读未拒（errno 应=5）: out=%q errno=%d", res.Output, errnoOf(t, res.Output))
+	if errnoOf(t, res.Output) != int(windows.ERROR_ACCESS_DENIED) {
+		t.Fatalf("②~/.ssh 读未拒（errno 应=ERROR_ACCESS_DENIED）: out=%q errno=%d", res.Output, errnoOf(t, res.Output))
 	}
-	// ③出站=拒（ERRNO=10013=WSAEACCES——零 capability AppContainer）
+	// ③出站=拒（零 capability AppContainer——WSAEACCES 常量绑定 R-1670）
 	res = execProbe(t, guard, "__goalos-probe dial 192.0.2.1:80")
 	if errnoOf(t, res.Output) == 0 {
 		t.Fatalf("③CRITICAL：出站成功——网络禁闭失效: %q", res.Output)
 	}
-	if errnoOf(t, res.Output) != 10013 {
-		t.Fatalf("③出站拒绝但 errno 非 10013（WSAEACCES）: errno=%d out=%q", errnoOf(t, res.Output), res.Output)
+	if errnoOf(t, res.Output) != int(windows.WSAEACCES) {
+		t.Fatalf("③出站拒绝但 errno 非 WSAEACCES: errno=%d out=%q", errnoOf(t, res.Output), res.Output)
 	}
 	// ④workspace 写=通（WritableRoots 语义）
 	res = execProbe(t, guard, "__goalos-probe write "+filepath.Join(ws, "ok.txt"))
@@ -211,4 +214,39 @@ func TestWinACProvider_D5Ordering(t *testing.T) {
 		Params: map[string]string{"binary": "cmd.exe"}}); err != ErrInvalidState {
 		t.Fatalf("D2：Running 前 Execute 应 ErrInvalidState，实际 %v", err)
 	}
+}
+
+// TestWinACProvider_ProfileEntropy 熵化命名契约（R-1667 v2——会议 #269）：
+// 两次 Acquire=两个不同 profile 名且格式=GoalOS-AC-<action≤24>-<16hex 熵>。
+// 撞名重试路径=构造性免证（熵空间 2^64，机器不可强制撞名——诚实标注）。
+// tainted 路径（R-1669 内核态 wedge）同理不可机器复现——代码评审级覆盖，
+// 实机复现需驱动级 wedge 注入（登记诚实缺口，不虚报绿）。
+func TestWinACProvider_ProfileEntropy(t *testing.T) {
+	p, _ := winACTestProvider(t, nil)
+	ctx := context.Background()
+	if err := p.Prepare(ctx, RuntimePlan{PlanID: "winac-ent", Tier: TierRestricted}); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	acquire := func(action string) *winACHandle {
+		h, err := p.Acquire(ctx, LeaseRequest{GoalID: "g", ActionID: action,
+			Contract: winACContract("g", action, []string{"shell.execute"})})
+		if err != nil {
+			t.Fatalf("Acquire %s: %v", action, err)
+		}
+		return h.(*winACHandle)
+	}
+	h1 := acquire("entropy-a")
+	defer h1.Release(ctx)
+	h2 := acquire("entropy-a")
+	defer h2.Release(ctx)
+	if h1.profile == h2.profile {
+		t.Fatalf("两次 Acquire profile 同名=%q——熵化命名失效（R-1667 v2）", h1.profile)
+	}
+	nameRe := regexp.MustCompile(`^GoalOS-AC-[A-Za-z0-9_-]{1,24}-[0-9a-f]{16}$`)
+	for _, n := range []string{h1.profile, h2.profile} {
+		if !nameRe.MatchString(n) {
+			t.Fatalf("profile 名 %q 不符熵化格式（GoalOS-AC-<action≤24>-<16hex>）", n)
+		}
+	}
+	t.Logf("熵名样本: %q / %q", h1.profile, h2.profile)
 }

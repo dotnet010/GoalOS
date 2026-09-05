@@ -59,7 +59,9 @@ func Main(args []string) int {
 		// 生命周期测试探针（Job 绞杀验证——长活子进程面）
 		ms, err := time.ParseDuration(args[1] + "ms")
 		if err != nil {
-			fmt.Println("PROBE-ERRNO=22") // EINVAL——参数非数字
+			// 合成码负数域（R-1670）：-3=探针参数无效——严禁借用 OS 正整数
+			// errno 空间（POSIX EINVAL=22/Windows ERROR_INVALID_PARAMETER=87 全退役）。
+			fmt.Println("PROBE-ERRNO=-3")
 			return 1
 		}
 		time.Sleep(ms)

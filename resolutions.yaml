@@ -8253,7 +8253,7 @@ resolutions:
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 PROBE-ERRNO 数字证据形态（R-1666）"
   R-1667:
-    desc: "Win32 profile 创建纪律——兜底 HRESULT 白名单化（会议 #268）: CreateAppContainerProfile pszDescription 不可为 NULL（=0 则 create 静默 E_INVALIDARG 0x80070057）；任何「失败→派生兜底」逻辑必须按 HRESULT 白名单触发（仅 ALREADY_EXISTS=0x800700B7）——全失败兜底=幻影 profile（derive 纯哈希恒成功不要求实体存在）→下游 spawn file-not-found 且错误消息误导归因（实机实锤）。适用=一切「创建→失败→旁路派生」形态 Win32 资源调用。证据等级=已实证（Debug3 阶梯+契约测试转绿，Win11 26200 实机——scripts/red-evidence/2026-09-06-winac-provider-green.txt）。disposition: 生效"
+    desc: "Win32 profile 创建纪律——熵化命名+撞名换名重试（会议 #268 立案，#269 v2 修订——Jobs 裁决）: v1=兜底 HRESULT 白名单化（pszDescription 不可为 NULL——=0 则 create 静默 E_INVALIDARG 0x80070057；全失败 derive 兜底=幻影 profile——derive 纯哈希恒成功不要求实体存在——下游 spawn file-not-found 误导归因，实机实锤）。v2 收紧：profile 名=GoalOS-AC-<action 前缀≤24>-<crypto/rand 64bit 熵 16hex>（一次性资源——同名重建永久损坏实机纪律）；ALREADY_EXISTS（0x800700B7）=偶发撞名→换新名有界重试×3（严禁 derive 复用——继承前序残留注册表/包虚拟化脏状态）；重试耗尽或其余失败=fail-closed 带真实 HRESULT；derive 兜底代码全删（proc 变量同删）。证据等级=已实证（契约五面转绿+熵名唯一性测试，Win11 26200——scripts/red-evidence/2026-09-06-winac-{provider,hardening}-green.txt；撞名重试路径=构造性免证——熵空间 2^64 机器不可强制撞名）。disposition: 生效"
     files: [会议纪要.md]
     verify:
       - must_exist: "R-1667"
@@ -8272,3 +8272,23 @@ resolutions:
       - must_exist: "绞杀在锁外"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记绞杀在锁外纪律（R-1668）"
+  R-1669:
+    desc: "超时处决 fail-safe——物理死亡 bracket+tainted 焊死 UAF（会议 #269——Jobs 裁决硬性条款）: execInContainer 120s 超时路径 TerminateProcess（异步）后必须 2s WaitForSingleObject bracket 确认物理死亡；未确认=进程卡入不可中断内核/驱动态→句柄标记 tainted→Release 焊死跳过 FreeSid/DeleteAppContainerProfile（宁承受单次句柄泄露，绝不在存活进程下释放 SID=UAF 构造性不可能；泄露面=注册表 Mappings 项+Packages 虚拟化目录，熵名一次性零污染后续 session）+CRITICAL 错误告警。主架构维持 KILL_ON_JOB_CLOSE 不动（daemon 崩溃 OS 照绞杀——TerminateJobObject 主流程形态崩溃即孤儿=降级，不采纳）。证据等级=已实证方向（主链路五面契约绿——2026-09-06-winac-hardening-green.txt；tainted 路径=内核 wedge 不可机器复现，评审级覆盖，诚实缺口登记）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1669"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1669"
+      - must_exist: "tainted"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 tainted fail-safe（R-1669）"
+  R-1670:
+    desc: "Win32 断言常量绑定+合成码负数域（会议 #269——R-1666 延伸）: Windows 侧测试/业务断言禁魔数字面量 5/10013——统一绑定 windows.ERROR_ACCESS_DENIED/windows.WSAEACCES 具名常量（防 POSIX 误读：5 在 POSIX=EIO）；PROBE-ERRNO 数字线格式不动（R-1666 核心纪律——本地化文本零依赖）；探针合成码移出 OS 正整数 errno 空间（sleep 参数无效 22→-3，负数域=合成命名空间）。证据等级=已实证（五面契约绿）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1670"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1670"
+      - must_exist: "常量绑定"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 Win32 断言常量绑定（R-1670）"
