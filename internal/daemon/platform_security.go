@@ -17,7 +17,8 @@ type SecurityLevel struct {
 // GetPlatformSecurityLevel 返回当前平台的安全隔离级别（R-829 统一 L2）。
 // Linux:   L2（基础系统隔离 + 子进程自声明 seccomp——daemon 侧无验证）
 // macOS:   L2（基础系统隔离——无系统调用过滤。v0.3.0 App Sandbox）
-// Windows: L1（基础系统隔离——无系统调用过滤）
+// Windows: L2（AppContainer 受限档实证边界——R-1675 会议 #275 重估；
+//          daemon 侧每 session Precheck 实证探针=强于自声明；无 seccomp 等价物）
 func GetPlatformSecurityLevel() SecurityLevel {
 	if runtime.GOOS == "darwin" {
 		return SecurityLevel{
@@ -47,7 +48,24 @@ func GetPlatformSecurityLevel() SecurityLevel {
 			},
 		}
 	}
-	// G13: Windows 等非 macOS/Linux 平台——诚实标注安全降级
+	// Windows：L2（R-1675——会议 #275 L 级重估 Jobs 裁决：WinAC AppContainer 实证面
+	// 全绿——读写双禁闭+网络禁闭+Job 内核绞杀，daemon 侧每 session Precheck 实证探针
+	// =严格强于 Linux L2 的「子进程自声明」验证面；无 seccomp 等价物=不自称更高）。
+	if runtime.GOOS == "windows" {
+		return SecurityLevel{
+			Platform: "windows",
+			Level:    "L2",
+			Label:    "当前平台安全隔离级别：基础（AppContainer 受限档——实证边界）",
+			Capabilities: []string{
+				"文件系统写禁闭——AppContainer+ACE 授予面（Precheck 实证探针每 session 验证）",
+				"文件系统读禁闭——敏感目录拒绝（Precheck 实证）",
+				"网络禁闭——零 capability AppContainer（出站 WSAEACCES 实证）",
+				"进程绞杀——Job KILL_ON_JOB_CLOSE 内核级（daemon 死亡仍生效）",
+				"系统调用过滤——无 seccomp 等价物（诚实标注；win32k 子集过滤在位）",
+			},
+		}
+	}
+	// G13: 其他非 macOS/Linux/Windows 平台——诚实标注安全降级
 	return SecurityLevel{
 		Platform: runtime.GOOS,
 		Level:    "L1",

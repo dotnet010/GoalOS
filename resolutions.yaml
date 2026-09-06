@@ -8332,3 +8332,13 @@ resolutions:
       - must_exist: "路由纪律"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记敏感行为面路由纪律（R-1674）"
+  R-1675:
+    desc: "Windows L 级重估 L1→L2（会议 #275——Jobs 基于事实矩阵裁决）: 事实面=WinAC 读写双禁闭+网络禁闭+Job 内核绞杀全实证（三环境一致：Pro 本机/Home 测试机/CI 管理员态），daemon 侧每 session Precheck 实证探针=严格强于 Linux L2 基准（R-829「子进程自声明——daemon 侧无验证」）；维持 L1=反向不诚实。L3 不自称（无 seccomp 等价物——syscall 级过滤缺席）。落地=platform_security.go 能力清单写实+TestS4 Windows 本地转绿（L2/L3 断言满足——平台条件恒红消除）。证据等级=已实证（契约五面×三环境+TC-RT-001a 旁路矩阵）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1675"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1675"
+      - must_exist: "L 级重估"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 L 级重估（R-1675）"
