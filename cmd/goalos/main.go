@@ -25,6 +25,7 @@ import (
 	"github.com/goalos/goalos/internal/governance"
 	"github.com/goalos/goalos/internal/healthcheck"
 	"github.com/goalos/goalos/internal/llm"
+	"github.com/goalos/goalos/internal/network"
 	"github.com/goalos/goalos/internal/metrics"
 	"github.com/goalos/goalos/internal/missionengine"
 	"github.com/goalos/goalos/internal/persona"
@@ -120,6 +121,13 @@ func main() {
 	// B14: BudgetTracker 提前声明，供 GoalCreated handler 闭包使用
 	var bt *scheduler.BudgetTracker
 
+	// R-1650 v4：tailnet peer 缓存（后台刷新协程——分类决策零阻塞；tailscale
+	// CLI 缺席=fail-closed 空集，CGNAT 段全 ZonePublic 基态不动）。生命周期随 daemon。
+	tailnetCache := network.NewTailnetPeerCache(network.TailscaleCLIQuery)
+	tailnetCache.Start(context.Background())
+	defer tailnetCache.Stop()
+	zoneClassifier := &network.Classifier{Peers: tailnetCache}
+
 	// TC-GL-006: GoalRunner per-Goal 执行控制。v0.1.1 fix: per-Goal PipelineRunner 避免跨 Goal 状态污染
 	bus.Subscribe(events.TypeGoalCreated, func(evt events.Event) error {
 		pr := scheduler.NewPipelineRunner(bus, store)
@@ -140,9 +148,12 @@ func main() {
 				if status.Healthy {
 					healthyCount++
 					// R-1643 裁决④：网域感知拨号（DNS 重绑定防御+force_public_zone 覆盖标记）
+					// R-1650 v4：tailnet peer 感知层注入（免审批语义=拨号侧实锤标记）
 					zd := llm.NewZoneDialer(p.ForcePublicZone, func(m llm.ZoneMark) {
-						log.Printf("[Daemon] LLM 出站网域: host=%s ip=%s zone=%s forced=%v", m.Host, m.IP, m.Zone, m.ForcedPublic)
+						log.Printf("[Daemon] LLM 出站网域: host=%s ip=%s zone=%s forced=%v tailnet_peer=%v tailnet_exempt=%v",
+							m.Host, m.IP, m.Zone, m.ForcedPublic, m.TailnetPeer, m.TailnetExempt)
 					})
+					zd.Classifier = zoneClassifier
 					providers = append(providers, scheduler.ProviderClient{Name: p.Name, Model: p.Model,
 						Client: missionengine.NewCloudLLMClientWithZone(p.BaseURL, p.APIKey, p.Model, maxTokens, zd)})
 					log.Printf("[Daemon] MultiLLM provider ✅ %s/%s: %s", p.Name, p.Model, status.Message)

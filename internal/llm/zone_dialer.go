@@ -23,14 +23,22 @@ type ZoneMark struct {
 	Zone      network.Zone // 分类结果（force_public_zone 覆盖后）
 	RawZone   network.Zone // 原始分类（覆盖前——审计可见覆盖发生）
 	ForcedPublic bool      // force_public_zone 覆盖生效
+	// TailnetPeer=true=该 IP 经 tailnet peer 实锤（R-1650——审计可见成员身份依据，
+	// 区别于静态网段归类）；TailnetExempt=免除 data_sharing 审查（peer 或
+	// Quad100:53 MagicDNS 基础设施——IsTailnetExempt 谓词快照）。
+	TailnetPeer   bool
+	TailnetExempt bool
 }
 
 // ZoneDialer 网域感知拨号器（forcePublicZone=配置覆盖——daemon.yaml force_public_zone）。
 type ZoneDialer struct {
 	ForcePublicZone bool
 	OnMark          func(ZoneMark) // 留痕回调（nil=仅日志纪律由调用方）
-	dialer          *net.Dialer
-	resolver        *net.Resolver
+	// Classifier=tailnet peer 感知层（R-1650——nil=纯静态表，CGNAT 全 ZonePublic
+	// fail-closed 基态）。
+	Classifier *network.Classifier
+	dialer     *net.Dialer
+	resolver   *net.Resolver
 }
 
 // NewZoneDialer 构造（默认系统解析器+5s 超时）。
@@ -75,13 +83,24 @@ func (z *ZoneDialer) DialContext(ctx context.Context, network_, addr string) (ne
 	ip := ips[0]
 	rawZone := network.ClassifyIP(ip)
 	zone := rawZone
+	// R-1650 tailnet peer 实锤重分类（CGNAT 段内 peer→ZoneLAN；其余原样）
+	tailnetPeer := false
+	if z.Classifier != nil {
+		before := zone
+		zone = z.Classifier.Classify(ip)
+		tailnetPeer = zone != before && zone == network.ZoneLAN
+	}
+	portNum := 0
+	fmt.Sscanf(port, "%d", &portNum)
+	tailnetExempt := z.Classifier != nil && z.Classifier.IsTailnetExempt(ip, portNum)
 	forced := false
 	if z.ForcePublicZone && zone != network.ZonePublic {
 		zone = network.ZonePublic // 内网代理端点穿透防御——按公网标记（审计语义不失真）
 		forced = true
 	}
 	if z.OnMark != nil {
-		z.OnMark(ZoneMark{Host: host, IP: ip.String(), Zone: zone, RawZone: rawZone, ForcedPublic: forced})
+		z.OnMark(ZoneMark{Host: host, IP: ip.String(), Zone: zone, RawZone: rawZone, ForcedPublic: forced,
+			TailnetPeer: tailnetPeer, TailnetExempt: tailnetExempt})
 	}
 
 	// 直连锁定 IP（DNS 重绑定防御——解析与连接同一 IP，不经过二次解析）
