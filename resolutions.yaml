@@ -8322,3 +8322,13 @@ resolutions:
       - must_exist: "目录白名单"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 Defender 不开目录白名单纪律（R-1673）"
+  R-1674:
+    desc: "敏感行为面路由纪律（会议 #274 补②——Jobs 2026-09-07 指令）: spike/测试中敏感行为面（建账户/跨账户拉进程/注册表写/服务操控族）默认路由到 goalos-test-win 专用测试机执行（消耗品环境=设计用来承受）；只有物理上无法在测试机跑、必须在开发机跑的敏感行为才走评审+环境门禁双闸。开发机默认零敏感行为（Defender 启发式面不触——R-1673 配套）。证据等级=纪律裁决（实证支撑=S-266-04 全程在 goalos-test-win 执行零干扰+开发机 go.exe 隔离事故对照）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1674"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1674"
+      - must_exist: "路由纪律"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记敏感行为面路由纪律（R-1674）"
