@@ -4,12 +4,16 @@
 # workflow 终态；本地闸口（make ci 手工等效）与 GitHub CI 双面都绿才算完。
 # 事故史：windows-daily 连红 4 次无人察觉（会议 #270 观测盲区）。
 #
-# 用法: bash scripts/watch-ci.sh [sha]     # 缺省=当前 HEAD
+# 用法: bash scripts/watch-ci.sh [sha]     # 缺省=当前 HEAD；短 SHA 自动解析为全 SHA
 # 退出码: 0=全部 success；1=任一 failure/cancelled/timed_out 或超时（45 分钟上限）。
 # 凭据: 本地走 git credential fill（token 不打印不落盘）；CI 内用 GITHUB_TOKEN 环境变量。
 set -u
 
-SHA="${1:-$(git rev-parse HEAD)}"
+SHA="${1:-HEAD}"
+# head_sha 过滤需全 40 位 SHA（短 SHA=零命中空转——2026-09-06 实测教训）
+if [ "${#SHA}" -lt 40 ]; then
+	SHA=$(git rev-parse "$SHA") || { echo "WATCH-CI FATAL: SHA 解析失败" >&2; exit 1; }
+fi
 REPO="dotnet010/GoalOS"
 DEADLINE=$(( $(date +%s) + 2700 ))  # 45 分钟上限（windows-daily timeout 15min 冗余）
 
