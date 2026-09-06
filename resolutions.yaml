@@ -8093,7 +8093,7 @@ resolutions:
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 R-1649"
   R-1650:
-    desc: "FD3 用户态 broker 承接+CGNAT 成员校验语义（会议 #262 v1/#264 v2/#266 v3）: 受限档 FD3=daemon 侧 broker 透明中继；CGNAT 100.64.0.0/10 不整段划 LOCAL——只认 tailnet 真实 peer（tailscaled 本机查询），fail-closed（查不到=ZonePublic）；Quad100 等保留地址天然排除。证据等级=规格裁决（文献级）+成员校验单测=施工项。disposition: 生效"
+    desc: "FD3 用户态 broker 承接+CGNAT 成员校验语义（会议 #262 v1/#264 v2/#266 v3/#272 v4 落地）: 受限档 FD3=daemon 侧 broker 透明中继；CGNAT 100.64.0.0/10 不整段划 LOCAL——只认 tailnet 真实 peer（tailscaled 本机查询），fail-closed（查不到=ZonePublic）；Quad100 等保留地址天然排除。v4 施工落地（#272）：查询路线修正——v3 点名 ipnstate 结构化包 vendor 实测 5.0MB/442 文件（仅类型定义）背离单二进制零依赖第一性→tailscale status --json CLI 主路（零依赖全平台）；TailnetPeerCache 后台刷新协程（3s/2s 超时）承载查询——决策路径纯缓存读 µs 级零阻塞（结构性挂起免疫，强于顾问二轮 30ms 同步超时）；缓存超龄>5s fail-closed（TOCTOU 收窄秒级）；Classifier.IsTailnetExempt=peer 免审批（Jobs 直批）+Quad100:53 MagicDNS 例外（tailscaled Alive 为锚）。证据等级=已实证（单测六面+真机 CLI 缺席 fail-closed——tailnet_test.go；MagicDNS 真机集成=待 tailnet 主机，诚实登记）。disposition: 生效"
     files: [会议纪要.md]
     verify:
       - must_exist: "R-1650"
