@@ -1,0 +1,29 @@
+# S-266-04 实机补证：CreateProcessWithLogonW 零特权性裁决（2026-09-07——goalos-test-win）
+
+环境：Win11 家庭版 26200，ssh 会话（Administrators 启用）。spike=prototype/
+winlogon_windows_test.go（纯 Win32 syscall 断言面——advapi32 LazyDLL 直调；
+setup 面 net.exe 允许）。裁决链=A 管理员基线/B 子进程非管理员取证/C 嵌套再调。
+
+## 出数（先红→归因→修正→终态全录）
+
+| 相 | 结果 | 证据 |
+|---|---|---|
+| 建账户 | 首轮红：`net user` 拒——**Home 密码策略 ≤14 字符**（超出报错） | 实机 |
+| A（管理员态调用） | 首轮红：Access denied——**映像在私有 home，新账户 token 打不开**；修=映像置 Public | 实机 |
+| A 二次 | 创建成功但子进程静默死——**退出码 0xC0000142**（session 0 无交互 window station/console）；修=CREATE_NO_WINDOW | 实机 |
+| A 终态 | **绿**——管理员态调用成功+子进程跑通（exit=0） | 实机 |
+| A2 对照 | cmd.exe 同形态（排除 Go 二进制变量） | 实机 |
+| B | **ELEVATED=0**——落盘子进程确为非管理员 token | TokenElevation 取证 |
+| C（嵌套：非管理员子进程内再调） | **ERROR_PROC_NOT_FOUND(127)**——LOGON_WITH_PROFILE 与默认 flag 双形态一致失败；蜂巢占用变量排除 | 实机 |
+| 旁证 | 任务计划程序替代路径=「该任务主体需要启用批登录特权」——新账户默认无 SeBatchLogonRight | 实机 |
+
+## 裁决
+
+**「CreateProcessWithLogonW 零特权可用」声称在本产品目标形态下不成立（方向性推翻）**：
+非管理员嵌套上下文=127 实锤失败；即使管理员态，可用性需四重人工面（映像可读/
+CREATE_NO_WINDOW/CWD 可达/环境块显式重建——profile 蜂巢加载会重建环境块致继承
+丢失）。**账户路线三税（UAC/凭据持久化/系统残留）之外实测新增两税**（密码策略
+合规成本+批登录特权缺省）——R-1648 AppContainer 基座裁决被实机证据进一步强化。
+
+S-266-04 闭环：文献级 → 已实证（方向=税目成立且加重）。清理=临时账户/任务/
+标记文件全删（实机核验 USER_GONE）。
