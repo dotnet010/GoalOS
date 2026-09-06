@@ -90,3 +90,47 @@ func ZoneForDecision(z Zone) string {
 		return "public"
 	}
 }
+
+// ─── tailnet 感知层（R-1650 v3/v4——会议 #266 拍板 + #271 顾问二轮评析落地） ───
+
+// cgnatCGNAT RFC 6598 共享地址空间——不做区间匹配（ISP CGNAT 基础设施同在段内=
+// 169.254.169.254 云元数据洞同模式），只认 peer 列表实锤。
+var cgnatCGNAT = netip.MustParsePrefix("100.64.0.0/10")
+
+// quad100 MagicDNS 保留地址（Tailscale 基础设施——非 peer，peer 列表法天然排除）。
+var quad100 = netip.MustParseAddr("100.100.100.100")
+
+// Classifier 网域分类器（peer 感知层——静态表 ClassifyIP 之上叠加 tailnet 成员实锤）。
+// Peers=nil=无 tailnet 面（CGNAT 全 ZonePublic——fail-closed 基态）。
+type Classifier struct {
+	Peers *TailnetPeerCache
+}
+
+// Classify peer 感知分类：CGNAT 段内且 peer 实锤→ZoneLAN（tailnet 成员——
+// 审计标记由调用方注记 TailnetPeer=true）；段内非 peer→ZonePublic（ISP 设施面）；
+// 段外=静态表原样。
+func (c *Classifier) Classify(ip netip.Addr) Zone {
+	ip = ip.Unmap()
+	if c != nil && c.Peers != nil && cgnatCGNAT.Contains(ip) && c.Peers.IsPeer(ip) {
+		return ZoneLAN
+	}
+	return ClassifyIP(ip)
+}
+
+// IsTailnetExempt tailnet 免除谓词（R-1650 v3④ Jobs 直批「确认属于用户自己
+// tailnet 的连接免审批」+顾问二轮① MagicDNS 例外收窄版）：
+//   - peer 实锤（任意端口）→免除；
+//   - Quad100:53（UDP/TCP 由调用方语义保证——端口判别在本层）且 tailscaled 在线
+//     （Alive 锚——不在线则 Quad100 只是普通 CGNAT 地址）→基础设施 DNS 例外
+//     （防 MagicDNS 主机上基础解析被推入审批流卡死——顾问①雪崩面）；
+//   - 其余=不免除（走正常 data_sharing 审查）。
+func (c *Classifier) IsTailnetExempt(ip netip.Addr, port int) bool {
+	if c == nil || c.Peers == nil {
+		return false
+	}
+	ip = ip.Unmap()
+	if port == 53 && ip == quad100 {
+		return c.Peers.Alive() // 基础设施例外=tailscaled 在线实锤为锚
+	}
+	return cgnatCGNAT.Contains(ip) && c.Peers.IsPeer(ip)
+}
