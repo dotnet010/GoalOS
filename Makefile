@@ -62,6 +62,7 @@ ci: lint build
 	@bash scripts/check-doc-completeness.sh || exit 1
 	@bash scripts/check-error-codes.sh || exit 1
 	@bash scripts/check-risk-table.sh || exit 1
+	@bash scripts/check-sensitive-path-write.sh || exit 1
 	@$(MAKE) build-xinchuang
 	@echo "=== Running full race tests ==="
 	@go test -count=1 -timeout 180s -race ./...

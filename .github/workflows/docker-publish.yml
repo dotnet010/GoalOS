@@ -86,6 +86,9 @@ jobs:
           bash scripts/check-doc-completeness.sh
           bash scripts/check-error-codes.sh
           bash scripts/check-risk-table.sh
+          # 会议 #272：测试夹具敏感路径写入机检（第 13 硬闸口——事故实证：
+          # 测试毁损真实 ~/.ssh/config；三段判定=敏感目录构造+终段字面量+写入动词）。
+          bash scripts/check-sensitive-path-write.sh
           # 任务 8.5（会议 #237 Linus——发版前版本号不得落后）：tag↔CanonicalVersion 硬闸。
           # tag 上下文本工作流天然具备（on.push.tags=v*）→ 不等即红；不入 make ci
           # （本地无 tag 上下文恒 SKIP，入列=无牙占位）。事故史=常量滞留 0.1.3 三版本。
