@@ -1,0 +1,39 @@
+# Win11 Home（家庭版）跨 SKU 实证（2026-09-06——goalos-test-win 真机）
+
+环境：goalos-test-win = Windows 11 **家庭版** 10.0.26200（无组策略面——Home SKU 特征），
+ssh 接入（OpenSSH Server），非管理员登录态。
+对照面：本机 Win11 Pro for Workstations 26200 + CI windows-latest（管理员态）。
+
+## 命令与出数（原文）
+
+```
+C:\Users\goalos\runtime-win-test.exe -test.v -test.run "TestWinACProvider|TestRuntime_Bypass_SyscallDenied_Windows"
+=== RUN   TestRuntime_Bypass_SyscallDenied_Windows
+--- PASS: TestRuntime_Bypass_SyscallDenied_Windows (0.21s)   ← TC-RT-001a 生产 WinAC 基座旁路矩阵
+=== RUN   TestWinACProvider_Boundary
+--- PASS: TestWinACProvider_Boundary (0.24s)                 ← home 写拒/.ssh 读拒/出站拒/workspace 通
+=== RUN   TestWinACProvider_ToolchainGranularity
+--- PASS: TestWinACProvider_ToolchainGranularity (0.23s)     ← 具名能力粒度
+=== RUN   TestWinACProvider_Lifecycle
+--- PASS: TestWinACProvider_Lifecycle (0.59s)                ← Job 绞杀+幂等 Release
+=== RUN   TestWinACProvider_D5Ordering
+--- PASS: TestWinACProvider_D5Ordering (0.01s)
+=== RUN   TestWinACProvider_ProfileEntropy
+--- PASS: TestWinACProvider_ProfileEntropy (0.02s)           ← 熵名唯一性（R-1667 v2）
+PASS
+```
+
+```
+-test.run TestRuntime_Latency_Gate → PASS (3.18s)
+  门槛段 Acquire→Start: P95=20.5204ms P50=11.8402ms（n=100）
+  观测段均值: 治理签发=162.83µs 契约验证=73.927µs Resolver=28.175µs
+```
+
+## 判定
+
+- **AppContainer 跨 SKU 实证闭环**：Home（家庭版）=Pro Workstations（本机）=
+  CI windows-latest（管理员态）三面一致全绿——组策略缺席不影响机制可用性。
+- TC-RT-060 第二数据点：Home P95=20.5ms vs Pro P95=26.6ms——同量级
+  （门槛段=profile 注册表创建+Job+ACE 授予的固有成本面，跨机稳定）。
+- goalos-test（Ubuntu 24.04）tailnet 六测试复跑全绿=Linux fail-closed 第二平台实证
+  （同轮——tailscale CLI 缺席路径真机出数）。
