@@ -8292,3 +8292,23 @@ resolutions:
       - must_exist: "常量绑定"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 Win32 断言常量绑定（R-1670）"
+  R-1671:
+    desc: "CI 主动盯梢纪律（会议 #271——Jobs 2026-09-06 指令「等待 CI 错误推送是被动行为」）: 任何 push 后必须 scripts/watch-ci.sh 主动轮询（每 120s——该 SHA 全部 workflow 到终态）；本地闸口（make ci 手工等效）与 GitHub CI 双面全绿才许收工；红=立即归因修复。事故史=windows-daily 连红 4 次无人察觉（#270 观测盲区）。证据等级=已实证（watch-ci.sh 对真实 SHA 出数——green/red 双向）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1671"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1671"
+      - must_exist: "主动盯梢"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 CI 主动盯梢纪律（R-1671）"
+  R-1672:
+    desc: "windows-daily 全绿=不可逾越发版卡点（会议 #271——Jobs 2026-09-06 指令）: docker-publish.yml 前置 windows-gate job（scripts/check-windows-daily-green.sh）——tag 指向 SHA 的最近一次 windows-daily run 必须 success；无 run=fail-closed（先推 main 触发）；未完结=每 120s 轮询上限 30 分钟；failure/任何非 success=发布中止，无人工豁免通道。证据等级=已实证（双向实证：绿 SHA 放行 exit 0/红 SHA 拦截 exit 1——真实数据对拍）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1672"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1672"
+      - must_exist: "发版卡点"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 windows-daily 发版卡点（R-1672）"

@@ -10,7 +10,23 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  windows-gate:
+    # R-1672（Jobs 2026-09-06 指令）：「windows-daily 必须全部亮绿」=不可逾越
+    # 发版卡点——tag 指向的 SHA 必须有 windows-daily success run（缺/红/超时=中止）。
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      actions: read
+    steps:
+      - name: Checkout（脚本来源）
+        uses: actions/checkout@v7
+      - name: windows-daily 全绿硬闸
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/check-windows-daily-green.sh "${{ github.sha }}"
+
   test:
+    needs: windows-gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
