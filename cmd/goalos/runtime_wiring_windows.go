@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/goalos/goalos/internal/llm"
 	goalosruntime "github.com/goalos/goalos/internal/runtime"
 )
 
@@ -18,8 +19,13 @@ import (
 // toolchains=nil：具名能力授予随契约声明动态（R-1659 v3），daemon 无静态工具链表。
 // tmpDir=os.TempDir() 下 goalos 专属子目录——原 "\tmp\goalos"=盘符根路径（随工作目录
 // 盘符漂移且通常不存在），2026-08-30 实机复核修正。
-func registerPlatformProvider(rb *runtimeBoundary, home string) {
-	p := goalosruntime.NewWinACProvider(filepath.Join(home, "Goals"), filepath.Join(os.TempDir(), "goalos"), nil)
+func registerPlatformProvider(rb *runtimeBoundary, home string, fd3dial *llm.ZoneDialer) {
+	var opts []goalosruntime.WinACOption
+	if fd3dial != nil {
+		// FD3 broker 拨号面=zone dialer 同源（R-1650 v2④——网域分类留痕不旁路）
+		opts = append(opts, goalosruntime.WithDialFunc(fd3dial.DialContext))
+	}
+	p := goalosruntime.NewWinACProvider(filepath.Join(home, "Goals"), filepath.Join(os.TempDir(), "goalos"), nil, opts...)
 	if err := p.Prepare(context.Background(), goalosruntime.RuntimePlan{PlanID: "daemon-boot", Tier: goalosruntime.TierRestricted}); err != nil {
 		log.Printf(`{"level":"WARN","msg":"Step 7c: windows WinAC Provider Prepare 失败（诚实不注册）: %v"}`, err)
 		return

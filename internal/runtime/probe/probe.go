@@ -67,6 +67,35 @@ func Main(args []string) int {
 		time.Sleep(ms)
 		fmt.Println("PROBE-SLEPT")
 		return 0
+	case "roundtrip":
+		// 回环中继探针（FD3——R-1650 v2/R-1660 v2 证据形态）：dial+写+读回显——
+		// 字节级全链验证（dial 探针只证连通；roundtrip 证中继真实通数据）。
+		// 成功=PROBE-ERRNO=0 + ROUNDTRIP-OK；失败=PROBE-ERRNO=<n>。
+		conn, derr := net.DialTimeout("tcp", args[1], 3*time.Second)
+		if derr != nil {
+			fmt.Printf("PROBE-ERRNO=%d\n", ErrnoFromError(derr))
+			return 1
+		}
+		defer conn.Close()
+		conn.SetDeadline(time.Now().Add(5 * time.Second))
+		nonce := fmt.Sprintf("rt-%d", time.Now().UnixNano())
+		if _, werr := conn.Write([]byte(nonce)); werr != nil {
+			fmt.Printf("PROBE-ERRNO=%d\n", ErrnoFromError(werr))
+			return 1
+		}
+		buf := make([]byte, 64)
+		n, rerr := conn.Read(buf)
+		if rerr != nil {
+			fmt.Printf("PROBE-ERRNO=%d\n", ErrnoFromError(rerr))
+			return 1
+		}
+		if string(buf[:n]) != nonce {
+			fmt.Println("PROBE-ERRNO=-4") // 合成码：回显内容失真（中继中间人嫌疑面）
+			return 1
+		}
+		fmt.Println("PROBE-ERRNO=0")
+		fmt.Println("ROUNDTRIP-OK")
+		return 0
 	default:
 		fmt.Println("PROBE-ERRNO=-2 unknown op")
 		return 1

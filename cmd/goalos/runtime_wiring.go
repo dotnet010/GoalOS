@@ -15,6 +15,7 @@ import (
 	"github.com/goalos/goalos/internal/config"
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/governance"
+	"github.com/goalos/goalos/internal/llm"
 	goalosruntime "github.com/goalos/goalos/internal/runtime"
 	"github.com/goalos/goalos/pkg/events"
 )
@@ -28,12 +29,13 @@ type runtimeBoundary struct {
 
 // runtimeWiring 组合根：平台 Provider 注册+解析器（平台探测+名单+事件发射）+
 // 验证层（keyring 签发材料+吊销桥+拒绝留痕）+启动自检（边界可解析证据）。
-func runtimeWiring(bus *eventbus.EventBus, home string, cfg *config.Config, gov *governance.Engine, secretKey []byte) *runtimeBoundary {
+// fd3dial=FD3 broker 拨号面（zone dialer 注入——nil=各平台自行兜底）。
+func runtimeWiring(bus *eventbus.EventBus, home string, cfg *config.Config, gov *governance.Engine, secretKey []byte, fd3dial *llm.ZoneDialer) *runtimeBoundary {
 	rb := &runtimeBoundary{registry: goalosruntime.NewProviderRegistry()}
 
 	// ①平台 Provider 注册（per-OS 文件——darwin=Seatbelt 受限档任务 5.3；linux/windows=
 	// 任务 5.1/5.2 收敛前注册表保持空——骨架纪律 R-1468 诚实状态）
-	registerPlatformProvider(rb, home)
+	registerPlatformProvider(rb, home, fd3dial)
 
 	// ②解析器（平台探测+名单+RuntimeSelected/Rejected 事件发射——07 §4.14）
 	trusted := make([]goalosruntime.TrustedWorkload, 0, len(cfg.Daemon.TrustedWorkloads))

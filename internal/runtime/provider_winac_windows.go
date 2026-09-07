@@ -40,6 +40,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/goalos/goalos/internal/fd3"
 )
 
 // ─── Win32 原语（userenv/kernelbase/advapi32——spike 实证归属） ───
@@ -287,16 +289,38 @@ type winACProvider struct {
 	capSids    map[string]*windows.SID
 	prepared   bool
 	mu         sync.Mutex
+	// FD3（R-1650 v2/R-1660 v2——沙箱内回环转发器承接宿主服务）：dialFn=zone dialer
+	// 注入（nil=broker 直连兜底——生产接线必须注入，runtime_wiring_windows.go）；
+	// onDeny=broker 拒绝审计回调（nil=log 面）。
+	dialFn fd3.DialFunc
+	onDeny func(endpoint, reason string)
+}
+
+// WinACOption 构造可选项。
+type WinACOption func(*winACProvider)
+
+// WithDialFunc 注入 broker 拨号面（生产=zone dialer——网域分类留痕同源不旁路）。
+func WithDialFunc(d fd3.DialFunc) WinACOption {
+	return func(p *winACProvider) { p.dialFn = d }
+}
+
+// WithOnDeny 注入 broker 拒绝审计回调（默认=日志面）。
+func WithOnDeny(fn func(endpoint, reason string)) WinACOption {
+	return func(p *winACProvider) { p.onDeny = fn }
 }
 
 // NewWinACProvider 构造（toolchains=具名能力授权表 name→路径；nil=无工具链授予）。
-func NewWinACProvider(workspace, tmpDir string, toolchains map[string]string) Provider {
-	return &winACProvider{
+func NewWinACProvider(workspace, tmpDir string, toolchains map[string]string, opts ...WinACOption) Provider {
+	p := &winACProvider{
 		workspace:  workspace,
 		tmpDir:     tmpDir,
 		toolchains: toolchains,
 		capSids:    map[string]*windows.SID{},
 	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 func (p *winACProvider) Name() string { return "winac-windows" }
@@ -384,7 +408,17 @@ func (p *winACProvider) Acquire(_ context.Context, req LeaseRequest) (RuntimeHan
 		p: p, profile: profile, sid: sid, job: job,
 		state: HandleAcquired, goalID: req.GoalID,
 		caps: winACSelectCaps(p.capSids, req.Contract),
+		// R-1650 v2：契约声明端点集（FD3 broker 白名单——nil=无网络中继面）
+		endpoints: winACContractEndpoints(req.Contract),
 	}, nil
+}
+
+// winACContractEndpoints 契约声明端点集提取（nil 契约=空集）。
+func winACContractEndpoints(contract *VerifiedContract) []string {
+	if contract == nil {
+		return nil
+	}
+	return contract.Claims().NetworkEndpoints
 }
 
 // winACSelectCaps 按契约声明挑选具名能力（R-1659 v3②——"toolchain:<name>" 前缀映射；
@@ -442,17 +476,79 @@ type winACHandle struct {
 	// 此时严禁 FreeSid/DeleteProfile（宁承受单次句柄泄露，绝不在存活进程下释放
 	// SID=UAF 焊死）。atomic：exec 锁外路径写，Release wg.Wait 后读（happens-after）。
 	tainted atomic.Bool
+	// FD3 面（R-1650 v2/R-1660 v2——沙箱内回环转发器承接宿主服务）：
+	// endpoints=契约声明端点集；fd3Ln/broker=daemon 侧；fd3dUp=沙箱内转发器已拉起。
+	endpoints []string
+	fd3Ln     *fd3.Listener
+	fd3Broker *fd3.Broker
+	fd3dUp    bool
 }
 
 func (h *winACHandle) ID() string { return "winac-" + h.profile }
 
-func (h *winACHandle) Start(context.Context) error {
+func (h *winACHandle) Start(ctx context.Context) error {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if h.state != HandleAcquired {
+		h.mu.Unlock()
 		return ErrInvalidState
 	}
+	// FD3 面（R-1650 v2）：契约声明端点集非空=拉中继（监听+broker+沙箱内转发器）；
+	// 拉起失败=fail-closed（Start 失败=session 不开——不放行无中继的声明契约）。
+	if len(h.endpoints) > 0 {
+		if err := h.bringUpFD3(); err != nil {
+			h.mu.Unlock()
+			return fmt.Errorf("runtime: FD3 中继拉起失败（fail-closed）: %w", err)
+		}
+	}
 	h.state = HandleReady
+	h.mu.Unlock()
+	return nil
+}
+
+// bringUpFD3 FD3 中继拉起：daemon 侧监听+broker（契约白名单+注入拨号）→
+// 沙箱内 fd3d 拉起（detached——session 长驻，Job 绞杀收尾）→就绪证据门槛。
+func (h *winACHandle) bringUpFD3() error {
+	ln, err := fd3.Listen("GoalOS-" + h.goalID)
+	if err != nil {
+		return err
+	}
+	broker := fd3.NewBroker(h.endpoints, h.p.dialFn, h.p.onDeny)
+	go broker.Serve(ln)
+	// 映射=透明同端口（agent 直连 localhost:<服务端已知端口> 无感知——R-1660 v2）
+	mappings := strings.Join(h.endpoints, ",")
+	outFile, err := h.spawnDetachedInContainer(probeSelfExe(),
+		[]string{"__goalos-fd3d", ln.Name(), mappings})
+	if err != nil {
+		ln.Close()
+		return err
+	}
+	// 就绪门槛：fd3d 证据文件出现 FD3D-READY（跨 loopback 不可达——捕获文件=唯一证据面）
+	var mapLines []string
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		if data, rerr := os.ReadFile(outFile); rerr == nil && strings.Contains(string(data), "FD3D-READY") {
+			for _, line := range strings.Split(string(data), "\n") {
+				if strings.HasPrefix(line, "FD3D-MAP ") {
+					mapLines = append(mapLines, strings.TrimPrefix(line, "FD3D-MAP "))
+				}
+			}
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if mapLines == nil {
+		ln.Close()
+		data, _ := os.ReadFile(outFile)
+		return fmt.Errorf("fd3d 就绪证据超时（捕获文件=%s 无 FD3D-READY——内容=%q）", outFile, string(data))
+	}
+	// 实际映射落工作区（绑定冲突回落后「声明≠实际」必须显式可见——禁静默错配；
+	// 工作负载读 goalos-fd3-map.txt 知真实回环端口——每行 <listenPort>=<endpoint>）
+	mapContent := strings.Join(mapLines, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(h.p.workspace, "goalos-fd3-map.txt"), []byte(mapContent), 0644); err != nil {
+		ln.Close()
+		return fmt.Errorf("fd3 映射文件写入失败: %w", err)
+	}
+	h.fd3Ln, h.fd3Broker, h.fd3dUp = ln, broker, true
 	return nil
 }
 
@@ -524,20 +620,22 @@ func (h *winACHandle) Execute(ctx context.Context, req ExecuteRequest) (ExecuteR
 	return res, nil
 }
 
-// execInContainer AppContainer 内执行（SUSPENDED 创建→入 Job→Resume——
-// 消灭先跑后入 job 的竞态窗口；输出=tmpDir 捕获文件继承句柄）。
-func (h *winACHandle) execInContainer(_ context.Context, binary string, args []string) (int, string) {
+// spawnInContainer AC 内拉起子进程（SUSPENDED 创建→入 Job→Resume——消灭先跑后入
+// job 的竞态窗口；输出=tmpDir 捕获文件继承句柄）。返回=捕获文件路径+进程信息
+//（句柄所有权移交调用方）。execInContainer=同步等待面；spawnDetachedInContainer=
+// 长驻面（fd3d 族——不等待不读回，Job KILL_ON_JOB_CLOSE 收尾）。
+func (h *winACHandle) spawnInContainer(binary string, args []string) (string, windows.ProcessInformation, error) {
+	var pi windows.ProcessInformation
 	outFile := filepath.Join(h.p.tmpDir, fmt.Sprintf("winac-out-%d.txt", time.Now().UnixNano()))
-	defer os.Remove(outFile)
 	outPtr, perr := windows.UTF16PtrFromString(outFile)
 	if perr != nil {
-		return -1, "WINAC-FATAL: 捕获文件路径含 NUL"
+		return "", pi, fmt.Errorf("捕获文件路径含 NUL")
 	}
 	sa := &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), InheritHandle: 1}
 	hOut, err := windows.CreateFile(outPtr, windows.GENERIC_WRITE, windows.FILE_SHARE_READ, sa,
 		windows.CREATE_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL, 0)
 	if err != nil {
-		return -1, "WINAC-FATAL: 捕获文件: " + err.Error()
+		return "", pi, fmt.Errorf("捕获文件: %w", err)
 	}
 	defer windows.CloseHandle(hOut)
 
@@ -548,11 +646,11 @@ func (h *winACHandle) execInContainer(_ context.Context, binary string, args []s
 	}
 	attrList, err := windows.NewProcThreadAttributeList(1)
 	if err != nil {
-		return -1, "WINAC-FATAL: attrlist: " + err.Error()
+		return "", pi, fmt.Errorf("attrlist: %w", err)
 	}
 	defer attrList.Delete()
 	if err := attrList.Update(procThreadAttributeSecurityCapabilities, unsafe.Pointer(&secCaps), unsafe.Sizeof(secCaps)); err != nil {
-		return -1, "WINAC-FATAL: attr update: " + err.Error()
+		return "", pi, fmt.Errorf("attr update: %w", err)
 	}
 
 	var siex windows.StartupInfoEx
@@ -569,39 +667,55 @@ func (h *winACHandle) execInContainer(_ context.Context, binary string, args []s
 	}
 	cmdPtr, perr := windows.UTF16PtrFromString(cmdline)
 	if perr != nil {
-		return -1, "WINAC-FATAL: 命令行含 NUL"
+		return "", pi, fmt.Errorf("命令行含 NUL")
 	}
 	cwdPtr, perr := windows.UTF16PtrFromString(h.p.workspace) // F6：CWD 显式=workspace（已授予面）
 	if perr != nil {
-		return -1, "WINAC-FATAL: workspace 路径含 NUL"
+		return "", pi, fmt.Errorf("workspace 路径含 NUL")
 	}
 
-	if os.Getenv("GOALOS_WINAC_DEBUG") == "1" {
-		var s *uint16
-		if windows.ConvertSidToStringSid(h.sid, &s) == nil {
-			fmt.Printf("[winac-dbg] profile=%q sid=%q ws=%q tmp=%q caps=%d\n",
-				h.profile, windows.UTF16PtrToString(s), h.p.workspace, h.p.tmpDir, len(h.caps))
-			windows.LocalFree(windows.Handle(unsafe.Pointer(s)))
-		}
-	}
-
-	var pi windows.ProcessInformation
 	err = windows.CreateProcess(nil, cmdPtr, nil, nil, true,
 		windows.CREATE_SUSPENDED|extendedStartupinfoPresent|windows.CREATE_UNICODE_ENVIRONMENT,
 		nil, cwdPtr, &siex.StartupInfo, &pi)
 	if err != nil {
-		return -1, "WINAC-FATAL: CreateProcess: " + err.Error() + " cmdline=" + cmdline + " cwd=" + h.p.workspace
+		return "", pi, fmt.Errorf("CreateProcess: %w cmdline=%s cwd=%s", err, cmdline, h.p.workspace)
 	}
-	defer windows.CloseHandle(pi.Process)
-	defer windows.CloseHandle(pi.Thread)
 	// 入 Job 先于 Resume（KILL_ON_JOB_CLOSE 覆盖全生命周期——无竞态窗口）
 	if err := windows.AssignProcessToJobObject(h.job, pi.Process); err != nil {
 		windows.TerminateProcess(pi.Process, 1)
-		return -1, "WINAC-FATAL: AssignProcessToJobObject: " + err.Error()
+		windows.CloseHandle(pi.Process)
+		windows.CloseHandle(pi.Thread)
+		return "", pi, fmt.Errorf("AssignProcessToJobObject: %w", err)
 	}
 	if _, err := windows.ResumeThread(pi.Thread); err != nil {
-		return -1, "WINAC-FATAL: ResumeThread: " + err.Error()
+		windows.CloseHandle(pi.Process)
+		windows.CloseHandle(pi.Thread)
+		return "", pi, fmt.Errorf("ResumeThread: %w", err)
 	}
+	return outFile, pi, nil
+}
+
+// spawnDetachedInContainer 长驻子进程拉起（fd3d 族——不等不收；句柄即关
+//（Job 成员身份已建立=KILL_ON_JOB_CLOSE 覆盖，进程句柄非存活依据））。
+func (h *winACHandle) spawnDetachedInContainer(binary string, args []string) (string, error) {
+	outFile, pi, err := h.spawnInContainer(binary, args)
+	if err != nil {
+		return "", err
+	}
+	windows.CloseHandle(pi.Process)
+	windows.CloseHandle(pi.Thread)
+	return outFile, nil
+}
+
+// execInContainer AppContainer 内执行（同步面——spawn→等待→读回捕获文件）。
+func (h *winACHandle) execInContainer(_ context.Context, binary string, args []string) (int, string) {
+	outFile, pi, err := h.spawnInContainer(binary, args)
+	defer os.Remove(outFile)
+	if err != nil {
+		return -1, "WINAC-FATAL: " + err.Error()
+	}
+	defer windows.CloseHandle(pi.Process)
+	defer windows.CloseHandle(pi.Thread)
 	wait, err := windows.WaitForSingleObject(pi.Process, 120000)
 	if err != nil || wait != 0 {
 		_ = windows.TerminateProcess(pi.Process, 1)
@@ -617,12 +731,11 @@ func (h *winACHandle) execInContainer(_ context.Context, binary string, args []s
 	}
 	var code uint32
 	_ = windows.GetExitCodeProcess(pi.Process, &code)
-	procFlushFileBuffersWinAC.Call(uintptr(hOut))
+	// 捕获文件读回（hOut 句柄归 spawn 方关闭；子进程已退出=写入已完结——
+	// Flush 面随句柄所有权退役，2026-09-07 spawn 拆分注记）。
 	data, _ := os.ReadFile(outFile)
 	return int(code), string(data)
 }
-
-var procFlushFileBuffersWinAC = windows.NewLazySystemDLL("kernel32.dll").NewProc("FlushFileBuffers")
 
 // Release 清理（R-1661 v2）：翻 state→关 Job（绞杀在飞+全部子孙，锁外——
 // 锁内关=与在飞 Execute 死锁实锤）→等在飞收尾→收 ACE→删 profile（退避重试）
@@ -635,6 +748,9 @@ func (h *winACHandle) Release(context.Context) error {
 	}
 	h.state = HandleReleased
 	h.mu.Unlock()
+	if h.fd3Ln != nil {
+		h.fd3Ln.Close() // broker Accept 循环退出（fd3d 由 Job 绞杀——下同族覆盖）
+	}
 	windows.CloseHandle(h.job) // KILL_ON_JOB_CLOSE=内核级绞杀（先绞杀再等收尾——反序=白等在飞超时）
 	h.wg.Wait()                // 在飞 execInContainer 收尾后方可 FreeSid/收 ACE
 	var errs []string

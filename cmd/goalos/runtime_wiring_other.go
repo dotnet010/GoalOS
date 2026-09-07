@@ -4,4 +4,6 @@
 // 非空壳：平台分支编译期完备性）。
 package main
 
-func registerPlatformProvider(_ *runtimeBoundary, _ string) {}
+import "github.com/goalos/goalos/internal/llm"
+
+func registerPlatformProvider(_ *runtimeBoundary, _ string, _ *llm.ZoneDialer) {}
