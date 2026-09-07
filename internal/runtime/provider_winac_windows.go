@@ -508,7 +508,7 @@ func (h *winACHandle) Start(ctx context.Context) error {
 // bringUpFD3 FD3 中继拉起：daemon 侧监听+broker（契约白名单+注入拨号）→
 // 沙箱内 fd3d 拉起（detached——session 长驻，Job 绞杀收尾）→就绪证据门槛。
 func (h *winACHandle) bringUpFD3() error {
-	ln, err := fd3.Listen("GoalOS-" + h.goalID)
+	ln, err := fd3.Listen(h.p.tmpDir, "GoalOS-"+h.goalID)
 	if err != nil {
 		return err
 	}

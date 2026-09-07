@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows || linux
 
 // fd3_broker_test.go——FD3 broker 治理面契约测试（S2——R-571 先红）。
 // 断言来源=开发计划/fd3-broker-设计.md §四治理面+F2/F1 矩阵：
@@ -72,7 +72,7 @@ func TestFD3Broker_DenyUndeclared(t *testing.T) {
 	broker := NewBroker([]string{echoAddr}, nil, func(ep, reason string) {
 		denies = append(denies, ep+"|"+reason)
 	})
-	ln, err := Listen("FD3-Broker-F2")
+	ln, err := Listen(t.TempDir(), "FD3-Broker-F2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestFD3Broker_DenyUndeclared(t *testing.T) {
 func TestFD3Broker_RelayDeclared(t *testing.T) {
 	echoAddr := echoServer(t)
 	broker := NewBroker([]string{echoAddr}, nil, nil)
-	ln, err := Listen("FD3-Broker-F1")
+	ln, err := Listen(t.TempDir(), "FD3-Broker-F1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestFD3Broker_RelayDeclared(t *testing.T) {
 func TestFD3Broker_ProtocolDiscipline(t *testing.T) {
 	echoAddr := echoServer(t)
 	broker := NewBroker([]string{echoAddr}, nil, nil)
-	ln, err := Listen("FD3-Broker-F3d")
+	ln, err := Listen(t.TempDir(), "FD3-Broker-F3d")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestFD3Broker_ZoneDialerInjection(t *testing.T) {
 		return net.DialTimeout("tcp", addr, 3*time.Second)
 	}
 	broker := NewBroker([]string{echoAddr}, injectDial, nil)
-	ln, err := Listen("FD3-Broker-Inj")
+	ln, err := Listen(t.TempDir(), "FD3-Broker-Inj")
 	if err != nil {
 		t.Fatal(err)
 	}

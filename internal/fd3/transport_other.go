@@ -1,8 +1,7 @@
-//go:build !windows
+//go:build !windows && !linux
 
-// transport_other.go——FD3 非 Windows 传输层占位（fail-closed——诚实不实现）：
-// Linux 模式 B 的宿主中继面=另行设计（abstract socket 族——见 fd3-broker-设计.md
-// 注记）；本包在 linux/darwin 仅帧协议（frame.go 平台中立）可用。
+// transport_other.go——FD3 非 Windows/Linux 传输层占位（fail-closed——诚实不实现）：
+// darwin 族=另行设计（Seatbelt unix socket 面未实证——登记待验）。
 package fd3
 
 import "errors"
@@ -20,7 +19,7 @@ func (l *Listener) Name() string { return "" }
 func (l *Listener) Close() error { return nil }
 
 // Listen 占位（恒 fail-closed）。
-func Listen(label string) (*Listener, error) { return nil, ErrUnsupportedPlatform }
+func Listen(dir, label string) (*Listener, error) { return nil, ErrUnsupportedPlatform }
 
 // Accept 占位。
 func (l *Listener) Accept() (*Conn, error) { return nil, ErrUnsupportedPlatform }
