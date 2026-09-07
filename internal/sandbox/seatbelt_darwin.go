@@ -42,3 +42,24 @@ func RestrictedSeatbeltProfileForNetwork(networkAuthorized bool) (string, error)
 (allow network-outbound (to tcp "*:80"))`, 1)
 	return variant, nil
 }
+
+// RestrictedSeatbeltProfileFD3 FD3 中继变体（R-1650 v2 darwin 面——会议 #277 续）：
+// 契约声明 network_endpoints（宿主服务中继诉求）时——网络节从全拒收窄为
+// 「仅 broker unix socket 出站点对点放行」（unix socket connect 在 macOS 沙箱=
+// network-outbound 操作族管辖——路径字面量收窄=mDNSResponder 族 SBPL 先例形态；
+// 实参经 -D FD3_SOCK_PATH 注入）。
+// 诚实标注：本变体=评审级实现——SBPL 弃用私有 API 无文档可考，unix socket
+// 字面量收窄的实机验证=待 mac 实机窗口（登记诚实缺口，不虚报）；deny-then-allow
+// 收窄形态=R-1643 变体实证同构。
+// fail-closed：锚点缺失（单源漂移）=返回错误，绝不静默产出。
+func RestrictedSeatbeltProfileFD3() (string, error) {
+	if !strings.Contains(restrictedDarwinSB, networkSectionAnchor) {
+		return "", fmt.Errorf("sandbox: 受限档 profile 网络节锚点缺失（单源漂移——fail-closed 不产出）")
+	}
+	variant := strings.Replace(restrictedDarwinSB, networkSectionAnchor, `;; FD3 变体（R-1650 v2 darwin 面）：全拒收窄=仅 broker unix socket 出站放行
+	(deny network-inbound)
+	(deny network-bind)
+	(deny network-outbound)
+	(allow network-outbound (literal (param "FD3_SOCK_PATH")))`, 1)
+	return variant, nil
+}

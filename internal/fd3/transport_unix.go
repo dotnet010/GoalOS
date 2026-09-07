@@ -1,6 +1,6 @@
-//go:build linux
+//go:build linux || darwin
 
-// transport_unix.go——FD3 Linux 传输层：unix socket（单连接全双工——无 Windows
+// transport_unix.go——FD3 Linux/darwin 传输层：unix socket（单连接全双工——无 Windows
 // 命名管道同步句柄坑，无需双单向对）。
 //
 // 与 Windows 面的形态差异（设计=开发计划/fd3-broker-设计.md 注记成文）：

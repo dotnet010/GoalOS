@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/goalos/goalos/internal/fd3"
 	"github.com/goalos/goalos/internal/sandbox"
 )
 
@@ -32,12 +33,29 @@ type darwinSeatbeltProvider struct {
 	workspace string // 工作区卷根（profile WORKSPACE_DIR 注入）
 	tmpDir    string // 临时目录根（profile TMP_DIR 注入）
 	homeDir   string
+	// FD3 面（R-1650 v2 darwin——unix socket 直连形态=linux 同构）：dialFn=zone
+	// dialer 注入；onDeny=broker 拒绝审计回调。
+	dialFn fd3.DialFunc
+	onDeny func(endpoint, reason string)
+}
+
+// DarwinOption 构造可选项（R-1650 v2 接线面）。
+type DarwinOption func(*darwinSeatbeltProvider)
+
+// WithDarwinDialFunc 注入 broker 拨号面（生产=zone dialer 同源）。
+func WithDarwinDialFunc(d fd3.DialFunc) DarwinOption {
+	return func(p *darwinSeatbeltProvider) { p.dialFn = d }
+}
+
+// WithDarwinOnDeny 注入 broker 拒绝审计回调。
+func WithDarwinOnDeny(fn func(endpoint, reason string)) DarwinOption {
+	return func(p *darwinSeatbeltProvider) { p.onDeny = fn }
 }
 
 // NewDarwinSeatbeltProvider 构造受限档 Provider（workspace/tmpDir=边界允许的唯二写入面）。
 // 路径全部 firmlink 规范化（EvalSymlinks）——SBPL 按真实路径匹配，/tmp≠/private/tmp
 // （2026-08-29 实证：未规范化导致 workspace 写允许与 TARGET_BINARY 放行全部失配）。
-func NewDarwinSeatbeltProvider(workspace, tmpDir string) Provider {
+func NewDarwinSeatbeltProvider(workspace, tmpDir string, opts ...DarwinOption) Provider {
 	home, _ := os.UserHomeDir()
 	if c, err := filepath.EvalSymlinks(workspace); err == nil {
 		workspace = c
@@ -48,12 +66,16 @@ func NewDarwinSeatbeltProvider(workspace, tmpDir string) Provider {
 	if c, err := filepath.EvalSymlinks(home); err == nil && c != "" {
 		home = c
 	}
-	return &darwinSeatbeltProvider{
+	p := &darwinSeatbeltProvider{
 		state:     ProviderRegistered,
 		workspace: workspace,
 		tmpDir:    tmpDir,
 		homeDir:   home,
 	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 func (p *darwinSeatbeltProvider) Name() string { return "darwin-seatbelt" }
@@ -110,6 +132,8 @@ func (p *darwinSeatbeltProvider) Acquire(_ context.Context, req LeaseRequest) (R
 		p:     p,
 		state: HandleAcquired,
 		netCaps: netCaps,
+		// R-1650 v2 darwin 面：契约声明端点集（FD3 broker 白名单）
+		endpoints: ContractEndpoints(req.Contract),
 	}, nil
 }
 
@@ -122,6 +146,12 @@ type seatbeltHandle struct {
 	profilePath string
 	activeCmd   *exec.Cmd // 当前执行进程（Interrupt/Pause/Resume 对象）
 	netCaps     bool      // 契约声明网络能力（R-1643 裁决④——profile 变体选择数据源）
+	// FD3 面（R-1650 v2 darwin）：endpoints=契约声明集；fd3Ln=broker unix socket；
+	// fd3SockPath=socket 实路径（-D FD3_SOCK_PATH 注入+映射文件载体）。
+	endpoints    []string
+	fd3Ln        *fd3.Listener
+	fd3Broker    *fd3.Broker
+	fd3SockPath  string
 }
 
 func (h *seatbeltHandle) ID() string { return h.id }
@@ -143,7 +173,18 @@ func (h *seatbeltHandle) Start(context.Context) error {
 		return fmt.Errorf("runtime: tmpDir 建立失败: %w", err)
 	}
 	// R-1643 裁决④：按契约网络能力选变体（授权=端口级放行 tcp 443/80；未授权=全拒）
-	profile, err := sandbox.RestrictedSeatbeltProfileForNetwork(h.netCaps)
+	// R-1650 v2 darwin 面：契约声明端点集→FD3 变体优先（全拒收窄到 broker socket
+	// 点对点——比 443/80 放行更强的收窄面；两变体互斥，FD3 在位=网络授权变体不叠加）
+	var profile string
+	var err error
+	if len(h.endpoints) > 0 {
+		if err := h.bringUpFD3(); err != nil {
+			return fmt.Errorf("runtime: FD3 中继拉起失败（fail-closed）: %w", err)
+		}
+		profile, err = sandbox.RestrictedSeatbeltProfileFD3()
+	} else {
+		profile, err = sandbox.RestrictedSeatbeltProfileForNetwork(h.netCaps)
+	}
 	if err != nil {
 		return fmt.Errorf("runtime: profile 变体产出失败（单源漂移 fail-closed）: %w", err)
 	}
@@ -152,6 +193,28 @@ func (h *seatbeltHandle) Start(context.Context) error {
 		return fmt.Errorf("runtime: profile 物化失败: %w", err)
 	}
 	h.state = HandleReady
+	return nil
+}
+
+// bringUpFD3 broker 拉起（unix socket 落 tmpDir——SBPL 写面已授；映射文件落
+// workspace=工作负载知悉面）。形态=linux 同构（unix socket 直连，无转发器）。
+func (h *seatbeltHandle) bringUpFD3() error {
+	ln, err := fd3.Listen(h.p.tmpDir, "GoalOS-"+h.id)
+	if err != nil {
+		return err
+	}
+	broker := fd3.NewBroker(h.endpoints, h.p.dialFn, h.p.onDeny)
+	go broker.Serve(ln)
+	h.fd3SockPath = ln.Name()
+	h.fd3Ln, h.fd3Broker = ln, broker
+	mapContent := "sock=" + h.fd3SockPath + "\n"
+	for _, ep := range h.endpoints {
+		mapContent += "endpoint=" + ep + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(h.p.workspace, "goalos-fd3-map.txt"), []byte(mapContent), 0644); err != nil {
+		ln.Close()
+		return fmt.Errorf("fd3 映射文件写入失败: %w", err)
+	}
 	return nil
 }
 
@@ -263,7 +326,7 @@ func (h *seatbeltHandle) Resume(context.Context) error {
 	return nil
 }
 
-// Release 清理：杀活进程+删 profile 文件（幂等——二次调用成功）。
+// Release 清理：杀活进程+删 profile 文件+FD3 监听收尾（幂等——二次调用成功）。
 func (h *seatbeltHandle) Release(context.Context) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -273,6 +336,9 @@ func (h *seatbeltHandle) Release(context.Context) error {
 	if h.activeCmd != nil && h.activeCmd.Process != nil {
 		_ = syscall.Kill(-h.activeCmd.Process.Pid, syscall.SIGKILL)
 		h.activeCmd = nil
+	}
+	if h.fd3Ln != nil {
+		h.fd3Ln.Close() // broker 循环退出+socket 文件清理
 	}
 	if h.profilePath != "" {
 		_ = os.Remove(h.profilePath)
@@ -289,14 +355,24 @@ func (h *seatbeltHandle) execInBoundary(binary string, args ...string) (string, 
 	if c, err := filepath.EvalSymlinks(binary); err == nil {
 		binary = c
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/sandbox-exec",
+	execArgs := []string{
 		"-f", h.profilePath,
-		"-D", "WORKSPACE_DIR="+h.p.workspace,
-		"-D", "TMP_DIR="+h.p.tmpDir,
-		"-D", "HOME_DIR="+h.p.homeDir,
-		"-D", "TARGET_BINARY="+binary, // process-exec 仅放行目标本身（全 deny=execvp 自拒假象）
-		"--", binary)
-	cmd.Args = append(cmd.Args, args...)
+		"-D", "WORKSPACE_DIR=" + h.p.workspace,
+		"-D", "TMP_DIR=" + h.p.tmpDir,
+		"-D", "HOME_DIR=" + h.p.homeDir,
+		"-D", "TARGET_BINARY=" + binary, // process-exec 仅放行目标本身（全 deny=execvp 自拒假象）
+	}
+	// FD3 变体参数注入（R-1650 v2——SBPL 按真实路径匹配，EvalSymlinks 规范化）
+	if h.fd3SockPath != "" {
+		sockPath := h.fd3SockPath
+		if c, err := filepath.EvalSymlinks(sockPath); err == nil {
+			sockPath = c
+		}
+		execArgs = append(execArgs, "-D", "FD3_SOCK_PATH="+sockPath)
+	}
+	execArgs = append(execArgs, "--", binary)
+	execArgs = append(execArgs, args...)
+	cmd := exec.CommandContext(ctx, "/usr/bin/sandbox-exec", execArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // 进程组（Interrupt/Pause 作用域）
 	out, err := cmd.CombinedOutput()
 	return string(out), err

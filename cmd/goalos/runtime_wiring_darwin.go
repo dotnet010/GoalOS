@@ -12,11 +12,16 @@ import (
 )
 
 // registerPlatformProvider darwin=Seatbelt 受限档 Provider（Prepare 失败=诚实不注册）。
-func registerPlatformProvider(rb *runtimeBoundary, home string, _ *llm.ZoneDialer) {
+func registerPlatformProvider(rb *runtimeBoundary, home string, fd3dial *llm.ZoneDialer) {
 	if goalosruntime.DetectPlatformIsolation() < goalosruntime.I2 {
 		return
 	}
-	p := goalosruntime.NewDarwinSeatbeltProvider(home+"/Goals", "/tmp/goalos")
+	var opts []goalosruntime.DarwinOption
+	if fd3dial != nil {
+		// FD3 broker 拨号面=zone dialer 同源（R-1650 v2④——darwin 面同构注入）
+		opts = append(opts, goalosruntime.WithDarwinDialFunc(fd3dial.DialContext))
+	}
+	p := goalosruntime.NewDarwinSeatbeltProvider(home+"/Goals", "/tmp/goalos", opts...)
 	if err := p.Prepare(context.Background(), goalosruntime.RuntimePlan{PlanID: "daemon-boot", Tier: goalosruntime.TierRestricted}); err != nil {
 		log.Printf(`{"level":"WARN","msg":"Step 7c: darwin Provider Prepare 失败（诚实不注册）: %v"}`, err)
 		return
