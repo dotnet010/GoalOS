@@ -28,5 +28,14 @@ func (l *Listener) Accept() (*Conn, error) { return nil, ErrUnsupportedPlatform 
 // Dial 占位。
 func Dial(base string) (*Conn, error) { return nil, ErrUnsupportedPlatform }
 
-// Conn 占位。
+// Conn 占位（方法集与 windows 版对称——broker.go 等平台中立消费面可编译）。
 type Conn struct{}
+
+// ReadFrame 占位（恒 fail-closed）。
+func (c *Conn) ReadFrame() (Frame, error) { return Frame{}, ErrUnsupportedPlatform }
+
+// WriteFrame 占位（恒 fail-closed）。
+func (c *Conn) WriteFrame(f Frame) error { return ErrUnsupportedPlatform }
+
+// Close 占位。
+func (c *Conn) Close() error { return nil }
