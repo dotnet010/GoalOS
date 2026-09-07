@@ -9,6 +9,17 @@
 # =============================================================================
 set -euo pipefail
 
+# 检查工具面=scripts/toolcheck（Go 原生——会议 #280：python3 退役。
+# WindowsApps Store stub=exit 49 静默死=本地测不出 CI 才见红断层实证）——
+# 本地与 CI 同工具链同行为（Go 项目=go 必在场）。
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+TOOLCHECK=$(mktemp)
+trap 'rm -f "$TOOLCHECK"' EXIT
+if ! (cd "$SCRIPT_DIR/.." && go build -o "$TOOLCHECK" ./scripts/toolcheck/); then
+    echo "❌ toolcheck 构建失败（scripts/toolcheck——go 工具链面）" >&2
+    exit 2
+fi
+
 PLUGIN_DIR="${HOME}/.goalos/plugins"
 EXPECTED_PROTOCOL="v2.0-two-line-hmac"
 FAIL=0
@@ -20,8 +31,8 @@ echo ""
 for plugin_json in "$PLUGIN_DIR"/*/*/plugin.json; do
     [ -f "$plugin_json" ] || continue
     plugin_dir=$(dirname "$plugin_json")
-    plugin_name=$(python3 -c "import json; print(json.load(open('$plugin_json'))['name'])" 2>/dev/null || echo "unknown")
-    plugin_binary=$(python3 -c "import json; print(json.load(open('$plugin_json'))['binary'])" 2>/dev/null || echo "")
+    plugin_name=$("$TOOLCHECK" jsonfield "$plugin_json" name 2>/dev/null || echo "unknown")
+    plugin_binary=$("$TOOLCHECK" jsonfield "$plugin_json" binary 2>/dev/null || echo "")
 
     echo "── Plugin: $plugin_name ($plugin_dir) ──"
 
@@ -52,7 +63,7 @@ for plugin_json in "$PLUGIN_DIR"/*/*/plugin.json; do
         continue
     fi
 
-    if echo "$line2" | python3 -c "import sys,json; json.loads(sys.stdin.read())" 2>/dev/null; then
+    if echo "$line2" | "$TOOLCHECK" jsonvalidate 2>/dev/null; then
         echo "  ✅ 第二行: 合法 JSON payload"
     else
         echo "  ❌ 第二行: 不是合法 JSON"
@@ -61,7 +72,7 @@ for plugin_json in "$PLUGIN_DIR"/*/*/plugin.json; do
     fi
 
     # 检查 3: JSON payload 中不含 "hmac" 字段（旧协议残留）
-    if echo "$line2" | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); assert 'hmac' not in d, '旧协议残留'" 2>/dev/null; then
+    if echo "$line2" | "$TOOLCHECK" jsonnohmac 2>/dev/null; then
         echo "  ✅ 无旧协议残留（hmac 字段）"
     else
         echo "  ❌ JSON 中含 'hmac' 字段——旧协议残留"

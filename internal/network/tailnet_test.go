@@ -148,3 +148,45 @@ func TestTailnet_CLIQueryAbsent_RealMachine(t *testing.T) {
 	}
 	t.Logf("CLI 查询结果: err=%v（缺席=fail-closed 实锤；在场=查询可达）", err)
 }
+
+// TestTailnet_EventSeam 事件驱动接缝（会议 #280——顾问二轮③收窄落地）：
+// ①peer 集变更=Version 跳变（轮询内哈希比对=变更事件消费面）；
+// ②Invalidate=立即 fail-closed（IsPeer=false——外部事件源插拔点）。
+func TestTailnet_EventSeam(t *testing.T) {
+	p1 := netip.MustParseAddr("100.64.7.7")
+	p2 := netip.MustParseAddr("100.64.9.9")
+	fq := &fakeQuerier{peers: []netip.Addr{p1}}
+	c := NewTailnetPeerCache(fq.q)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c.Start(ctx)
+	defer c.Stop()
+	deadline := time.Now().Add(3 * time.Second)
+	for c.Version() == 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	v1 := c.Version()
+	if v1 == 0 {
+		t.Fatal("首刷后 Version 应>0（初始 peer 集=一次变更事件）")
+	}
+	// 变更 peer 集 → 下轮刷新 Version 跳变
+	fq.peers = []netip.Addr{p1, p2}
+	deadline = time.Now().Add(6 * time.Second) // 刷新周期 3s+余量
+	for c.Version() == v1 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if c.Version() == v1 {
+		t.Fatal("peer 集变更后 Version 未跳变——变更检测失守")
+	}
+	if !c.IsPeer(p2) {
+		t.Fatal("变更后新 peer 应可见")
+	}
+	// Invalidate=主动失效——立即 fail-closed
+	c.Invalidate()
+	if c.IsPeer(p1) {
+		t.Fatal("Invalidate 后 IsPeer 应=false（立即 fail-closed）")
+	}
+	if c.Alive() {
+		t.Fatal("Invalidate 后 Alive 应=false")
+	}
+}

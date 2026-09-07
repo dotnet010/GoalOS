@@ -8342,3 +8342,23 @@ resolutions:
       - must_exist: "L 级重估"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 L 级重估（R-1675）"
+  R-1676:
+    desc: "检查链原生工具面——python3 依赖全退役（会议 #280——Jobs 指令根治 stub 脱节）: CI 检查脚本运行时依赖=项目主工具链同族（Go 项目=Go 实现）——scripts/toolcheck 四子命令（stoken=desc 锚定 S-token 扫描/jsonfield/jsonvalidate/jsonnohmac）；事故史=v0.3.3 yaml 转义首红（本地 python3=Store stub exit 49 静默死=「本地测不出推 CI 才见红」断层）。证据等级=已实证（toolcheck 双向实证+本地 S-token 首跑 87 token 全绿）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1676"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1676"
+      - must_exist: "toolcheck"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 toolcheck 原生工具面（R-1676）"
+  R-1677:
+    desc: "tailnet 事件驱动接缝化（会议 #280——顾问二轮③收窄落地）: CLI 主路（零依赖裁决）无事件流——LocalAPI 长轮询=重依赖路线冲突；诚实折中=接缝化：TailnetPeerCache+Version（peer 集哈希比对=变更事件可观测）+Invalidate（外部事件源插拔点=立即 fail-closed）；轮询载体不变（3s/5s TTL）。证据等级=已实证（fake 源 EventSeam 契约绿）；真 tailnet 面=待真实用户场景（MagicDNS 事件驱动登记）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1677"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1677"
+      - must_exist: "事件接缝"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 tailnet 事件接缝化（R-1677）"

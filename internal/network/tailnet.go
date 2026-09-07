@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -34,7 +35,14 @@ const tailnetQueryTimeout = 2 * time.Second
 // TailnetQuerier peer 查询器（可注入——生产=TailscaleCLIQuery；测试=fake）。
 type TailnetQuerier func(ctx context.Context) ([]netip.Addr, error)
 
-// TailnetPeerCache tailnet peer 缓存（后台刷新+超龄 fail-closed）。
+// TailnetPeerCache tailnet peer 缓存（后台刷新+超龄 fail-closed+事件失效接缝）。
+//
+// 事件驱动面（会议 #280——顾问二轮③落地方向收窄实证）：CLI 路线（Jobs 裁决
+// 零依赖主路）无事件流——tailscale CLI 无长轮询订阅面；真事件源=LocalAPI
+// ipn.Notify 长轮询=重依赖路线（与本裁决冲突）。诚实折中=**接缝化**：轮询
+// 仍是载体（3s/5s TTL 不变），但 ①peer 集变更检测（哈希比对）触发版本递增
+// =消费方可观测变更事件；②Invalidate() 主动失效口=外部事件源（未来 OS 网络
+// 变化监听/LocalAPI watcher 接入点）零改造插拔。
 type TailnetPeerCache struct {
 	mu        sync.RWMutex
 	peers     map[netip.Addr]struct{}
@@ -43,6 +51,8 @@ type TailnetPeerCache struct {
 	query     TailnetQuerier
 	stopCh    chan struct{}
 	stopped   sync.Once
+	version   atomic.Uint64 // peer 集变更计数（变更事件=消费方可观测——接缝面）
+	peersHash uint64        // 上次刷新的 peer 集哈希（变更检测锚）
 }
 
 // NewTailnetPeerCache 构造（query=nil 等价恒缺席——fail-closed 空集）。
@@ -61,6 +71,11 @@ func (c *TailnetPeerCache) Start(ctx context.Context) {
 		cancel()
 		c.mu.Lock()
 		if err == nil {
+			newHash := hashPeers(ips)
+			if newHash != c.peersHash {
+				c.version.Add(1) // 变更事件（消费方可经 Version() 观测——接缝面）
+				c.peersHash = newHash
+			}
 			c.peers = make(map[netip.Addr]struct{}, len(ips))
 			for _, ip := range ips {
 				c.peers[ip] = struct{}{}
@@ -91,6 +106,30 @@ func (c *TailnetPeerCache) Start(ctx context.Context) {
 
 // Stop 停后台协程（幂等）。
 func (c *TailnetPeerCache) Stop() { c.stopped.Do(func() { close(c.stopCh) }) }
+
+// Version peer 集变更计数（事件接缝——变更检测=轮询内哈希比对，真实事件源
+// 可叠加调用 Invalidate/或直接观测 Version 跳变）。
+func (c *TailnetPeerCache) Version() uint64 { return c.version.Load() }
+
+// Invalidate 主动失效（外部事件源接缝——未来 OS 网络变化监听/LocalAPI watcher
+// 接入点；失效=立即超龄化=fresh 判定 false=fail-closed 直到下次成功刷新）。
+func (c *TailnetPeerCache) Invalidate() {
+	c.mu.Lock()
+	c.fetchedAt = time.Time{}
+	c.mu.Unlock()
+}
+
+// hashPeers peer 集哈希（变更检测锚——FNV 轻量即可，非安全面）。
+func hashPeers(ips []netip.Addr) uint64 {
+	h := uint64(1469598103934665603) // FNV-1a 64 offset
+	for _, ip := range ips {
+		for _, b := range ip.As16() {
+			h ^= uint64(b)
+			h *= 1099511628211
+		}
+	}
+	return h
+}
 
 // IsPeer 成员校验（决策热路径——纯缓存读 µs 级；缓存缺席/超龄=false fail-closed）。
 func (c *TailnetPeerCache) IsPeer(ip netip.Addr) bool {

@@ -555,57 +555,30 @@ check_s_token_coverage() {
     log_info "── ${BOLD}S 决议 token 完备性机检${NC}（S'-31: desc 字段须含 S-01~S-48 与 S'-01~S'-39 全部 87 token）──"
     log_info ""
 
-    # 依赖检查：python3 + PyYAML（依赖缺失=脚本错误 → exit 2，行为契约第 3 类）
-    if ! command -v python3 >/dev/null 2>&1; then
-        log_error "缺少依赖: python3（S-token 机检需要——check-plugin-protocol.sh 同依赖）"
+    # 依赖检查：go 工具链（R-1666 同族纪律延伸至检查链——会议 #280：python3 退役。
+    # WindowsApps Store stub=exit 49 静默死=本地测不出 CI 才见红的断层实机事故
+    # （v0.3.3 yaml 转义首红）——Go 工具面=本地与 CI 同工具链同行为）
+    if ! command -v go >/dev/null 2>&1; then
+        log_error "缺少依赖: go（S-token 机检工具链——scripts/toolcheck）"
         exit 2
     fi
 
-    # python 代码经临时文件执行（macOS bash 3.2 解析器缺陷：$() 内带引号 heredoc 遇裸单引号即断，
-    # 顶层 heredoc 两平台均安全——与 check-plugin-protocol.sh 的 python3 依赖同一前提）
-    local pyfile result
-    pyfile=$(mktemp)
-    cat > "$pyfile" <<'PYEOF'
-import sys, re
-import yaml as _yaml
+    # toolcheck 构建（模块根定位=脚本目录上级——工作区/repo-only 两布局同构）
+    local script_dir module_root toolcheck_bin result
+    script_dir=$(cd "$(dirname "$0")" && pwd)
+    module_root=$(cd "$script_dir/.." && pwd)
+    toolcheck_bin=$(mktemp)
+    if ! (cd "$module_root" && go build -o "$toolcheck_bin" ./scripts/toolcheck/); then
+        log_error "toolcheck 构建失败（scripts/toolcheck——go 工具链面）"
+        rm -f "$toolcheck_bin"
+        exit 2
+    fi
 
-yaml_path = sys.argv[1]
-try:
-    with open(yaml_path, encoding='utf-8') as f:
-        doc = _yaml.safe_load(f)
-except Exception as e:
-    print('PARSE_ERROR:' + str(e))
-    sys.exit(0)
-
-res = doc.get('resolutions')
-if not isinstance(res, dict):
-    print('PARSE_ERROR:resolutions top-level key missing or wrong type')
-    sys.exit(0)
-
-# anchor on desc fields only (F-16) — comments/other fields must not count
-descs = '\n'.join(
-    v.get('desc', '')
-    for v in res.values()
-    if isinstance(v, dict) and isinstance(v.get('desc'), str)
-)
-
-tokens = [f'S-{n:02d}' for n in range(1, 49)] + [f"S'-{n:02d}" for n in range(1, 40)]
-missing = []
-for tok in tokens:
-    # whole-token match: S-01 must not match inside S-010 or S'-01
-    pat = re.compile(rf"(?<![\w'-]){re.escape(tok)}(?![\w])")
-    if not pat.search(descs):
-        missing.append(tok)
-
-print(f'COVERAGE:total={len(tokens)}:missing={len(missing)}')
-for m in missing:
-    print('MISSING:' + m)
-PYEOF
-    result=$(python3 "$pyfile" "$yaml")
-    rm -f "$pyfile"
+    result=$("$toolcheck_bin" stoken "$yaml")
+    rm -f "$toolcheck_bin"
 
     if [ -z "$result" ]; then
-        log_error "S-token 机检: python3 无输出（脚本错误）"
+        log_error "S-token 机检: toolcheck 无输出（脚本错误）"
         exit 2
     fi
 
