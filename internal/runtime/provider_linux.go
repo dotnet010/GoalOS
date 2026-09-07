@@ -11,6 +11,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/goalos/goalos/internal/fd3"
 )
 
 // dualEngineProvider 双引擎 Provider（Prepare 期实证选择引擎——选择记录可观测）。
@@ -19,12 +21,31 @@ type dualEngineProvider struct {
 	tmpDir    string
 	engine    Provider // Prepare 期选定
 	mode      string   // "A"(agentbox)/"B"(modeb)——可观测性
+	dialFn    fd3.DialFunc
+	onDeny    func(endpoint, reason string)
+}
+
+// LinuxOption 双引擎构造可选项（R-1650 v2 FD3 接线面——仅模式 B 消费）。
+type LinuxOption func(*dualEngineProvider)
+
+// WithLinuxDialFunc 注入模式 B broker 拨号面（生产=zone dialer 同源）。
+func WithLinuxDialFunc(d fd3.DialFunc) LinuxOption {
+	return func(p *dualEngineProvider) { p.dialFn = d }
+}
+
+// WithLinuxOnDeny 注入 broker 拒绝审计回调。
+func WithLinuxOnDeny(fn func(endpoint, reason string)) LinuxOption {
+	return func(p *dualEngineProvider) { p.onDeny = fn }
 }
 
 // NewLinuxRestrictedProvider Linux 受限档唯一构造入口（双引擎收敛——
 // 生产接线与 TC-RT-001b 同源）。
-func NewLinuxRestrictedProvider(workspace, tmpDir string) Provider {
-	return &dualEngineProvider{workspace: workspace, tmpDir: tmpDir}
+func NewLinuxRestrictedProvider(workspace, tmpDir string, opts ...LinuxOption) Provider {
+	p := &dualEngineProvider{workspace: workspace, tmpDir: tmpDir}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 func (p *dualEngineProvider) Name() string { return "linux-dual" }
@@ -64,7 +85,8 @@ func (p *dualEngineProvider) Prepare(ctx context.Context, plan RuntimePlan) erro
 	}
 	// 模式 B 实证（免 userns——landlock ABI+架构）
 	if modeBAvailable() {
-		mb := NewModeBProvider(p.workspace, p.tmpDir)
+		mb := NewModeBProvider(p.workspace, p.tmpDir,
+			WithModeBDialFunc(p.dialFn), WithModeBOnDeny(p.onDeny))
 		if err := mb.Prepare(ctx, plan); err == nil {
 			p.engine, p.mode = mb, "B"
 			return nil

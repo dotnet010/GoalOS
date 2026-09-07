@@ -17,8 +17,13 @@ import (
 // 注册表保持空=骨架纪律 R-1468 诚实状态）。
 // 2026-09-07 修正：此前误注册裸 agentbox（双引擎从未接生产——Ubuntu 24.04 AppArmor
 // 限 userns 场景=本可模式 B 承接却空注册）。
-func registerPlatformProvider(rb *runtimeBoundary, home string, _ *llm.ZoneDialer) {
-	p := goalosruntime.NewLinuxRestrictedProvider(home+"/Goals", "/tmp/goalos")
+func registerPlatformProvider(rb *runtimeBoundary, home string, fd3dial *llm.ZoneDialer) {
+	var opts []goalosruntime.LinuxOption
+	if fd3dial != nil {
+		// FD3 broker 拨号面=zone dialer 同源（R-1650 v2④——模式 B 消费）
+		opts = append(opts, goalosruntime.WithLinuxDialFunc(fd3dial.DialContext))
+	}
+	p := goalosruntime.NewLinuxRestrictedProvider(home+"/Goals", "/tmp/goalos", opts...)
 	if err := p.Prepare(context.Background(), goalosruntime.RuntimePlan{PlanID: "daemon-boot", Tier: goalosruntime.TierRestricted}); err != nil {
 		log.Printf(`{"level":"WARN","msg":"Step 7c: linux agentbox Provider Prepare 失败（诚实不注册）: %v"}`, err)
 		return

@@ -24,6 +24,8 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"github.com/goalos/goalos/internal/fd3"
 )
 
 // modeBMarker 子进程标记（daemon main.go/TestMain 拦截——probe.Marker 同族）。
@@ -298,11 +300,33 @@ type modeBProvider struct {
 	tmpDir    string
 	platform  string
 	prepared  bool
+	// FD3 面（R-1650 v2——unix socket 直连形态：沙箱内进程经 seccomp AF_UNIX
+	// 白名单直连 tmpDir 内 broker socket——无 fd3d 转发器）：dialFn=zone dialer
+	// 注入；onDeny=broker 拒绝审计回调。
+	dialFn fd3.DialFunc
+	onDeny func(endpoint, reason string)
+}
+
+// ModeBOption 构造可选项（R-1650 v2 接线面）。
+type ModeBOption func(*modeBProvider)
+
+// WithModeBDialFunc 注入 broker 拨号面（生产=zone dialer 同源）。
+func WithModeBDialFunc(d fd3.DialFunc) ModeBOption {
+	return func(p *modeBProvider) { p.dialFn = d }
+}
+
+// WithModeBOnDeny 注入 broker 拒绝审计回调。
+func WithModeBOnDeny(fn func(endpoint, reason string)) ModeBOption {
+	return func(p *modeBProvider) { p.onDeny = fn }
 }
 
 // NewModeBProvider 构造（能力不在此断言——Prepare 实证探测）。
-func NewModeBProvider(workspace, tmpDir string) Provider {
-	return &modeBProvider{workspace: workspace, tmpDir: tmpDir, platform: "linux-modeb"}
+func NewModeBProvider(workspace, tmpDir string, opts ...ModeBOption) Provider {
+	p := &modeBProvider{workspace: workspace, tmpDir: tmpDir, platform: "linux-modeb"}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 func (p *modeBProvider) Name() string { return "modeb-linux" }
@@ -337,9 +361,10 @@ func (p *modeBProvider) State(context.Context) (ProviderState, error) {
 	return ProviderRegistered, nil
 }
 
-// Acquire 租约（模式 B 无预建资源——句柄即配置载体）。
+// Acquire 租约（模式 B 无预建资源——句柄即配置载体+契约端点集登记）。
 func (p *modeBProvider) Acquire(_ context.Context, req LeaseRequest) (RuntimeHandle, error) {
-	return &modeBHandle{p: p, state: HandleAcquired, goalID: req.GoalID}, nil
+	return &modeBHandle{p: p, state: HandleAcquired, goalID: req.GoalID,
+		endpoints: ContractEndpoints(req.Contract)}, nil
 }
 
 // modeBHandle 模式 B 执行句柄（D-5 定序同构：Start→Precheck→Execute）。
@@ -347,13 +372,47 @@ type modeBHandle struct {
 	p      *modeBProvider
 	state  HandleState
 	goalID string
+	// FD3 面（R-1650 v2）：endpoints=契约声明集；fd3Ln=broker unix socket 监听
+	//（落 tmpDir——Landlock 已授写权面）；fd3Broker=治理中继。
+	endpoints  []string
+	fd3Ln      *fd3.Listener
+	fd3Broker  *fd3.Broker
 }
 
 func (h *modeBHandle) Start(context.Context) error {
 	if h.state != HandleAcquired {
 		return ErrInvalidState
 	}
+	// FD3 面：契约声明端点集非空=broker 拉起（unix socket——沙箱内直连，
+	// 无 fd3d 转发器）；失败=fail-closed（Start 失败=session 不开）。
+	if len(h.endpoints) > 0 {
+		if err := h.bringUpFD3(); err != nil {
+			return fmt.Errorf("runtime: FD3 中继拉起失败（fail-closed）: %w", err)
+		}
+	}
 	h.state = HandleReady
+	return nil
+}
+
+// bringUpFD3 broker 拉起：unix socket 监听（tmpDir）+治理中继+映射文件落 workspace
+//（sock 路径+端点集——沙箱内工作负载的知悉面；Linux 形态=帧协议直连，
+// 无回环透明——形态差异成文）。
+func (h *modeBHandle) bringUpFD3() error {
+	ln, err := fd3.Listen(h.p.tmpDir, "GoalOS-"+h.goalID)
+	if err != nil {
+		return err
+	}
+	broker := fd3.NewBroker(h.endpoints, h.p.dialFn, h.p.onDeny)
+	go broker.Serve(ln)
+	mapContent := "sock=" + ln.Name() + "\n"
+	for _, ep := range h.endpoints {
+		mapContent += "endpoint=" + ep + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(h.p.workspace, "goalos-fd3-map.txt"), []byte(mapContent), 0644); err != nil {
+		ln.Close()
+		return fmt.Errorf("fd3 映射文件写入失败: %w", err)
+	}
+	h.fd3Ln, h.fd3Broker = ln, broker
 	return nil
 }
 
@@ -418,6 +477,9 @@ func (h *modeBHandle) execSandboxed(_ context.Context, argv []string) (int, stri
 }
 
 func (h *modeBHandle) Release(context.Context) error {
+	if h.fd3Ln != nil {
+		h.fd3Ln.Close() // broker 循环退出+socket 文件清理
+	}
 	h.state = HandleReleased
 	return nil
 }

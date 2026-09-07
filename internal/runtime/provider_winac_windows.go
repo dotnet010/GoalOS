@@ -409,16 +409,8 @@ func (p *winACProvider) Acquire(_ context.Context, req LeaseRequest) (RuntimeHan
 		state: HandleAcquired, goalID: req.GoalID,
 		caps: winACSelectCaps(p.capSids, req.Contract),
 		// R-1650 v2：契约声明端点集（FD3 broker 白名单——nil=无网络中继面）
-		endpoints: winACContractEndpoints(req.Contract),
+		endpoints: ContractEndpoints(req.Contract),
 	}, nil
-}
-
-// winACContractEndpoints 契约声明端点集提取（nil 契约=空集）。
-func winACContractEndpoints(contract *VerifiedContract) []string {
-	if contract == nil {
-		return nil
-	}
-	return contract.Claims().NetworkEndpoints
 }
 
 // winACSelectCaps 按契约声明挑选具名能力（R-1659 v3②——"toolchain:<name>" 前缀映射；

@@ -212,3 +212,12 @@ func (v *ContractVerifier) emitReject(err error) {
 		v.onReject(ce.Reason)
 	}
 }
+
+// ContractEndpoints 契约声明网络端点集提取（R-1650 v2 FD3 白名单载体——
+// nil 契约=空集；WinAC/模式 B 双 provider 同源消费）。
+func ContractEndpoints(contract *VerifiedContract) []string {
+	if contract == nil {
+		return nil
+	}
+	return contract.Claims().NetworkEndpoints
+}

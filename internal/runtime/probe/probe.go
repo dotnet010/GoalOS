@@ -19,6 +19,8 @@ import (
 	"os"
 	"syscall"
 	"time"
+
+	"github.com/goalos/goalos/internal/fd3"
 )
 
 // ErrnoFromError 解开错误链取底层 errno（数字证据——跨平台 syscall.Errno）。
@@ -91,6 +93,51 @@ func Main(args []string) int {
 		}
 		if string(buf[:n]) != nonce {
 			fmt.Println("PROBE-ERRNO=-4") // 合成码：回显内容失真（中继中间人嫌疑面）
+			return 1
+		}
+		fmt.Println("PROBE-ERRNO=0")
+		fmt.Println("ROUNDTRIP-OK")
+		return 0
+	case "fd3rt":
+		// unix socket FD3 帧中继探针（Linux 模式 B 面——R-1650 v2 S4）：
+		// fd3rt <sockpath> <endpoint>——dial unix+OPEN 帧+OPEN_OK 校验+字节回显。
+		// 成功=PROBE-ERRNO=0 + ROUNDTRIP-OK；broker 拒绝=PROBE-ERRNO=-5；
+		// 传输出错=PROBE-ERRNO=<n>；回显失真=PROBE-ERRNO=-4。
+		if len(args) < 3 {
+			fmt.Println("PROBE-ERRNO=-3") // 参数不足
+			return 1
+		}
+		conn, derr := fd3.Dial(args[1])
+		if derr != nil {
+			fmt.Printf("PROBE-ERRNO=%d\n", ErrnoFromError(derr))
+			return 1
+		}
+		defer conn.Close()
+		if werr := conn.WriteFrame(fd3.Frame{Op: fd3.OpOpen, Payload: []byte(args[2])}); werr != nil {
+			fmt.Printf("PROBE-ERRNO=%d\n", ErrnoFromError(werr))
+			return 1
+		}
+		resp, rerr := conn.ReadFrame()
+		if rerr != nil {
+			fmt.Printf("PROBE-ERRNO=%d\n", ErrnoFromError(rerr))
+			return 1
+		}
+		if resp.Op != fd3.OpOpenOK {
+			fmt.Println("PROBE-ERRNO=-5") // 合成码：broker 拒绝（治理否定面）
+			return 1
+		}
+		nonce := fmt.Sprintf("rt-%d", time.Now().UnixNano())
+		if werr := conn.WriteFrame(fd3.Frame{Op: fd3.OpData, Payload: []byte(nonce)}); werr != nil {
+			fmt.Printf("PROBE-ERRNO=%d\n", ErrnoFromError(werr))
+			return 1
+		}
+		echo, rerr := conn.ReadFrame()
+		if rerr != nil {
+			fmt.Printf("PROBE-ERRNO=%d\n", ErrnoFromError(rerr))
+			return 1
+		}
+		if echo.Op != fd3.OpData || string(echo.Payload) != nonce {
+			fmt.Println("PROBE-ERRNO=-4") // 回显失真
 			return 1
 		}
 		fmt.Println("PROBE-ERRNO=0")
