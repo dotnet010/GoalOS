@@ -20,7 +20,7 @@ import (
 // 版本同步纪律（任务 8.5——会议 #237 Linus）：开发中=目标版本号；
 // tag 一致性校验=scripts/check-version-sync.sh（tag CI 窗口比对 GITHUB_REF_NAME
 // 与常量，不一致即红——本常量曾经 0.1.3 滞后三个版本无人发现，机制化防复发）。
-const CanonicalVersion = "0.3.3"
+const CanonicalVersion = "0.3.4"
 
 // Config 是 GoalOS 完整配置。
 type Config struct {
