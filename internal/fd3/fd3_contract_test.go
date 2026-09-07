@@ -1,4 +1,4 @@
-//go:build windows || linux
+//go:build windows || linux || darwin
 
 // fd3_contract_test.go——FD3 传输层契约测试（S1——R-571 先红）。
 // 断言来源=开发计划/fd3-broker-设计.md §六 测试矩阵 F3/F6：
@@ -114,11 +114,11 @@ func TestFD3_NameEntropy(t *testing.T) {
 	if l1.Name() == l2.Name() {
 		t.Fatalf("同标签两 Listen 同名=%q——熵化纪律失守（残留态继承面）", l1.Name())
 	}
-	// 平台形态断言（windows=命名管道前缀；linux=unix socket 熵名落目录）
+	// 平台形态断言（windows=命名管道前缀；linux/darwin=unix socket 熵名落目录）
 	if goruntime.GOOS == "windows" && !strings.HasPrefix(l1.Name(), `\\.\pipe\GoalOS-FD3-`) {
 		t.Fatalf("管道名缺合法前缀: %q", l1.Name())
 	}
-	if goruntime.GOOS == "linux" && !strings.Contains(filepath.Base(l1.Name()), "goalos-fd3-") {
+	if goruntime.GOOS != "windows" && !strings.Contains(filepath.Base(l1.Name()), "goalos-fd3-") {
 		t.Fatalf("socket 名缺熵化段: %q", l1.Name())
 	}
 }

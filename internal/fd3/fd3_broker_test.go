@@ -1,4 +1,4 @@
-//go:build windows || linux
+//go:build windows || linux || darwin
 
 // fd3_broker_test.go——FD3 broker 治理面契约测试（S2——R-571 先红）。
 // 断言来源=开发计划/fd3-broker-设计.md §四治理面+F2/F1 矩阵：

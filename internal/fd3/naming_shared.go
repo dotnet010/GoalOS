@@ -1,4 +1,4 @@
-//go:build windows || linux
+//go:build windows || linux || darwin
 
 // naming_shared.go——FD3 名段净化（定义面=使用面：仅 windows/linux 有传输实现——
 // U1000 按构建上下文判定，2026-09-06 CI 实证事故纪律）。
