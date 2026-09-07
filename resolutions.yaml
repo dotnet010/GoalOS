@@ -8151,7 +8151,7 @@ resolutions:
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 R-1656"
       - must_exist: "R-1656"
-        in_file: check-deprecated.sh
+        in_file: GoalOS/scripts/check-deprecated.sh
         reason: "check-deprecated.sh 必须登记 R-1656 禁称模式（机检接线）"
   R-1657:
     desc: "决议依据证据等级标注纪律（会议 #262 续场 3——顾问第三轮隐藏问题①）: 决议「依据」栏每条必须标注四值之一=已实证/方向判断/设计上可证（待证）/文献级；未标注=决议不完整退回。disposition: 生效"
