@@ -8313,7 +8313,7 @@ resolutions:
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 windows-daily 发版卡点（R-1672）"
   R-1673:
-    desc: "Defender 处置纪律——不开目录白名单（会议 #274 补——Jobs 2026-09-07 裁决）: go.exe 被实时防护隔离事件的处置=隔离区点对点还原误杀文件，严禁目录级排除（%USERPROFILE%\go=第三方依赖缓存+全局工具面，目录排除=供应链投毒直通；D:\project\pi2=产物面；D:\tools=工具链面——粗粒度排除=行为误报误当路径信任，违反最小权限）。复发预防=行为面收敛（winlogon spike 已带 GOALOS_S266_SPIKE=1 环境门禁——默认不触发建账户+跨账户拉进程序列）；再被隔离=人工点对点还原，不开后门。证据等级=已实证（go.exe 隔离+还原复绿全链实机）。disposition: 生效"
+    desc: "Defender 处置纪律——不开目录白名单（会议 #274 补——Jobs 2026-09-07 裁决）: go.exe 被实时防护隔离事件的处置=隔离区点对点还原误杀文件，严禁目录级排除（%USERPROFILE%\\go=第三方依赖缓存+全局工具面，目录排除=供应链投毒直通；D:\\project\\pi2=产物面；D:\\tools=工具链面——粗粒度排除=行为误报误当路径信任，违反最小权限）。复发预防=行为面收敛（winlogon spike 已带 GOALOS_S266_SPIKE=1 环境门禁——默认不触发建账户+跨账户拉进程序列）；再被隔离=人工点对点还原，不开后门。证据等级=已实证（go.exe 隔离+还原复绿全链实机）。disposition: 生效"
     files: [会议纪要.md]
     verify:
       - must_exist: "R-1673"

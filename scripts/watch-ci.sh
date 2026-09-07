@@ -62,9 +62,11 @@ while true; do
 		sleep 120
 		continue
 	fi
-	# 全部完结——裁决结论
+	# 全部完结——先打印各 run 结论摘要（可观测），再裁决（ERE 语法：分组/交替
+	# 不转义——2026-09-07 实机实证事故：ERE 下 \( \| =字面量=失败检测面静默死，
+	# Build failure 被误报 GREEN）
 	echo "$summary"
-	if echo "$resp" | grep -qE '"conclusion": *"\(failure\|cancelled\|timed_out\|action_required\|startup_failure\|stale\)"'; then
+	if echo "$resp" | grep -qE '"conclusion": *"(failure|cancelled|timed_out|action_required|startup_failure|stale)"'; then
 		echo "WATCH-CI RED: 存在非 success 结论 run——立即归因修复（不许留红过夜）"
 		exit 1
 	fi
