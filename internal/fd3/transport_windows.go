@@ -27,7 +27,10 @@ var procWaitNamedPipe = windows.NewLazySystemDLL("kernel32.dll").NewProc("WaitNa
 
 // waitNamedPipe 等管道实例可用（x/sys 未包——手卷；返回 false=超时/失败）。
 func waitNamedPipe(name *uint16, timeoutMs uint32) bool {
-	r1, _, _ := procWaitNamedPipe.Call(uintptr(unsafe.Pointer(name)), uintptr(timeoutMs))
+	r1, _, callErr := procWaitNamedPipe.Call(uintptr(unsafe.Pointer(name)), uintptr(timeoutMs))
+	if r1 == 0 && callErr != nil && callErr != syscall.Errno(0) {
+		return false // 错误=不可用面（超时 ERROR_SEM_TIMEOUT 族同归 false）
+	}
 	return r1 != 0
 }
 

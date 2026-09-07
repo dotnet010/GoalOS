@@ -2,10 +2,10 @@
 
 // provider_modeb_fd3_test.go——FD3 Linux 模式 B 全链契约测试（S4——R-571）。
 // 断言=fd3-broker-设计.md §六 F1/F4 的 Linux 形态：
-//  L1：契约声明端点=模式 B 沙箱内经 unix socket FD3 帧中继全链通（fd3rt 探针
+//  U1：契约声明端点=模式 B 沙箱内经 unix socket FD3 帧中继全链通（fd3rt 探针
 //      字节级回显——真实沙箱面，不经 mock）；
-//  L2：未声明端点=OPEN_DENY（broker 治理 fail-closed——PROBE-ERRNO=-5）；
-//  L3：边界不削弱对照——沙箱内直接出站仍拒（EACCES=13）。
+//  U2：未声明端点=OPEN_DENY（broker 治理 fail-closed——PROBE-ERRNO=-5）；
+//  U3：边界不削弱对照——沙箱内直接出站仍拒（EACCES=13）。
 // 形态差异诚实标注：Linux=沙箱进程对 unix socket 直说 FD3 帧（无 fd3d 转发器——
 // 模式 B seccomp AF_UNIX 白名单放行直连；无回环透明）。
 package runtime
@@ -63,7 +63,7 @@ func modeBContractNet(goalID, actionID string, endpoints []string) *VerifiedCont
 	}}
 }
 
-// TestModeB_FD3Relay L1+L3：声明端点=沙箱内 unix socket 帧中继通；出站仍拒。
+// TestModeB_FD3Relay L1+U3：声明端点=沙箱内 unix socket 帧中继通；出站仍拒。
 func TestModeB_FD3Relay(t *testing.T) {
 	if !modeBAvailable() {
 		t.Skip("模式 B 不可用（landlock ABI 缺席/非 amd64——R-1452 合法先红形态）")
@@ -98,7 +98,7 @@ func TestModeB_FD3Relay(t *testing.T) {
 	if !strings.HasPrefix(sock, tmp) {
 		t.Fatalf("socket 路径不在 tmpDir 授予面: %q", sock)
 	}
-	// L1：沙箱内 fd3rt——unix socket→broker→宿主 echo 字节级回显
+	// U1：沙箱内 fd3rt——unix socket→broker→宿主 echo 字节级回显
 	self, _ := os.Executable()
 	res, err := guard.Execute(ctx, ExecuteRequest{ActionID: "fd3rt", ActionType: "process.exec",
 		Params: map[string]string{"binary": self, "args": "__goalos-probe fd3rt " + sock + " " + echoAddr}})
@@ -106,7 +106,7 @@ func TestModeB_FD3Relay(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 	if !strings.Contains(res.Output, "ROUNDTRIP-OK") {
-		t.Fatalf("L1：沙箱内经 unix socket 中继回显失败——out=%q", res.Output)
+		t.Fatalf("U1：沙箱内经 unix socket 中继回显失败——out=%q", res.Output)
 	}
 	// L3 对照：同 session 沙箱内直接出站仍拒（EACCES=13——seccomp 域名白名单在位）
 	res, err = guard.Execute(ctx, ExecuteRequest{ActionID: "dial", ActionType: "process.exec",
@@ -119,7 +119,7 @@ func TestModeB_FD3Relay(t *testing.T) {
 	}
 }
 
-// TestModeB_FD3Undeclared L2：未声明端点=broker OPEN_DENY（PROBE-ERRNO=-5）。
+// TestModeB_FD3Undeclared U2：未声明端点=broker OPEN_DENY（PROBE-ERRNO=-5）。
 func TestModeB_FD3Undeclared(t *testing.T) {
 	if !modeBAvailable() {
 		t.Skip("模式 B 不可用——R-1452 合法先红形态")
@@ -155,6 +155,6 @@ func TestModeB_FD3Undeclared(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 	if !strings.Contains(res.Output, "PROBE-ERRNO=-5") {
-		t.Fatalf("L2：未声明端点应 broker 拒绝（-5），实得 out=%q", res.Output)
+		t.Fatalf("U2：未声明端点应 broker 拒绝（-5），实得 out=%q", res.Output)
 	}
 }
