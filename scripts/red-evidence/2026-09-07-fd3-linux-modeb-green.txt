@@ -1,0 +1,36 @@
+# FD3 S4 Linux 模式 B 集成实证（2026-09-07——goalos-test 真机）
+
+环境：goalos-test（Ubuntu 24.04.4 kernel 6.8，AppArmor 限 userns 默认策略=模式 B 面）。
+面=真模式 B 沙箱（landlock+seccomp 免 userns）非 mock。
+
+## 形态定案（设计裁决——先于代码）
+
+模式 B seccomp 白名单放行 AF_UNIX（socket/socketpair 域名白名单实证在位）→
+沙箱内进程**直连**宿主 unix socket，无 AC 回环隔离问题（WinAC 特有）——
+**Linux 面无 fd3d 转发器**。不对称诚实标注：
+- Windows=回环端口透明映射（agent 无感知——fd3d 承接）；
+- Linux=沙箱进程对 unix socket 直说 FD3 帧（seccomp 拦 AF_INET connect——
+  回环透明在 Linux 面构造性不可能）；socket 落 tmpDir（Landlock 已授写权面）。
+
+## 出数（TestModeB_FD3Relay/TestModeB_FD3Undeclared——真实模式 B 沙箱内探针）
+
+```
+=== RUN   TestModeB_FD3Relay
+--- PASS: TestModeB_FD3Relay (0.01s)     ← L1 沙箱内 unix socket→broker→echo
+                                              字节级回显 + L3 同 session 出站仍拒
+=== RUN   TestModeB_FD3Undeclared
+--- PASS: TestModeB_FD3Undeclared (0.01s) ← L2 未声明端点=OPEN_DENY（PROBE-ERRNO=-5）
+PASS
+```
+
+L1 的边界活性证明链：同 session Precheck 绿（home 写拒+出站拒）=模式 B 边界在位实锤；
+L1=边界内的治理中继面工作（AF_UNIX 白名单内）；L3=中继面不削弱 IP 边界。
+
+## 代码面
+
+- probe fd3rt 探针（unix socket FD3 帧中继——合成码 -5=broker 拒/-4=回显失真）
+- modeb_linux.go：Start 期 broker 拉起（契约 NetworkEndpoints→unix socket 监听
+  tmpDir+goalos-fd3-map.txt 落 workspace）+Release 收尾
+- provider_linux.go：LinuxOption 透传（WithLinuxDialFunc/WithLinuxOnDeny——
+  双引擎流向模式 B）；runtime_wiring_linux 注入 zone dialer
+- contract.go：ContractEndpoints 共享助手（WinAC/模式 B 同源）
