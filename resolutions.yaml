@@ -8145,7 +8145,7 @@ resolutions:
         reason: "会议纪要必须登记 R-1655"
   R-1656:
     desc: "I3 禁称机检化（会议 #262 续场 1）: 06 §1.3 修订前「Windows+真 I3/已达 I3/双面齐备」组合入 check-deprecated.sh 警示档——承诺过闸不过嘴。disposition: 生效"
-    files: [会议纪要.md, check-deprecated.sh]
+    files: [会议纪要.md, GoalOS/scripts/check-deprecated.sh]
     verify:
       - must_exist: "R-1656"
         in_file: 会议纪要.md
