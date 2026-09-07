@@ -7,11 +7,12 @@ import (
 	"context"
 	"log"
 
+	"github.com/goalos/goalos/internal/llm"
 	goalosruntime "github.com/goalos/goalos/internal/runtime"
 )
 
 // registerPlatformProvider darwin=Seatbelt 受限档 Provider（Prepare 失败=诚实不注册）。
-func registerPlatformProvider(rb *runtimeBoundary, home string) {
+func registerPlatformProvider(rb *runtimeBoundary, home string, _ *llm.ZoneDialer) {
 	if goalosruntime.DetectPlatformIsolation() < goalosruntime.I2 {
 		return
 	}

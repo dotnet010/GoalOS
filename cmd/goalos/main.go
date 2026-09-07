@@ -24,6 +24,7 @@ import (
 	"github.com/goalos/goalos/internal/eventbus"
 	"github.com/goalos/goalos/internal/governance"
 	"github.com/goalos/goalos/internal/healthcheck"
+	"github.com/goalos/goalos/internal/fd3"
 	"github.com/goalos/goalos/internal/llm"
 	"github.com/goalos/goalos/internal/network"
 	"github.com/goalos/goalos/internal/metrics"
@@ -51,6 +52,9 @@ func main() {
 			os.Exit(probe.Main(os.Args[2:]))
 		case "__goalos-modeb":
 			modebEntry()
+		case "__goalos-fd3d":
+			// FD3 沙箱内转发器（R-1650 v2/R-1660 v2——受限档回环承接）
+			os.Exit(fd3.ForwarderMain(os.Args[2:]))
 		}
 	}
 
@@ -257,7 +261,10 @@ func main() {
 	}
 
 	// ③Runtime 边界组合根（手工组合根纪律——会议 #257 调研决议：不引进 DI 框架）
-	runtimeBoundary := runtimeWiring(bus, home, cfg, gov, secretKey)
+	// FD3 broker 拨号面=zone dialer 同源注入（网域分类/留痕不旁路——R-1650 v2④）。
+	fd3Dialer := llm.NewZoneDialer(false, nil)
+	fd3Dialer.Classifier = zoneClassifier
+	runtimeBoundary := runtimeWiring(bus, home, cfg, gov, secretKey, fd3Dialer)
 
 	gov.Start()
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 7: Governance registered"}`, time.Now().Format(time.RFC3339))

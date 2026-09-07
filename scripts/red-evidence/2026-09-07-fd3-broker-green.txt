@@ -1,0 +1,49 @@
+# FD3 broker 全链实证（2026-09-07——S1~S3 收口）
+
+设计=开发计划/fd3-broker-设计.md（R-1650 v2/R-1660 v2/R-1662 v2/R-922 裁决映射）。
+
+## 组件与证据
+
+**S1 传输层**（internal/fd3/frame.go+transport_windows.go）：
+- 帧协议 v1（长度前缀二进制——OPEN/OPEN_OK/OPEN_DENY/DATA/CLOSE/PING/PONG）
+- 命名管道双单向对（req/resp 独立句柄——R-1662 v2 并发根治形态）
+- SDDL=`D:P(A;;GA;;;WD)(A;;GA;;;AC)`（spike 实证 AAP 必需——仅 Everyone=AC 拒）
+- 熵化一次性基名（R-1667 v2 同族——同标签两次 Listen 必异名 F6 实证）
+
+**S1 排障链（先红→归因→修正）**：
+1. 客户端 dial file-not-found——服务端 Accept 逐连接开实例，直接 CreateFile 抢跑
+   →WaitNamedPipe 先行
+2. WaitNamedPipe 返回≠CreateFile 成功（PIPE_BUSY 抢夺窗口实锤）→wait+create 重试环
+3. ConnectNamedPipe ERROR_PIPE_CONNECTED=客户端抢连已成——误当失败=Accept 循环
+   早夭=后续 dial 全超时（20× 抖动钓出）→该码=成功处理
+4. Accept 孤儿悬挂（同步 ConnectNamedPipe 无打断面）→overlapped+事件+
+   Close=CancelIoEx 打断在飞连接
+
+**S2 broker 治理面**（internal/fd3/broker.go）：
+- 契约端点白名单（未声明=OPEN_DENY+onDeny 审计回调）/注入 DialFunc（生产=zone
+  dialer 同源）/协议纪律（首帧非 OPEN=断开）/双向泵（CLOSE 半关）
+- staticcheck SA4011 钓出真 bug：switch 内 break 不终止泵循环→标签化 pump 循环
+
+**S3 沙箱内转发器+WinAC 集成**（internal/fd3/forwarder.go+provider_winac）：
+- fd3d=__goalos-fd3d 子命令（re-exec 自身零外部二进制）；Start 期拉起（契约
+  NetworkEndpoints 声明集=TokenClaims 新字段）；就绪=捕获文件 FD3D-READY 门槛
+- **实机新知**：AC 回环与宿主同命名空间——宿主已占端口（Ollama 11434 族）在
+  AC 内不可重绑（EADDRINUSE 实锤）→回落 :0 自由端口+FD3D-MAP 上报+映射文件
+  goalos-fd3-map.txt 写工作区（禁静默错配）
+- ParseMappings 裸端点分支 rhs 空串 bug（Cut 未命中 rhs=""——fd3d 捕获文件
+  浮出 FD3D-FATAL 实证）→lhs 修正
+
+## 全链实证出数
+
+F1 AC 内字节级中继（探针 roundtrip=fd3d→管道→broker→宿主 echo 回显）：
+- 本机 Win11 Pro 26200：PASS（0.62s）
+- goalos-test-win Win11 家庭版 26200：PASS（0.24s）
+F4 未声明端点=连接即拒：双机 PASS。F5 同 session 直接出站仍拒（WSAEACCES）：
+PASS（中继面不削弱边界）。
+CI：分支 run 绿（windows-daily 含 smoke 步全量）。
+
+## 修正的潜伏缺口（同包顺带）
+
+runtime_wiring_linux.go 生产注册误用裸 agentbox——双引擎 NewLinuxRestrictedProvider
+（R-1664）从未接生产（Ubuntu 24.04 AppArmor 面=本可模式 B 承接却空注册）。
+本包已修正为双引擎构造。

@@ -40,6 +40,9 @@ type TokenClaims struct {
 	Nonce                   string `json:"nonce"`                     // hex(32B)——仅会话建立时单次消费（防跨会话重放，R-1510 时序句①）
 	IssuerKeyID             string `json:"issuer_key_id"`             // keyring kid（R-1389）
 	PolicyRevision          string `json:"policy_revision"`
+	// NetworkEndpoints 契约声明端点集（"host:port"——R-1650 v2 FD3 broker 白名单：
+	// 受限档沙箱内经 fd3d 转发器可中继的宿主端点；未声明=broker 拒绝+审计留痕）。
+	NetworkEndpoints []string `json:"network_endpoints,omitempty"`
 }
 
 // tokenHeader 是 Token 的固定 Header。

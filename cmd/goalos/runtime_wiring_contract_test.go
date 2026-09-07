@@ -24,7 +24,7 @@ func TestDaemon_RuntimeWiring_BoundaryUp(t *testing.T) {
 	cfg := &config.Config{}
 	gov := governance.New(bus, nil)
 
-	rb := runtimeWiring(bus, t.TempDir(), cfg, gov, []byte("test-secret-32-bytes-padding!!!!!"))
+	rb := runtimeWiring(bus, t.TempDir(), cfg, gov, []byte("test-secret-32-bytes-padding!!!!!"), nil)
 
 	// ①三件套
 	if rb == nil || rb.registry == nil || rb.resolver == nil || rb.verifier == nil {
