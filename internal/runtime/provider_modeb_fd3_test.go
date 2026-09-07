@@ -63,7 +63,7 @@ func modeBContractNet(goalID, actionID string, endpoints []string) *VerifiedCont
 	}}
 }
 
-// TestModeB_FD3Relay L1+U3：声明端点=沙箱内 unix socket 帧中继通；出站仍拒。
+// TestModeB_FD3Relay U1+U3：声明端点=沙箱内 unix socket 帧中继通；出站仍拒。
 func TestModeB_FD3Relay(t *testing.T) {
 	if !modeBAvailable() {
 		t.Skip("模式 B 不可用（landlock ABI 缺席/非 amd64——R-1452 合法先红形态）")
@@ -108,14 +108,14 @@ func TestModeB_FD3Relay(t *testing.T) {
 	if !strings.Contains(res.Output, "ROUNDTRIP-OK") {
 		t.Fatalf("U1：沙箱内经 unix socket 中继回显失败——out=%q", res.Output)
 	}
-	// L3 对照：同 session 沙箱内直接出站仍拒（EACCES=13——seccomp 域名白名单在位）
+	// U3 对照：同 session 沙箱内直接出站仍拒（EACCES=13——seccomp 域名白名单在位）
 	res, err = guard.Execute(ctx, ExecuteRequest{ActionID: "dial", ActionType: "process.exec",
 		Params: map[string]string{"binary": self, "args": "__goalos-probe dial 192.0.2.1:80"}})
 	if err != nil {
 		t.Fatalf("Execute dial: %v", err)
 	}
 	if strings.Contains(res.Output, "PROBE-ERRNO=0") {
-		t.Fatal("L3 CRITICAL：沙箱内直接出站竟通——中继面削弱了 seccomp 边界")
+		t.Fatal("U3 CRITICAL：沙箱内直接出站竟通——中继面削弱了 seccomp 边界")
 	}
 }
 
