@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows || linux
 
 // fd3_contract_test.go——FD3 传输层契约测试（S1——R-571 先红）。
 // 断言来源=开发计划/fd3-broker-设计.md §六 测试矩阵 F3/F6：
@@ -10,6 +10,8 @@ package fd3
 import (
 	"fmt"
 	"strings"
+	goruntime "runtime"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -18,7 +20,7 @@ import (
 // TestFD3_ConcurrentAttribution F3：2 客户端并发×双向——每客户端各发 N 帧带身份标签，
 // 服务端逐帧回显；断言=每客户端回收的标签全属自己（归属零串线）+无死锁（全链完成时限）。
 func TestFD3_ConcurrentAttribution(t *testing.T) {
-	ln, err := Listen("FD3-Test-F3")
+	ln, err := Listen(t.TempDir(), "FD3-Test-F3")
 	if err != nil {
 		t.Fatalf("Listen: %v", err)
 	}
@@ -99,12 +101,12 @@ func TestFD3_ConcurrentAttribution(t *testing.T) {
 // TestFD3_NameEntropy F6：同标签两次 Listen=管道对名必须异（熵化一次性——R-1667 v2 同族：
 // 同名复用=残留态继承面）；名含合法管道前缀+熵段。
 func TestFD3_NameEntropy(t *testing.T) {
-	l1, err := Listen("FD3-Test-F6")
+	l1, err := Listen(t.TempDir(), "FD3-Test-F6")
 	if err != nil {
 		t.Fatalf("Listen#1: %v", err)
 	}
 	defer l1.Close()
-	l2, err := Listen("FD3-Test-F6")
+	l2, err := Listen(t.TempDir(), "FD3-Test-F6")
 	if err != nil {
 		t.Fatalf("Listen#2: %v", err)
 	}
@@ -112,7 +114,11 @@ func TestFD3_NameEntropy(t *testing.T) {
 	if l1.Name() == l2.Name() {
 		t.Fatalf("同标签两 Listen 同名=%q——熵化纪律失守（残留态继承面）", l1.Name())
 	}
-	if !strings.HasPrefix(l1.Name(), `\\.\pipe\GoalOS-FD3-`) {
+	// 平台形态断言（windows=命名管道前缀；linux=unix socket 熵名落目录）
+	if goruntime.GOOS == "windows" && !strings.HasPrefix(l1.Name(), `\\.\pipe\GoalOS-FD3-`) {
 		t.Fatalf("管道名缺合法前缀: %q", l1.Name())
+	}
+	if goruntime.GOOS == "linux" && !strings.Contains(filepath.Base(l1.Name()), "goalos-fd3-") {
+		t.Fatalf("socket 名缺熵化段: %q", l1.Name())
 	}
 }

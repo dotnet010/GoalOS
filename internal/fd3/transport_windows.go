@@ -10,7 +10,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 	"syscall"
@@ -50,24 +49,6 @@ func fd3SecurityAttributes() (*windows.SecurityAttributes, error) {
 	}, nil
 }
 
-// sanitizeLabel 管道名段净化（字母数字横线族——与 winAC 同名纪律）。
-func sanitizeLabel(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' {
-			b.WriteRune(r)
-		}
-	}
-	if b.Len() == 0 {
-		return "x"
-	}
-	out := b.String()
-	if len(out) > 24 {
-		out = out[:24]
-	}
-	return out
-}
-
 // Listener FD3 监听器（基名熵化；Accept=每连接开新管道对实例——命名管道多实例语义）。
 type Listener struct {
 	base    string
@@ -103,7 +84,8 @@ func (l *Listener) untrack(hs ...windows.Handle) {
 }
 
 // Listen 建监听器（label 净化+熵后缀——同标签两次 Listen 必异名）。
-func Listen(label string) (*Listener, error) {
+// dir 参数=跨平台签名对称位（unix=socket 落目录；windows=管道无目录概念——忽略）。
+func Listen(_ string, label string) (*Listener, error) {
 	var entropy [8]byte
 	if _, err := rand.Read(entropy[:]); err != nil {
 		return nil, fmt.Errorf("fd3: 熵源失败: %w", err)
