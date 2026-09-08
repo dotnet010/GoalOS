@@ -15,7 +15,7 @@ import (
 
 // sanitizeChildProcess 在子进程启动前设置 Windows 安全加固。
 // v0.3.0 fix (C5): 通过 Job Object 实现进程组隔离——父进程终止时子进程自动清理。
-// 后续版本将扩展：Restricted Token + Low Integrity Level + ACLs（agentbox 集成）。
+// 后续形态注记：Windows 受限档=WinAC（R-1648——AppContainer 基座已落地，本条历史计划注记更新）
 func sanitizeChildProcess(cmd *exec.Cmd) {
 	// 生成唯一 Job Object 名称
 	id := make([]byte, 4)

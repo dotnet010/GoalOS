@@ -32,7 +32,8 @@ Thumbs.db
 *.log
 
 # ─── Go ───
-# vendor/ 例外（R-931/C-EXEC-04 W0 条件——agentbox 供应链锁定入库；05 审计面）
+# vendor/ 例外（R-931/C-EXEC-04 供应链锁定入库——外部依赖全部 vendor pin；
+# 2026-09-08 agentbox 族移除后余 BurntSushi/toml+sashabaranov/go-openai+yaml.v3）
 # vendor/
 
 # ─── 测试产物 ───

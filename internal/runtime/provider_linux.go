@@ -1,10 +1,12 @@
 //go:build linux
 
-// provider_linux.go——Linux 受限档双引擎收敛（R-1664——会议 #267 顾问第七~九轮）：
-// 能力探测（实证式——不问 agentbox Available() 静态声明）：
-//   模式 A=agentbox（namespace 族——userns 可用环境）；
-//   模式 B=免 userns 原生沙箱（landlock+seccomp——Ubuntu 24.04 AppArmor 默认环境）；
+// provider_linux.go——Linux 受限档双引擎收敛（R-1664 框架+R-1679 换引擎——会议 #280 续）：
+// 能力探测（实证式——不问静态声明）：
+//   模式 A=bwrap（userns+mount ns 遮蔽——隔离强度更高=文件系统视图级；
+//         依赖=bwrap 二进制+Ubuntu 24.04 需 goalos-bwrap profile）；
+//   模式 B=免 userns 原生沙箱（landlock+seccomp——零依赖兜底线）；
 //   双不可用=fail-closed（ErrNoBackend——诚实报错非裸跑）。
+// agentbox 模式 A 位已退役（R-1678——递归爆炸+fail-open 实机事故链）。
 package runtime
 
 import (
@@ -20,15 +22,15 @@ type dualEngineProvider struct {
 	workspace string
 	tmpDir    string
 	engine    Provider // Prepare 期选定
-	mode      string   // "A"(agentbox)/"B"(modeb)——可观测性
+	mode      string   // "A"(bwrap)/"B"(modeb)——可观测性
 	dialFn    fd3.DialFunc
 	onDeny    func(endpoint, reason string)
 }
 
-// LinuxOption 双引擎构造可选项（R-1650 v2 FD3 接线面——仅模式 B 消费）。
+// LinuxOption 双引擎构造可选项（R-1650 v2 FD3 接线面——引擎均可消费）。
 type LinuxOption func(*dualEngineProvider)
 
-// WithLinuxDialFunc 注入模式 B broker 拨号面（生产=zone dialer 同源）。
+// WithLinuxDialFunc 注入 broker 拨号面（生产=zone dialer 同源）。
 func WithLinuxDialFunc(d fd3.DialFunc) LinuxOption {
 	return func(p *dualEngineProvider) { p.dialFn = d }
 }
@@ -70,16 +72,16 @@ func (p *dualEngineProvider) Capabilities(ctx context.Context) (ProviderCapabili
 }
 
 // Prepare 引擎实证选择：
-//  1. 模式 A 实证——agentbox 管理器构造+真实探针（经 agentbox 沙箱写 home——
-//     拒绝=边界在位；泄漏/错误=userns 被拦族，不可信）；
+//  1. 模式 A 实证——bwrap（Prepare 探针=实证 spawn+Precheck 边界实证）；
 //  2. 模式 B 实证——landlock ABI+架构探测（modeBAvailable）；
 //  3. 双不可用=fail-closed。
 func (p *dualEngineProvider) Prepare(ctx context.Context, plan RuntimePlan) error {
-	// 模式 A 实证（agentbox——empirical，不问 Available()）
-	agent := NewAgentboxProvider(p.workspace, p.tmpDir, "linux")
-	if err := agent.Prepare(ctx, plan); err == nil {
-		if p.probeEngineA(ctx, agent) {
-			p.engine, p.mode = agent, "A"
+	// 模式 A 实证（bwrap——ns 级隔离优先；Prepare 失败/边界实证不过=落 B）
+	bw := NewBwrapProvider(p.workspace, p.tmpDir,
+		WithBwrapDialFunc(p.dialFn), WithBwrapOnDeny(p.onDeny))
+	if err := bw.Prepare(ctx, plan); err == nil {
+		if p.probeEngineA(ctx, bw) {
+			p.engine, p.mode = bw, "A"
 			return nil
 		}
 	}
@@ -92,13 +94,13 @@ func (p *dualEngineProvider) Prepare(ctx context.Context, plan RuntimePlan) erro
 			return nil
 		}
 	}
-	return fmt.Errorf("%w: 双引擎均不可用（模式 A=userns 被拦族/模式 B=landlock 缺席）——受限档本平台不可用（fail-closed）", ErrNoBackend)
+	return fmt.Errorf("%w: 双引擎均不可用（模式 A=bwrap 缺席或实证失败/模式 B=landlock 缺席）——受限档本平台不可用（fail-closed）", ErrNoBackend)
 }
 
-// probeEngineA 模式 A 边界实证——经 agentbox 沙箱跑 home 写探针：
-// 拒绝=边界在位（真 A）；写成功=fail-open 裸跑（弃用转 B）。
-func (p *dualEngineProvider) probeEngineA(ctx context.Context, agent Provider) bool {
-	h, err := agent.Acquire(ctx, LeaseRequest{GoalID: "engine-probe", ActionID: "engine-probe"})
+// probeEngineA 模式 A 边界实证——经 bwrap 沙箱跑 home 写探针：
+// 拒绝=边界在位（真 A）；写成功/错误=fail-open 疑面（弃用转 B）。
+func (p *dualEngineProvider) probeEngineA(ctx context.Context, engine Provider) bool {
+	h, err := engine.Acquire(ctx, LeaseRequest{GoalID: "engine-probe", ActionID: "engine-probe"})
 	if err != nil {
 		return false
 	}
@@ -106,7 +108,7 @@ func (p *dualEngineProvider) probeEngineA(ctx context.Context, agent Provider) b
 	if err := h.Start(ctx); err != nil {
 		return false
 	}
-	// Precheck=边界实证（home 写探针——S-266-01 强化版）；通过=模式 A 可信
+	// Precheck=边界实证（home 写探针+出站探针——S-266-01 强化版）；通过=模式 A 可信
 	return h.Precheck(ctx) == nil
 }
 

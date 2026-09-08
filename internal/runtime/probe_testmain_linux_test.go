@@ -9,17 +9,12 @@ import (
 	"testing"
 
 	"github.com/goalos/goalos/internal/runtime/probe"
-	"github.com/zhangyunhao116/agentbox"
 )
 
 // TestMain 拦截 __goalos-probe/__goalos-modeb 子命令（先于测试运行）。
-// 最前=agentbox.MaybeSandboxInit()（R-1678——agentbox 沙箱子进程=re-exec 自身
-// 二进制+环境标记，子进程必须最前调用它才进入沙箱初始化——缺失=子进程落入
-// m.Run() 跑全量测试=递归爆炸+fail-open 裸跑，双机实机实锤）。
+// 注：agentbox MaybeSandboxInit 钩子已随 agentbox 移除而退役（R-1678 钩子失效面
+// 随库移除——bwrap/模式 B 均扁平拉起无 reexec 标记面）。
 func TestMain(m *testing.M) {
-	if agentbox.MaybeSandboxInit() {
-		return
-	}
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "__goalos-probe":

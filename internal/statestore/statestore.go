@@ -247,7 +247,7 @@ func (s *Store) SaveSnapshot(goalID string, state *GoalState) error {
 
 // renameWithRetry Windows 瞬态文件锁防护（2026-08-31 实机实证——
 // TestWaitMore_ExtendsGoalRunnerTimeout 红：Defender/索引器扫描新建 .tmp 期间
-// rename=Access is denied 瞬态；agentbox acl.go F3 同族同修法）。
+// rename=Access is denied 瞬态；历史事故同族同修法）。
 // 瞬态拒绝短退避重试；非权限错误立即返回（不掩盖真实故障）。
 func renameWithRetry(oldpath, newpath string) error {
 	err := os.Rename(oldpath, newpath)

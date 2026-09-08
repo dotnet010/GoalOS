@@ -51,7 +51,8 @@ cat <<PROFILE
 # GoalOS 模式 A 正证 profile（S-266-03——gen-apparmor-profile.sh 生成，勿手编）
 # 语义（Ubuntu 24.04 userns 限制官方形态——bwrap 先例）：flags=(unconfined)+
 # userns 规则——本 profile 唯一职责=让二进制成为「有 profile」进程过内核
-# userns_create LSM 钩；其余一切不施加限制（边界=agentbox 自身 namespace 族）。
+# userns_create LSM 钩；其余一切不施加限制（边界=二进制自身沙箱机制——2026-09-08
+# 起模式 A=bwrap 承载，agentbox 族已全量移除）。
 # 纪律：禁 aa-enforce 加载（会剥 unconfined 语义）；complain 模式不满足内核检查。
 abi <abi/4.0>,
 include <tunables/global>
