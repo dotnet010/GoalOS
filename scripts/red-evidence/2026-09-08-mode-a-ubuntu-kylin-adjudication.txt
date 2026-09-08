@@ -29,3 +29,14 @@
   信任目录运维面=kysec_set -r 递归打标。
 - 信创原生路线登记：kysec 自研 LSM（exectl/devctl/netctl 族）作受限档承载面的
   可行性评估=研究方向（Jobs 已批准该路线）。
+
+## 追加（同场深挖终态）
+
+- **麒麟 LSM 栈定性**（/proc/cmdline+config 实锤）：`lsm=capability,kycp,kysec,box,kyextend`
+  ——**无 AppArmor、无 Landlock**（`# CONFIG_SECURITY_LANDLOCK is not set`）；
+  麒麟安全栈=kycp+kysec+box+kyextend（自研私有，公开文档缺席）。
+- **Ubuntu 模式 A 供应商级 fail-open 最小隔离实证**：纯 agentbox Manager 直驱
+  （零 GoalOS 代码）：`Available=true`+`ExecArgs(/bin/touch ~/x)`=exit 0 文件落 home。
+  =agentbox 在 Ubuntu 24.04 不可用（非配置面）——模式 B=唯一承载，fail-closed 在位。
+- Ubuntu uid_map EPERM（#267 面）=AppArmor profile 解了（`0 0 1` 写通+clone 全
+  命名空间族 strace 实锤）——但 agentbox 自身禁闭仍不生效（供应商级）。
