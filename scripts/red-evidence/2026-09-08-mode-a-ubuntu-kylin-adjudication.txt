@@ -1,0 +1,31 @@
+# S-266-03+信创实机裁决：模式 A（agentbox）两平台实机终局（2026-09-08）
+
+## Ubuntu 24.04（goalos-test——sudo 免密就位后装 profile 实机链）
+
+**AppArmor profile 面（userns 解禁=有效）**：
+- 正确形态=官方 bwrap 先例：`flags=(unconfined)+userns,`（Ubuntu 24.04 文档形态——
+  禁 aa-enforce；complain 不满足内核检查）；confined 形态=逐条加规则的跑步机
+  （proc/sys/usr/cgroup/network/sys_admin 逐拦——审计日志逐条实锤后放弃该形态）。
+- 装载后实证：uid_map 写通（「0 0 1」写成功——#267 的 EPERM 面=已解）+clone 全
+  命名空间创建成功（strace 实锤 CLONE_NEWUSER|NEWNS|NEWNET 族全建）。
+- scripts/gen-apparmor-profile.sh=生成器入库（安装期动态路径规范化）。
+
+**但模式 A 仍败——供应商级 fail-open 实锤（隔离变量=最小驱动）**：
+纯 agentbox Manager 直接调用（零 GoalOS 代码面）：`mgr.Available()=true`+
+`ExecArgs(/bin/touch ~/agb-probe.txt)`=exit 0+文件落 home=**边界失效**。
+命名空间在+Landlock 施加在（strace 全链），agentbox 自身不收敛 home 写。
+= 供应商级问题（非我方配置可修）→ 模式 A 在 Ubuntu 24.04=不可用登记；
+模式 B=该平台唯一承载（已实证）。上游跟进面登记。
+
+## 麒麟 V10 SP1（goalos-kylin-test——信创真机）
+
+- 内核 5.15.0-52（非矩阵假设的 4.19）；userns 全通（真机窗口确认项 #1 闭环）
+- **Landlock 缺席**（麒麟内核未编入——模式 B 不可建）
+- **agentbox fail-open 同形态**（home 写探针沙箱内成功——Precheck 正确拦下）
+- 双引擎全灭=受限档当前 fail-closed 不可用（诚实拒绝在位——零裸跑）
+- **kysec 执行控制**：未签名二进制一律 EPERM exit 126（hello-world 对照实锤）；
+  白名单=kysec_set -n exectl -v original <路径> 标签制；**生效有分钟级同步延迟窗**
+  （新打标立即跑=126，数分钟后通——kysec-sync-daemon 异步传播实机实证）；
+  信任目录运维面=kysec_set -r 递归打标。
+- 信创原生路线登记：kysec 自研 LSM（exectl/devctl/netctl 族）作受限档承载面的
+  可行性评估=研究方向（Jobs 已批准该路线）。
