@@ -8362,3 +8362,23 @@ resolutions:
       - must_exist: "事件接缝"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 tailnet 事件接缝化（R-1677）"
+  R-1678:
+    desc: "agentbox MaybeSandboxInit 必修钩子（会议 #280 续——实机实锤）: agentbox 沙箱化子进程=re-exec 自身二进制+环境标记（_AGENTBOX_WORKER/reexec fd）；消费方 main()/TestMain 必须在一切初始化之前调用 agentbox.MaybeSandboxInit()，缺失=子进程落入正常 main/m.Run()=fail-open 裸跑+worker 递归跑全量测试（goalos-test /tmp 1.6M 残留目录实机事故——inode 耗尽）。【凡引用 agentbox 的二进制=钩子不可缺】接线清单：daemon main+各测试二进制 TestMain。证据等级=已实证（双机 fail-open+目录爆炸+修复后 worker 模式接通实机出数）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1678"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1678"
+      - must_exist: "MaybeSandboxInit"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 MaybeSandboxInit 钩子（R-1678）"
+  R-1679:
+    desc: "Linux 受限档承载=bwrap 集成路线（会议 #280 续——Jobs 裁决：kysec 逆向停止+探索 bwrap+探索 gVisor+非核心免自研）: bwrap=模式 C 的现成实现（userns+bind-mount 遮蔽+pivot_root——数千行 C 单二进制全球审计；Go 侧仅拼参数调起——彻底避开 Go 运行时多线程操作命名空间的 unshare EINVAL 坑）。实机全绿：麒麟 V10 SP1（bwrap 0.4.0 系统自带=kysec 天然信任）+Ubuntu 24.04（apt 0.9.0+goalos-bwrap profile——gen-apparmor-profile.sh --bwrap 生成）双机 fs 遮蔽/网络全拒/工作区可写持久全矩阵。gVisor=I4 级过重（需 root 安装+超出受限档需求面——登记不采纳）。证据等级=已实证（双机矩阵）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1679"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1679"
+      - must_exist: "bwrap"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 bwrap 集成路线（R-1679）"
