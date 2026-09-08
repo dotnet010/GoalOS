@@ -35,8 +35,38 @@
 - **麒麟 LSM 栈定性**（/proc/cmdline+config 实锤）：`lsm=capability,kycp,kysec,box,kyextend`
   ——**无 AppArmor、无 Landlock**（`# CONFIG_SECURITY_LANDLOCK is not set`）；
   麒麟安全栈=kycp+kysec+box+kyextend（自研私有，公开文档缺席）。
-- **Ubuntu 模式 A 供应商级 fail-open 最小隔离实证**：纯 agentbox Manager 直驱
-  （零 GoalOS 代码）：`Available=true`+`ExecArgs(/bin/touch ~/x)`=exit 0 文件落 home。
-  =agentbox 在 Ubuntu 24.04 不可用（非配置面）——模式 B=唯一承载，fail-closed 在位。
+- **Ubuntu 模式 A fail-open 归因修正（同日深挖——撤回「供应商级」定性）**：
+  真根因=**我方从未调用 agentbox.MaybeSandboxInit()**（agentbox 沙箱子进程=re-exec
+  自身二进制+环境标记；vendor 文档原话「call at the very beginning of main()」——
+  我方 daemon main 与测试 TestMain 均未调用=子进程落入正常 main/m.Run()=
+  fail-open 裸跑+递归跑全量测试）。「最小驱动直驱」实验同样没调它——
+  当时的「供应商级」结论是我方接线缺失的误判，现已更正。
+  **残留面**：补上 MaybeSandboxInit 后边界测试仍 fail-open（worker 起来了但
+  landlock 未布防——478 次 ABI 查询/0 add_rule/0 restrict_self）——下一层归因面。
+  **bwrap 路线（Jobs 2026-09-08 裁决）实证两机全绿**（见下）——agentbox 深调
+  可能整体被 bwrap 取代而 moot。
 - Ubuntu uid_map EPERM（#267 面）=AppArmor profile 解了（`0 0 1` 写通+clone 全
-  命名空间族 strace 实锤）——但 agentbox 自身禁闭仍不生效（供应商级）。
+  命名空间族 strace 实锤）；agentbox 边界仍未生效的残留归因=上条更正块
+  （我方 init 缺失为主线——landlock 未布防=下一层，供应商定性已撤回）。
+
+## bwrap 集成实证（2026-09-08——Jobs 裁决路线：kysec 逆向停止+bwrap 集成+gVisor 评估+非核心免自研）
+
+**bwrap=模式 C 的现成实现**（userns+bind-mount 遮蔽+pivot_root——全球审计的
+数千行 C 单二进制；GoalOS Go 侧仅拼参数调起）。
+
+麒麟 V10 SP1（goalos-kylin-test）：**bwrap 0.4.0 系统自带**（kysec 天然信任
+OS 签名包——零安装零标签税）。全矩阵绿：
+- spawn OK；fs 遮蔽（--tmpfs /home/goalos 后真身内容不可见+.ssh 不可见+
+  沙箱内写入随 tmpfs 消亡=宿主零污染）✓；--unshare-net 网络全拒 ✓
+
+Ubuntu 24.04（goalos-test）：apt 装 bubblewrap 0.9.0 + goalos-bwrap profile
+（gen-apparmor-profile.sh --bwrap 生成：unconfined+userns+net_admin+setpcap+
+sys_admin——实机实锤：默认 unprivileged_userns 兜底 profile 剥 bwrap 的
+net_admin/setpcap=回环拉起 RTM_NEWADDR 被拒=bwrap 死）后全矩阵绿：
+- fs 遮蔽 ✓；网络全拒 ✓；工作区 bind 可写+持久 ✓（同路径 bind 形态）
+
+**gVisor 评估**：runsc=需 root 安装+重依赖；受限档需求 bwrap 已全覆盖——
+gVisor=I4 级（自带内核）过重，不进入本路线（登记不采纳：超出受限档需求面）。
+
+**结论**：bwrap=Linux 受限档新承载候选（模式 C 的现成实现）——双 Linux 机
+实证全绿；bwrapProvider 引擎集成=下一工作包。
