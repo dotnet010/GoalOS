@@ -21,7 +21,7 @@ func runBypassProbeMatrix(t *testing.T, tc string, guard *HandleGuard) {
 	counters := NewBypassCounters()
 
 	// 探针组（Option B 语义——会议 #256；探针形态 per 平台——platformProbeSet 族表
-	// 由平台文件注入：darwin=touch/cat/nc；linux/windows=agentbox 承载形态）
+	// 由平台文件注入：darwin=touch/cat/nc；linux=双引擎（bwrap/模式 B）；windows=WinAC 承载形态）
 	home, _ := os.UserHomeDir()
 	probes := platformProbeSet(tc, home)
 	for _, probe := range probes {

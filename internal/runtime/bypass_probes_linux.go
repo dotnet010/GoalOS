@@ -22,6 +22,3 @@ func platformProbeSet(tc, home string) []struct{ name, binary, args string } {
 		{"outbound connect 192.0.2.1:80", self, "__goalos-probe dial 192.0.2.1:80"},
 	}
 }
-
-// probeEchoBin Execute 正向探针（边界内真实执行证据——非空输出反虚假绿）。
-func probeEchoBin() string { return "/bin/echo" }

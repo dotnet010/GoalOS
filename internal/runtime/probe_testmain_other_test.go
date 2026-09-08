@@ -10,16 +10,10 @@ import (
 
 	"github.com/goalos/goalos/internal/fd3"
 	"github.com/goalos/goalos/internal/runtime/probe"
-	"github.com/zhangyunhao116/agentbox"
 )
 
 // TestMain 拦截 __goalos-probe/__goalos-fd3d 子命令（先于测试运行）。
-// 最前=agentbox.MaybeSandboxInit()（R-1678——非 Linux 面 agentbox=worker 模式
-// 同样经环境标记 re-exec——缺失=子进程落入 m.Run()=fail-open）。
 func TestMain(m *testing.M) {
-	if agentbox.MaybeSandboxInit() {
-		return
-	}
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "__goalos-probe":

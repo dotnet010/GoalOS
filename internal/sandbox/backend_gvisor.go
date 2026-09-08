@@ -9,7 +9,7 @@ import (
 
 // backend_gvisor.go — gVisor 后端（I4，R-1078——会议 #193 威胁模型升级）。
 //
-// 契约：runsc 子进程后端（不链接进 daemon，供应链审查同 agentbox 标准 R-916）；
+// 契约：runsc 子进程后端（不链接进 daemon，供应链审查同 vendor 库标准 R-916）；
 // KVM 探测优先、无 KVM 自动 systrap（SECCOMP_RET_TRAP，无需硬件虚拟化——
 // 信创 4.19 内核同样可跑 I4 用户态内核）；不兼容 syscall seccomp 兜底；
 // 自动降级链 L5→L4→L3→L2。

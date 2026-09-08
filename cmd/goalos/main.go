@@ -36,7 +36,6 @@ import (
 	"github.com/goalos/goalos/internal/skills"
 	"github.com/goalos/goalos/internal/statestore"
 	"github.com/goalos/goalos/pkg/events"
-	"github.com/zhangyunhao116/agentbox"
 )
 
 const (
@@ -44,18 +43,11 @@ const (
 )
 
 func main() {
-	// agentbox 沙箱初始化钩子（R-1678——实机实锤必修）：agentbox 的沙箱化子进程=
-	// re-exec 自身二进制+环境变量标记（_AGENTBOX_WORKER/reexec fd），子进程必须在
-	// main 最前调用 MaybeSandboxInit 才会进入沙箱初始化/工作者模式——**从未调用=
-	// 沙箱子进程直接落入正常 main=fail-open 裸跑**（Ubuntu/Kylin 双机实机实锤：
-	// home 写探针沙箱内成功+751k agentbox-worker 目录递归爆炸=子进程跑全量测试）。
-	// 必须位于一切初始化之前（vendor 文档原话）。
-	if agentbox.MaybeSandboxInit() {
-		return
-	}
 	// 子命令拦截（R-1666/R-1664——re-exec 自身=零外部二进制）：
 	// __goalos-probe=原生探针（errno 数字证据）；__goalos-modeb=模式 B 沙箱施加器
 	// （Linux——免 userns landlock+seccomp；其他平台不应出现，出现即拒）。
+	// 注：agentbox MaybeSandboxInit 钩子已随 agentbox 移除而退役（R-1678 钩子
+	// 失效面随库移除——bwrap/模式 B 均扁平拉起无 reexec 标记面）。
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "__goalos-probe":

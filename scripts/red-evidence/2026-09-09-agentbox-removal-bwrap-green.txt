@@ -1,0 +1,42 @@
+# agentbox 全量移除+bwrap 换引擎——闸口与双机实证留痕（2026-09-09，会议 #281 / R-1680/R-1681）
+# 分支 feat/bwrap-engine-remove-agentbox；环境=开发机 Win11 + goalos-test(Ubuntu 24.04) + goalos-kylin-test(麒麟 V10 SP1)
+
+== 移除面 ==
+git rm: provider_agentbox{,_linux,_windows,_contract_test}.go + internal/sandbox/classifier.go
+        + internal/runtime/goruntime_helper_test.go（ab43a7b agentbox 收敛定稿引入的孤儿）
+vendor: zhangyunhao116/agentbox 整树 + go-ole（agentbox 独占传递依赖）——100 文件 22445 行删除
+        go mod tidy + go mod vendor 重建后余: BurntSushi/toml + sashabaranov/go-openai + gopkg.in/yaml.v3
+钩子撤销: cmd/goalos/main.go + probe_testmain_linux_test.go + probe_testmain_other_test.go
+        的 agentbox.MaybeSandboxInit() 调用（R-1678 义务随依赖移除失效）
+孤儿函数: probeEchoBin（bypass_probes_{linux,windows}.go 各一）——staticcheck U1000 钓出
+文本面: runtime_wiring_linux.go 两条 WARN 日志（曾写「linux agentbox Provider」=引擎已换后日志撒谎）
+        + .gitignore vendor 例外依据 + docker-publish.yml Go 版本注 + gen-apparmor-profile.sh 边界注
+        + bypass_dual_test.go / bypass_linux_test.go 事故归因注释（agentbox→userns/bwrap 写实）
+
+== win/macos 残留核对（源码级）==
+grep 全树（zhangyunhao116|GOALOS_AGENTBOX|MaybeSandboxInit|reExecEnvKey|_AGENTBOX_WORKER）:
+  活代码零命中。残留仅在 glossary.yaml / resolutions.yaml 历史决议 / red-evidence 档案 /
+  prototype spike 注释（配方出处）/ 移除注记注释（main.go、probe_testmain、bypass_windows_test）
+  =历史记录面不改写。
+Windows: 生产面自 R-1648=WinAC；provider_agentbox_windows.go 生前仅契约测试载体。GOOS=windows
+  build+vet+staticcheck 全绿=构造性零残留。
+darwin: Seatbelt 路线与 agentbox 零依赖。GOOS=darwin build+vet+staticcheck 全绿=构造性零残留。
+
+== 本地闸口（2026-09-09 复跑）==
+go build ./... + GOOS={linux/amd64,linux/arm64,darwin,windows} 交叉 = 全绿
+go vet 三 GOOS = 全绿
+staticcheck 三 GOOS = 全绿（SC_WINDOWS_OK / SC_LINUX_OK / SC_DARWIN_OK——U1000 清零）
+go test -count=1 ./internal/runtime/... ./internal/sandbox/... ./cmd/goalos/... ./internal/fd3/... =
+  ok internal/runtime 14.559s / ok sandbox / ok cmd/goalos / ok fd3
+13 检查脚本（check-anti-cheat … check-sensitive-path-write 第 13 闸口）= 全 PASS
+build-xinchuang（-tags xinchuang linux/amd64）= OK
+race = 本机无 gcc（-race 需 cgo）——环境缺席非回归，CI 承载
+
+== 双机实证（TC-RT-001b = TestRuntime_Bypass_SyscallDenied_Linux 复跑）==
+goalos-test（Ubuntu 24.04，bwrap 0.9.0+goalos-bwrap profile 在位）:
+  --- PASS: TestRuntime_Bypass_SyscallDenied_Linux (14.35s) —— Precheck 通过=平台有承载能力，
+  全探针矩阵（写区外/敏感目录读/出站连接）全拒
+goalos-kylin-test（麒麟 V10 SP1，bwrap 0.4.0 系统自带=kysec 信任零税；测试二进制经
+  kysec_set -n exectl -v original 打标+分钟级同步窗后执行）:
+  --- PASS: TestRuntime_Bypass_SyscallDenied_Linux (0.03s) —— 全探针矩阵全拒
+  （信创受限档零突破持续在位——#280 突破后复跑确认）

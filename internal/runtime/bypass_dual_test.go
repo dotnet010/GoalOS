@@ -32,9 +32,10 @@ func runBypassProbeDual(t *testing.T, tc string, p Provider) {
 		t.Fatalf("%s：取回失败: %v", tc, err)
 	}
 	if err := got.Prepare(ctx, RuntimePlan{PlanID: tc + "-probe", Tier: TierRestricted}); err != nil {
-		// 引擎层 fail-closed（Kylin V10 SP1 实机实证——双引擎全灭=agentbox fail-open
-		// +landlock 缺席）：ErrNoBackend=平台无承载能力=受限档根本不注册=零裸跑——
-		// 安全性质 vacuously 成立（边界缺席=无执行）。登记为合规第三态，非测试失败。
+		// 引擎层 fail-closed（Kylin V10 SP1 实机实证——userns 缺席+bwrap 缺席
+		// +landlock 缺席=无引擎可承载）：ErrNoBackend=平台无承载能力=受限档根本不
+		// 注册=零裸跑——安全性质 vacuously 成立（边界缺席=无执行）。登记为合规
+		// 第三态，非测试失败。
 		if errors.Is(err, ErrNoBackend) {
 			t.Logf("%s：引擎层 fail-closed 实证（ErrNoBackend=本平台无任何可承载引擎——受限档不可用=安全性质成立）: %v", tc, err)
 			return

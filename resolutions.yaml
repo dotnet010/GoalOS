@@ -8223,7 +8223,7 @@ resolutions:
 
   # ═══ 会议 #267: tag CI 实证场+双引擎收敛（2026-09-01）═══
   R-1664:
-    desc: "双引擎动态收敛——Linux 受限档基座（会议 #267）: 能力探测实证式（不问 agentbox Available() 静态声明）；模式 A=agentbox（userns 可用）/模式 B=免 userns（landlock+seccomp——AppArmor 不拦三原语，goalos-test 实机确认）；双不可用=fail-closed。模式 B 布防=四大暗坑（LockOSThread+TSYNC/socket+socketpair domain 白名单仅 AF_UNIX/标准运行时集/home 链 READ_DIR）+P0/P1（网络 syscall 解耦/白名单非黑名单/O_NOFOLLOW ELOOP 熔断/继承 FD 清理/能力语义分列/FS 粒度/架构熔断）。抽象套接字诚实声明=模式 B 激活时 daemon 输出（CVE-2020-15257 族）。证据等级=已实证（goalos-test 九探针+TC-RT-001b 模式 B 闭环）。disposition: 生效"
+    desc: "双引擎动态收敛——Linux 受限档基座（会议 #267）: 能力探测实证式（不问 agentbox Available() 静态声明）；模式 A=agentbox（userns 可用）/模式 B=免 userns（landlock+seccomp——AppArmor 不拦三原语，goalos-test 实机确认）；双不可用=fail-closed。模式 B 布防=四大暗坑（LockOSThread+TSYNC/socket+socketpair domain 白名单仅 AF_UNIX/标准运行时集/home 链 READ_DIR）+P0/P1（网络 syscall 解耦/白名单非黑名单/O_NOFOLLOW ELOOP 熔断/继承 FD 清理/能力语义分列/FS 粒度/架构熔断）。抽象套接字诚实声明=模式 B 激活时 daemon 输出（CVE-2020-15257 族）。证据等级=已实证（goalos-test 九探针+TC-RT-001b 模式 B 闭环）。disposition: 生效（模式 A 位承载引擎经 R-1681 换血=bwrap——收敛结构不动）"
     files: [会议纪要.md]
     verify:
       - must_exist: "R-1664"
@@ -8363,7 +8363,7 @@ resolutions:
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 tailnet 事件接缝化（R-1677）"
   R-1678:
-    desc: "agentbox MaybeSandboxInit 必修钩子（会议 #280 续——实机实锤）: agentbox 沙箱化子进程=re-exec 自身二进制+环境标记（_AGENTBOX_WORKER/reexec fd）；消费方 main()/TestMain 必须在一切初始化之前调用 agentbox.MaybeSandboxInit()，缺失=子进程落入正常 main/m.Run()=fail-open 裸跑+worker 递归跑全量测试（goalos-test /tmp 1.6M 残留目录实机事故——inode 耗尽）。【凡引用 agentbox 的二进制=钩子不可缺】接线清单：daemon main+各测试二进制 TestMain。证据等级=已实证（双机 fail-open+目录爆炸+修复后 worker 模式接通实机出数）。disposition: 生效"
+    desc: "agentbox MaybeSandboxInit 必修钩子（会议 #280 续——实机实锤）: agentbox 沙箱化子进程=re-exec 自身二进制+环境标记（_AGENTBOX_WORKER/reexec fd）；消费方 main()/TestMain 必须在一切初始化之前调用 agentbox.MaybeSandboxInit()，缺失=子进程落入正常 main/m.Run()=fail-open 裸跑+worker 递归跑全量测试（goalos-test /tmp 1.6M 残留目录实机事故——inode 耗尽）。【凡引用 agentbox 的二进制=钩子不可缺】接线清单：daemon main+各测试二进制 TestMain。证据等级=已实证（双机 fail-open+目录爆炸+修复后 worker 模式接通实机出数）。disposition: 失效→R-1680（agentbox 全量移除——钩子义务随依赖移除消脱）"
     files: [会议纪要.md]
     verify:
       - must_exist: "R-1678"
@@ -8382,3 +8382,23 @@ resolutions:
       - must_exist: "bwrap"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 bwrap 集成路线（R-1679）"
+  R-1680:
+    desc: "agentbox 全量移除（会议 #281——Jobs 2026-09-08 指令：检测全面移除影响+移除报告+win/macos 源码核对）: 移除面=4 provider 文件（provider_agentbox{,_linux,_windows,_contract_test}.go）+vendor 树（zhangyunhao116/agentbox+其独占传递依赖 go-ole——共 100 文件 22445 行删除）+go.mod require+main/TestMain 的 MaybeSandboxInit 钩子（R-1678 义务随依赖移除失效——修订 R-1678）+internal/sandbox/classifier.go 孤儿骨架+probeEchoBin/goruntimeGOOS 孤儿函数（staticcheck U1000 钓出）。win/macos 核对结论=零残留：Windows 生产面已是 WinAC（R-1648 换血——provider_agentbox_windows.go 仅契约测试载体）；darwin=Seatbelt 无 agentbox 依赖；三 GOOS build/vet/staticcheck 全绿=构造性证明无残留符号；GOALOS_AGENTBOX_CI 门禁已随 R-1648 退役。glossary/resolutions/red-evidence 中 agentbox 提及=历史记录不改写。证据等级=已实证（三 GOOS 闸口+双机 TC-RT-001b 复跑绿）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1680"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1680"
+      - must_exist: "agentbox 全量移除"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 agentbox 全量移除（R-1680）"
+  R-1681:
+    desc: "Linux 受限档模式 A 位换血=bwrap 承载（会议 #281——R-1664 修订）: 模式 A 位 agentbox→bwrap（provider_bwrap_linux.go——bwrapProvider 全 SPI：Prepare=LookPath+实证 spawn 不信静态存在；Precheck=写 home/出站探针经 bwrap 执行非零即拒；FD3=契约声明→unix socket 落 tmpDir 经 --bind 进沙箱）；模式 B（landlock+seccomp 免 userns）不动；双不可用=fail-closed 不动。麒麟 0.4.0 版本面差异实锤=--dev-bind /dev/null 不支持（Can't create file）→不挂（探针面无依赖）。证据等级=已实证（TC-RT-001b 双机复跑：Ubuntu 24.04 14.35s+麒麟 V10 SP1 0.03s 全探针矩阵绿——信创受限档零突破后持续在位）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1681"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1681"
+      - must_exist: "模式 A"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记模式 A 换 bwrap 承载（R-1681）"
