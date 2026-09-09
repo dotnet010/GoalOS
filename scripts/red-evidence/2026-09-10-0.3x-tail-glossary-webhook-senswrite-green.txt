@@ -1,0 +1,43 @@
+# 0.3.x 尾项包——术语漂移清理+06 §1.3 bwrap 固定+Webhook 告警+senswrite 拦截（2026-09-10，会议 #282 / R-1682~R-1684）
+# 环境：开发机 Win11 + w64devkit gcc 14.1.0（C:\tools\w64devkit）+ goalos-kylin-test/GOALOS 双机实证基线
+
+== 术语面（R-1682） ==
+00统一术语表 v9.45：七词条写实（Sandbox/exec 分层策略/agentbox 退役注记/MXC/后端引擎架构/
+  平台支持三级定义/Sandbox 后端矩阵）——agentbox 家族=历史注记化+平台原生替代写实
+glossary.yaml=export-glossary.awk 同源再生（110 terms，与 md 逐字节一致——差异仅头注释）
+生成器性能 bug：原 bash 版每行 7 外部进程×640 行——MSYS fork ≈0.5s/行=120s 超时实锤
+  →awk 单进程等值实现（110 terms 全量对照一致；异尾空格=修复旧版 sed 链尾随空格漂移）
+
+== 06 §1.3（R-1682，v7.39） ==
+Linux 受限档承载正式固定=bwrap（R-1681——模式 A bwrap+模式 B landlock+seccomp 兜底双引擎收敛结构）
+信创=PlatformTier 3 级里程碑（沙箱强制生效=麒麟 V10 SP1 实机 TC-RT-001b 全探针矩阵绿——
+  red-evidence/2026-09-09-agentbox-removal-bwrap-green.txt 基线+#281 复跑）
+平台矩阵 Linux/信创行机制列写实（fs=--ro-bind 遮蔽/网络=--unshare-net+FD3 契约白名单）
+I 级档位=Jobs 议程注记（本行写实不构成档位生效——R-1571 互指；原 I3+ 系 v0.5.0 假设档）
+
+== Webhook 告警（R-1683） ==
+.github/workflows/notify-webhook.yml：
+  workflow_run 监听三工作流（Build&Release/W1-2 windows-daily/W5-6 信创模拟）
+  失败结论集=failure/timed_out/error/action_required（cancelled/success/skipped/neutral=过滤）
+  通用 JSON POST（jq 构造：event=goalos-ci-failure+workflow/conclusion/branch/sha/run_url/run_id/ts）
+  secrets.GOALOS_WEBHOOK_URL 未配置=::warning::+skip fail-silent（告警网关自身不得制造失败）
+  自身不被监听=零自触发循环面；YAML 解析（yaml.v3 v2）OK
+  R-1671 保留=本地主动面（云侧自动+本地盯梢两面对称）
+  飞书/钉钉类 HMAC 签名=接入面扩展登记
+
+== senswrite 拦截（R-1684） ==
+scripts/toolcheck senswrite：三段判定 Go 移植（①敏感目录字面量 ②敏感终段行+同行豁免
+  goalos-/safefixture: ③写入动词——同文件全命中=红；纯分类/纯读取=合法）
+scripts/check-sensitive-path-write.sh=薄封装（build+调用=单实现面零漂移）
+双向反证实证=3 红 2 绿：
+  红: a_evil（裸 config 写）/ d_annotated（异行注释不豁免——bash 语义保真）/ e_aws credentials
+  绿: b goalos- 专用夹具名 / c 纯读取
+== 环境教训 ==
+w64devkit/bin 含 awk/sh——PATH 无差别注入=污染既有脚本面（check-anti-cheat awk '^{' 兼容
+  +check-deprecated 解析面）——工具链隔离纪律：编译链用 CC/GOOS 变量指定，非编译工具不进
+  PATH 首位；race 用后立即移除注入。
+
+== 闸口全量绿 ==
+13 检查脚本（无注入 PATH）全 PASS | staticcheck 三 GOOS 全绿 | 信创构建 OK |
+  doc-version PASS（00=9.45/06=7.39/纪要=6.77）|
+  全量 race CGO_ENABLED=1 首次本地全绿（w64devkit gcc 14.1.0——环境就绪兑现）

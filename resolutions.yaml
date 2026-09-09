@@ -8402,3 +8402,33 @@ resolutions:
       - must_exist: "模式 A"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记模式 A 换 bwrap 承载（R-1681）"
+  R-1682:
+    desc: "术语与安全模型修订（0.3.x 尾项——会议 #282，Jobs 2026-09-10 指令两条）: ①术语面漂移清理——00统一术语表 v9.45 七词条写实（agentbox=已退役注记 R-1680/平台原生替代=WinAC+bwrap+模式 B+Seatbelt/exec 分层策略规则面自持化/后备引擎架构现状/P 支持三级定义补信创 3 级与 Windows 3 级达成/**glossary.yaml 同源再生=110 terms 与 md 逐字节一致**——生成器性能 bug 实证：原 bash 版每行 7 外部进程×640 行=MSYS fork 开销 15 分钟级不可用（实机超时），换 export-glossary.awk 单进程等值实现）；②06 安全模型 v7.39 §1.3 修订——Linux 受限档承载**正式固定=bwrap**（R-1681：模式 A bwrap+模式 B 兜底双引擎收敛结构），信创=**PlatformTier 3 级里程碑写实**（沙箱强制生效=麒麟 V10 SP1 实机 TC-RT-001b 全探针矩阵绿证据）；平台矩阵 Linux/信创行机制列写实；**I 级档位=Jobs 议程注记**（本行写实不构成档位生效——R-1571 互指；原 I3+ 系 v0.5.0 seccomp-notify/全域过滤形态假设档）。证据等级=已实证（术语面=同源再生机器一致；06 行=R-1681 双机实证+2026-09-09 移除包复跑）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1682"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1682"
+      - must_exist: "正式固定"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 bwrap 正式固定（R-1682）"
+  R-1683:
+    desc: "云端构建失败即时告警 Webhook（#270 提案落实——会议 #282，Jobs 2026-09-10 指令: #277「不需要做」裁决被推翻——GitHub 邮件=被动面延迟，R-1671 watch-ci=本地进程存活依赖（关机/未跑=盲区））: 云侧即时面=notify-webhook.yml（workflow_run 监听三工作流：Build & Release/windows-daily/信创模拟；conclusion ∈ {failure,timed_out,error,action_required}=告警（cancelled/success/skipped/neutral=噪音过滤）；通用 JSON POST（event/goalos-ci-failure+workflow+conclusion+branch+sha+run_url+run_id+ts）；secrets.GOALOS_WEBHOOK_URL 未配置=::warning::+skip-fail-silent（告警网关自身不得制造失败）；自身不被监听=零自触发循环面）。R-1671 保留=本地主动面（两面对称：云侧自动+本地盯梢）。证据等级=设计+本地 YAML/行为验证（webhook 接收端=用户接入面；负载形态契约=本决议）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1683"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1683"
+      - must_exist: "Webhook"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 Webhook 告警（R-1683）"
+  R-1684:
+    desc: "测试夹具敏感路径写入静态拦截=toolcheck senswrite（会议 #282——原 check-sensitive-path-write.sh 三段判定的 Go 逐语义移植:R-1676 同族）: 判定=①文件含敏感目录构造字面量（.ssh/.aws/.gnupg）②敏感终段行（config/id_*/credentials/.gitconfig/.netrc/known_hosts）且行无豁免标记（goalos-/safefixture:——豁免须在同行，bash 语义保真）③文件含写入动词=同文件全命中=红；纯分类/纯读取=合法；脚本=薄封装（构建+调用）。双向反证实证=3 红（裸 config 写/异行注释不豁免/.aws credentials）+2 绿（goalos- 夹具名/纯读取）。环境教训=w64devkit/bin 含 awk/sh 通用工具=注入 PATH 污染既有脚本面（awk '^{' 兼容+deprecated bash 解析面）——race 用后立即移除注入，CC 指定全路径更稳。证据等级=已实证（双向反证+全套闸口绿+全量 race 绿——w64devkit gcc 14.1.0）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1684"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1684"
+      - must_exist: "senswrite"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 senswrite（R-1684）"
