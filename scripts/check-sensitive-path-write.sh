@@ -10,34 +10,24 @@
 # 纯构造匹配误伤分类断言）：
 #   ①文件构造敏感目录（".ssh"/".aws"/".gnupg" 字面量）
 #   ②文件出现敏感文件终段字面量（"config"/"id_*"/"credentials"/".gitconfig"/
-#     ".netrc"）且该行无豁免标记（goalos- 夹具名 或 safefixture: 注释）
+#     ".netrc"/"known_hosts"）且该行无豁免标记（goalos- 夹具名 或 safefixture: 注释）
 #   ③文件含写入动词（os.WriteFile/Create/MkdirAll/Remove/RemoveAll）
 # 纯分类/纯读取（无写入动词）=合法通过；goalos- 专用夹具名=合法新建。
 #
-# 退出码: 0=无违规, 1=存在违规
+# 检查工具面=scripts/toolcheck senswrite（2026-09-10——R-1676 同族：检查链原生
+# Go 工具面；本脚本=薄封装，核心判定=Go 原生单二进制，本地/CI 同工具链同行为；
+# bash 段判定逻辑已随移植退役=单实现面零漂移）。
+# 退出码: 0=无违规, 1=存在违规, 2=工具面错误
 # =============================================================================
 set -uo pipefail
 
-RED='\033[0;31m'; GREEN='\033[0m'; NC='\033[0m'
-FAILED=0
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TOOLCHECK="$(mktemp)"
+trap 'rm -f "$TOOLCHECK"' EXIT
 
-echo "=== check-sensitive-path-write: 测试夹具敏感路径写入扫描（三段判定） ==="
-
-FILES=$(grep -rlE '"\.(ssh|aws|gnupg)"' --include="*_test.go" internal/ cmd/ pkg/ test/ 2>/dev/null || true)
-for f in $FILES; do
-	# 条件②：敏感终段行（无豁免标记）
-	SUS=$(grep -nE '"(config|id_[a-zA-Z0-9_]*|credentials|\.gitconfig|\.netrc|known_hosts)"' "$f" | grep -v "goalos-" | grep -v "safefixture:" || true)
-	[ -z "$SUS" ] && continue
-	# 条件③：写入动词在场
-	if grep -qE 'os\.(WriteFile|Create|MkdirAll|Remove|RemoveAll)\(' "$f"; then
-		echo -e "${RED}❌ FAIL: $f${NC}"
-		echo "$SUS" | head -5
-		echo "  → 同文件含写入动词+敏感终段构造——夹具须用 goalos- 专用名或 safefixture: 注释豁免"
-		FAILED=1
-	fi
-done
-
-if [ "$FAILED" -eq 0 ]; then
-    echo -e "${GREEN}✅ 通过——测试夹具零触碰真实敏感条目${NC}"
+if ! (cd "$SCRIPT_DIR/.." && go build -o "$TOOLCHECK" ./scripts/toolcheck/); then
+    echo "❌ toolcheck 构建失败（scripts/toolcheck——go 工具链面）" >&2
+    exit 2
 fi
-exit $FAILED
+
+exec "$TOOLCHECK" senswrite

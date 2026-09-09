@@ -1,6 +1,10 @@
 #!/bin/bash
 # 从 00统一术语表.md 表格提取术语→生成 glossary.yaml（机器可读）
 # 用法: bash scripts/export-glossary-yaml.sh > GoalOS/glossary.yaml
+# 2026-09-10 性能修复：原实现每行 7 个外部进程（echo|grep|sed|cut）——Windows
+# Git Bash (MSYS) fork 开销 ≈0.5s/行×640 行=15 分钟级不可用（实机超时实锤）；
+# 换 awk 单进程等值实现（scripts/export-glossary.awk——语义逐字保持，110 terms
+# 全量对照一致）。产物区别=修复了旧版 desc 尾随空格漂移（sed 链残余尾空格）。
 set -euo pipefail
 
 GLOSSARY_MD="${1:-开发文档/00统一术语表.md}"
@@ -12,52 +16,7 @@ echo "# 生成时间: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 echo "# 真相来源: $GLOSSARY_MD — 本文件是其派生文件。不一致时以 Markdown 为准。"
 echo ""
 echo "terms:"
-
-in_table=0
-while IFS= read -r line; do
-    # 检测表格开始（"| 术语" 或 "| 正确术语" 行）
-    if echo "$line" | grep -qE '^\|.*术语.*\|.*说明'; then
-        in_table=1
-        continue
-    fi
-
-    # 表格分隔行 |---| 或 |:---| 跳过
-    if [ "$in_table" -eq 1 ] && echo "$line" | grep -qE '^\|[-: |]+\|'; then
-        continue
-    fi
-
-    # 空行或 ## 标题 → 退出表格
-    if [ "$in_table" -eq 1 ] && echo "$line" | grep -qE '^$|^## |^---$'; then
-        in_table=0
-        continue
-    fi
-
-    # 提取术语行: | **Term** | Description |
-    if [ "$in_table" -eq 1 ] && echo "$line" | grep -qE '^\|.*\*\*.*\*\*.*\|'; then
-        # 提取术语名
-        term=$(echo "$line" | sed 's/^| *//' | cut -d'|' -f1 | sed 's/\*\*//g' | sed 's/^ *//;s/ *$//')
-        # 提取说明
-        desc=$(echo "$line" | sed 's/^| *//' | cut -d'|' -f2- | sed 's/^ *//;s/ *$//;s/|$//')
-        # 清理：移除末尾残留的 |
-        desc=$(echo "$desc" | sed 's/ *| *$//')
-
-        [ -z "$term" ] && continue
-        # 跳过非术语行（如"正确术语 | 废弃术语 | 说明"这种三列表头）
-        echo "$term" | grep -qE '正确术语|术语.*值' && continue
-
-        # 判断是否有 Schema（描述中包含关键词）
-        has_schema=0
-        echo "$desc" | grep -qE 'struct|interface|字段|Schema|schema|YAML|JSON' && has_schema=1
-
-        # YAML 安全输出——用单引号括描述，内部单引号转义为 ''
-        desc_safe=$(echo "$desc" | sed "s/'/''/g")
-
-        echo "  - name: '$term'"
-        echo "    description: '$desc_safe'"
-        echo "    has_schema: $has_schema"
-        echo "    defined_in: '05软件架构文档.md'"
-    fi
-done < "$GLOSSARY_MD"
+awk -f "$(dirname "$0")/export-glossary.awk" "$GLOSSARY_MD"
 } > "$OUTPUT"
 
 if [ "$OUTPUT" != "/dev/stdout" ]; then

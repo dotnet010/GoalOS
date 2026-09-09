@@ -1,0 +1,66 @@
+name: 构建失败即时告警 Webhook
+
+# #270 流程洞提案落实（Jobs 2026-09-10 指令——#277 曾裁「不需要做：GitHub 邮件覆盖
+# 被动面+R-1671 主动盯梢」，本裁决推翻：云侧失败必须实时出站告警，不依赖本机盯梢
+# 进程存活（本地关机/未跑=盯梢盲区）+不等待邮件投递（被动面延迟）。
+# R-1671（本地 watch-ci 2min 轮询）保留为本地主动面；本 workflow=云侧即时面。
+#
+# 配置：repository secrets -> GOALOS_WEBHOOK_URL（通用 URL，token/secret 内嵌 URL
+# 查询参数或路径——禁止明文入库）；未配置=告警面未启用（本 job skip+fail-silent：
+# 告警网关自身不得制造失败——诚实警告面=::warning::）。
+# Webhook 接收形态=通用 JSON POST（Content-Type: application/json），字段见下；
+# 飞书/钉钉类需 HMAC 签名的服务=扩展登记（当前通用形态，签名改造随真实接入面）。
+#
+# 结论集合：failure/timed_out/error/action_required=告警（构建失败即时通知）；
+# cancelled（人工取消）/success/skipped/neutral=不告警（噪音过滤）。
+# 自身不监听 notify-webhook（workflow_run 不提交本 workflow=无自触发循环面）。
+
+on:
+  workflow_run:
+    workflows:
+      - "Build & Release"
+      - "W1-2 Windows 每日构建与测试（任务 1.4——CI windows-latest runner 接入）"
+      - "W5-6 信创 4.19 模拟模式契约测试（发布闸口）"
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  notify-on-failure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      github.event.workflow_run.conclusion != 'success' &&
+      github.event.workflow_run.conclusion != 'cancelled' &&
+      github.event.workflow_run.conclusion != 'skipped' &&
+      github.event.workflow_run.conclusion != 'neutral'
+    steps:
+      - name: 构造载荷并 POST Webhook
+        env:
+          WEBHOOK_URL: ${{ secrets.GOALOS_WEBHOOK_URL }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "::warning::GOALOS_WEBHOOK_URL repository secret 未配置——云端告警面未启用（skip 不 fail：告警网关自身不得制造失败）。配置方法见 .github/workflows/notify-webhook.yml 头注。"
+            exit 0
+          fi
+          TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          PAYLOAD="$(jq -n \
+            --arg event "goalos-ci-failure" \
+            --arg workflow "$WORKFLOW_NAME" \
+            --arg conclusion "$CONCLUSION" \
+            --arg branch "$BRANCH" \
+            --arg sha "$SHA" \
+            --arg run_url "$RUN_URL" \
+            --arg run_id "$RUN_ID" \
+            --arg ts "$TS" \
+            '{event: $event, workflow: $workflow, conclusion: $conclusion, branch: $branch, sha: $sha, run_url: $run_url, run_id: $run_id, ts: $ts}')"
+          echo "$PAYLOAD"
+          curl -fsS -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" -d "$PAYLOAD"
+          echo "::notice::Webhook POST 成功（$WORKFLOW_NAME → $CONCLUSION）"
