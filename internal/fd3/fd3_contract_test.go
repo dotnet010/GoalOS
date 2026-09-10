@@ -1,10 +1,18 @@
-//go:build windows || linux || darwin
+//go:build (windows || linux || darwin) && platformtest
 
 // fd3_contract_test.go——FD3 传输层契约测试（S1——R-571 先红）。
 // 断言来源=开发计划/fd3-broker-设计.md §六 测试矩阵 F3/F6：
 //  F3：≥2 客户端并发双向全链+响应归属断言（R-1662 v2——顺序单请求不得冒充并发证据）。
 //  F6：管道对名熵化唯一（R-1667 v2 同族纪律）+SDDL 结构断言（ALL APPLICATION
 //      PACKAGES 授权面——AC 可连宿主管道路径）。
+//
+// 车道（R-1695 ②「FD3 测试分层纳管——协议与物理传输解耦」）：**平台专项特测车道**
+// （build tag `platformtest`——物理 Socket 与路径边界实测面）。本文件两测均 bind 真实
+// 传输（F3 并发连接隔离 / F6 路径形态与权限），主体即「物理传输本体」——故不随轻量
+// 常规车道触发，防各开发机基底路径差异误伤。触发面：`make test-platform`（本地平台）、
+// darwin-nightly / windows-daily（平台 CI）、docker-publish test 作业（linux runner）。
+// 协议与帧解包面（零 OS 依赖——内存管道直驱）=通用单测车道：fd3_broker_test.go /
+// frame_test.go（随常规 PR/CI 三平台全量触发）。
 package fd3
 
 import (

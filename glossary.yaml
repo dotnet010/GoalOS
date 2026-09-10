@@ -1,5 +1,5 @@
 # GoalOS 00统一术语表 — 机器可读 YAML（从 ../开发文档/00统一术语表.md 自动生成）
-# 生成时间: 2026-09-10T03:03:46Z
+# 生成时间: 2026-09-10T10:35:36Z
 # 真相来源: ../开发文档/00统一术语表.md — 本文件是其派生文件。不一致时以 Markdown 为准。
 
 terms:
@@ -164,7 +164,7 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'I0–I5'
-    description: '隔离等级（执行后端隔离度，R-1098 命名分离——R-1114 全量传播：隔离维度一律 I0-I5，禁 L 前缀）。**阶梯唯一定义（R-1506——会议 #234，修订 R-1354 的 I4 部分）**：I0=无隔离（仅进程边界）；I1=进程边界+资源限制；I2=OS 原生强制**单面**（syscall 过滤族或文件系统禁闭族任一，诚实标注覆盖面）；I3=I2 双面齐备（syscall 过滤+文件系统禁闭）；I4=独立内核边界（gVisor 用户态内核/Windows Sandbox/HV 微虚拟机——信创 systrap 可达）；I5=一次性执行环境。**金丝雀移出阶梯**（数据面检测归五支柱，不是隔离边界）；macOS Seatbelt=I2 唯一值（文件禁闭单面）。与 R0–R5 正交：风险→最小隔离映射归治理策略（06 §1.3 签发决策表）。权威：06 §1.3'
+    description: '隔离等级（执行后端隔离度，R-1098 命名分离——R-1114 全量传播：隔离维度一律 I0-I5，禁 L 前缀）。**阶梯唯一定义（R-1506——会议 #234，修订 R-1354 的 I4 部分）**：I0=无隔离（仅进程边界）；I1=进程边界+资源限制；I2=OS 原生强制**单面**（syscall 过滤族或文件系统禁闭族任一，诚实标注覆盖面）；I3=I2 双面齐备（syscall 过滤+文件系统禁闭）；I4=独立内核边界（gVisor 用户态内核/Windows Sandbox/HV 微虚拟机——信创 systrap 可达）；I5=一次性执行环境。**I3/I4/I5 三级=`[议程注记 / 待落地]`**（R-1695 ①——定义存续、**生效面未落地**：当前正式生效档位仅写实到「信创 3 级（bwrap 双引擎）」〔PlatformTier 尺度〕，IsolationLevel 生效读数止于 I2/I2+；晋级生效条件=`DockerProvider + runsc` 真实探针全绿合并；严禁读作已生效档位）。**金丝雀移出阶梯**（数据面检测归五支柱，不是隔离边界）；macOS Seatbelt=I2 唯一值（文件禁闭单面）。与 R0–R5 正交：风险→最小隔离映射归治理策略（06 §1.3 签发决策表）。权威：06 §1.3'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: '执行分级（ExecutionTier——T 族速记，R-1475/R-1477/R-1498/R-1521）'
@@ -336,7 +336,7 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'Semantic Freeze（R-1099）'
-    description: '废弃语义 `[DEPRECATED]` 标注+CI 残留检测（check-deprecated.sh 扫描活动规范文档正文，命中即 FAIL）——旧语义靠人脑记忆淘汰必然残留（会议 #195 实证：05 活动正文三处旧语义残留）。废弃模式登记表见脚本头部（新增废弃语义时追加）。权威：00统一术语表 本词条'
+    description: '废弃语义 `[DEPRECATED]` 标注+CI 残留检测（check-deprecated.sh 扫描活动规范文档正文，命中即 FAIL）——旧语义靠人脑记忆淘汰必然残留（会议 #195 实证：05 活动正文三处旧语义残留）。废弃模式登记表见脚本头部（新增废弃语义时追加）。**历史存证豁免白名单（R-1695 ③——2026-09-10 PM 处置包「改脚本加白名单，捍卫档案真实性」）**：`docs/stub/**`（本布局=开发文档/stub追踪清单.md）／`docs/resolutions/**`（resolutions.yaml）／`red-evidence/**` 三族纳入 `IGNORE_GLOBS` 路径白名单——历史废止记录逐字原样封存，不因机检被改写。**边界（诚实标注）**：豁免=**文件级**——豁免族内新增的活动正文同样不机检（换取档案真实性）；豁免**非静默**——逐文件输出 `[skip] …历史存证豁免（R-1695 白名单）` 行，跳过可见。**实扫命中面（R-1645 名实联动——2026-09-10 实测）**：脚本扫描面=开发文档顶层 `*.md`＋`开发计划/**/*.md`＋`internal`/`cmd` 下 `*.go|*.html`——三族中**实扫命中 1 族**（stub追踪清单.md，实测输出 `[skip]` 行）；`resolutions.yaml` 与 `red-evidence/**`（`.txt`）**当前不在本脚本扫描面**，其白名单条目=**预防性登记**（扫描面一旦扩张即自动生效），**非当前实测豁免**。权威：00统一术语表 本词条'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'bbolt（R-1109/R-1175）'
@@ -404,15 +404,15 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: '五支柱模型安全体系（R-1077）'
-    description: '会议 #193 威胁模型升级：LLM 使攻击带宽从"人年"降为"秒"，模型本身会系统性尝试突破边界——**白名单/规则判定降级为基础层**，其上叠加五支柱行为级防御：P1 物理隔离升级（gVisor/Windows Sandbox/一次性执行环境）P2 数据面+经济学（金丝雀三层）P3 验证分离（Guard LLM 前置审查）P4 可观测性（目标偏离检测）P5 以 AI 对 AI（LLM 红队常态化）+人机终局裁决（已有）。权威：06 §9.7。**R-1120（会议 #196）命名统一**：全文档唯一概念名（01 变体"五支柱安全基建/五支柱安全体系"已回收；"五支柱组件"=体系内构件表述）'
+    description: '会议 #193 威胁模型升级：LLM 使攻击带宽从"人年"降为"秒"，模型本身会系统性尝试突破边界——**白名单/规则判定降级为基础层**，其上叠加五支柱行为级防御：P1 物理隔离升级（gVisor/Windows Sandbox/一次性执行环境——**I 级全项 `[议程注记 / 待落地]`**，R-1695 ①）P2 数据面+经济学（金丝雀三层）P3 验证分离（Guard LLM 前置审查）P4 可观测性（目标偏离检测）P5 以 AI 对 AI（LLM 红队常态化）+人机终局裁决（已有）。权威：06 §9.7。**R-1120（会议 #196）命名统一**：全文档唯一概念名（01 变体"五支柱安全基建/五支柱安全体系"已回收；"五支柱组件"=体系内构件表述）'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'I4-I5 隔离层级（R-1078/R-1114）'
-    description: '隔离层级扩展（06 §5/08 §19.8）：**I4**=gVisor 后端（Sentry 用户态内核+Gofer 9P；KVM 探测优先、无 KVM 自动 systrap——信创 4.19 可跑；不兼容 syscall seccomp 兜底 fail-closed）/Windows Sandbox .wsb（Hyper-V 硬件隔离、air-gap、仅 Pro/Enterprise）；**I5**=一次性执行环境；macOS 诚实标注维持 Seatbelt（无等价物）。自动降级链 I5→I4→I3→I2，每级降级=审计事件+诚实标注'
+    description: '**本词条=`[议程注记 / 待落地]`（R-1695 ①）——下述为后端设计规格，非已生效档位**；未落地期间 I4/I5 契约=不可满足=fail-closed 拒绝（06 §1.3 档位定稿块）。隔离层级扩展（06 §5/08 §19.8）：**I4**=gVisor 后端（Sentry 用户态内核+Gofer 9P；KVM 探测优先、无 KVM 自动 systrap——信创 4.19 可跑；不兼容 syscall seccomp 兜底 fail-closed）/Windows Sandbox .wsb（Hyper-V 硬件隔离、air-gap、仅 Pro/Enterprise）；**I5**=一次性执行环境；macOS 诚实标注维持 Seatbelt（无等价物）。自动降级链 I5→I4→I3→I2，每级降级=审计事件+诚实标注。晋级生效条件=`DockerProvider + runsc` 真实探针全绿合并'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: '一次性执行环境（R-1079）'
-    description: 'I5 隔离层：每次执行全新环境、用完即销毁、无持久状态——对抗"残留探测+跨执行侦察"。生命周期三态机 create→run→destroy；**FileSnapshot（statefs 快照）/复用优化一律不做（简单>性能）**。与 Firecracker/Lambda MicroVM 8h 一次性会话实证对齐（Anthropic Claude 工具调用同模式）'
+    description: 'I5 隔离层**`[议程注记 / 待落地]`（R-1695 ①——I5 实现推迟 v0.4.0，R-1158/R-1354/R-1394；晋级生效条件=`DockerProvider + runsc` 真实探针全绿合并）**：每次执行全新环境、用完即销毁、无持久状态——对抗"残留探测+跨执行侦察"。生命周期三态机 create→run→destroy；**FileSnapshot（statefs 快照）/复用优化一律不做（简单>性能）**。与 Firecracker/Lambda MicroVM 8h 一次性会话实证对齐（Anthropic Claude 工具调用同模式）'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: '金丝雀（R-1080）'
@@ -440,11 +440,11 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'seccomp-only 对抗分级（R-1087）'
-    description: '信创降级链重排后的 I2 兜底验证分级：**可验证向量**（路径穿越/符号链接劫持/写白名单滥用——BPF 可断言，契约测试全覆盖）vs **已知弱向量**（TOCTOU 路径重解析竞态——seccomp 无法安全按路径过滤，路径可经 /proc/self/fd 重解析；Landlock 因此设计为 inode 级但 4.19 无）——不可完全验证，诚实标注入 FSR bug bar。信创 I4 主路径=gVisor systrap；seccomp-only 仅 I2 兜底+硬化三件。权威：08 §18.3/§19.8'
+    description: '信创降级链重排后的 I2 兜底验证分级：**可验证向量**（路径穿越/符号链接劫持/写白名单滥用——BPF 可断言，契约测试全覆盖）vs **已知弱向量**（TOCTOU 路径重解析竞态——seccomp 无法安全按路径过滤，路径可经 /proc/self/fd 重解析；Landlock 因此设计为 inode 级但 4.19 无）——不可完全验证，诚实标注入 FSR bug bar。~~信创 I4 主路径=gVisor systrap~~【R-1691/R-1679 退役标注——gVisor 对受限档过重登记不采纳，信创承载实况=bwrap（R-1681）】；seccomp-only 仅 I2 兜底+硬化三件。权威：08 §18.3/§19.8。**I 级注记（R-1695 ①）**：本词条涉 I4 部分=`[议程注记 / 待落地]`'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: '内核 CVE 残余风险（R-1088）'
-    description: 'I3 及以下与宿主共享内核——攻击面=内核 attack surface 全集，**任何内核提权 bug 定义上即容器逃逸**（Copy Fail CVE-2026-31431 跨租户 page-cache LPE；runc CVE-2024-21626 同谱系；Bugcrowd：gVisor "not affected; no shared host kernel"）。处置：威胁模型登记（R3 残余风险入 FSR bug bar 发布时逐级声明）+风险分层强制（高危目标强制 I4/I5）+运营闭环（CVE 订阅→影响分析→安全公告/禁后端）。权威：06 §5'
+    description: 'I3 及以下与宿主共享内核——攻击面=内核 attack surface 全集，**任何内核提权 bug 定义上即容器逃逸**（Copy Fail CVE-2026-31431 跨租户 page-cache LPE；runc CVE-2024-21626 同谱系；Bugcrowd：gVisor "not affected; no shared host kernel"）。处置：威胁模型登记（R3 残余风险入 FSR bug bar 发布时逐级声明）+风险分层强制（高危目标强制 I4/I5 **`[议程注记 / 待落地]`**——R-1695 ①：I4/I5 未落地期间本项=**强制拒绝执行**而非降档放行，06 §1.3 档位定稿块）+运营闭环（CVE 订阅→影响分析→安全公告/禁后端）。权威：06 §5'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'DLL 搜索路径劫持防线（R-1089）'

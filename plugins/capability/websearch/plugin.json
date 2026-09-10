@@ -5,7 +5,7 @@
   ],
   "description": "Web 搜索执行器 — 调用 Bing Search API，返回结构化搜索结果",
   "name": "websearch",
-  "signature": "sha256:a27baaa41cde30debf8ae2fd00a02e9041824c222879901f236b41a03405e11b",
+  "signature": "sha256:dd70d912f21d5a56c94ee3c2d775efc18af123a30b79a92a9282d4dad96d18db",
   "type": "capability",
   "version": "1.0.0"
 }

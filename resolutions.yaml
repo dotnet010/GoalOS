@@ -8505,3 +8505,28 @@ resolutions:
       - must_exist: "R-1694"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 R-1694"
+  R-1695:
+    desc: "PM 处置包（2026-09-10 Jobs 裁定，五件；darwin/arm64 窗口执行落地）: ①《06 安全模型》§1.3 档位定稿=定性为议程注记严禁预支生效——当前正式生效档位仅写实到「信创 3 级（bwrap 双引擎）」+I 级（微虚机/Docker 容器档：I3 全域双面/I4 独立内核边界/I5 一次性执行环境）显式标注 [议程注记 / 待落地]+晋级生效条件=DockerProvider + runsc 真实探针全绿合并；落地面=06 §1.3 档位定稿块+逐面注记 8 处（矩阵 MXC 行/I0-I5 阶梯定义/平台×层级可达矩阵/降级链生效面/签发决策表行 4/§5 I4 小节/§5 I5 小节/§5 内核 CVE 处置②/§9.7 支柱 P1）+跨文档传播 00/08/05/01/07/stub 六文档 11 处（含「既有 I4 本地后端」类虚假声明 3 处删除线修订——R-1599 已清算措辞的传播漏网）；注记边界=不撤销可达性登记 R-1108/不撤销设计存档 R-1087+R-1679/不撤销降级链 fail-closed，否定面仅一项=把议程注记读作生效档位（R-1571 轴分离同义）；未落地期间契约 MinIsolation 高于 I2 且无可用后端=fail-closed 拒绝（R-1497/R-1512③）。②FD3 Broker 6 测试归类=分层纳管拒绝一刀切——判据「断言主体是否 bind 真实传输」：协议与帧解包测试归通用单元测试（零 OS 依赖，内存管道直驱 broker 传输中立缝 frameConn，随常规 PR/CI 三平台全量触发）；物理 Socket 与路径边界测试（sun_path/目录权限 6 项实测）归平台专项特测（build tag platformtest；触发面 darwin-nightly/windows-daily/docker-publish）；落地面=broker.go frameConn 缝+新增 frame_test.go+fd3_broker_test.go 通用化改造（保留全部原测试函数名只增不改名）+fd3_contract_test.go/transport_dir_darwin_test.go tag 化+Makefile test-platform+三 workflow 接线+新增 darwin-nightly.yml（仅 workflow_dispatch——macOS runner 计费 10×，定时闸启用=PM 成本裁定）；边界=平台车道未跑=平台面零实证不得登记为绿（12 清单 H 节=唯一登记面）。③check-deprecated 历史存证豁免=改脚本加白名单捍卫档案真实性——docs/stub/**（本布局=开发文档/stub追踪清单.md）/docs/resolutions/**（resolutions.yaml）/red-evidence/** 三族纳入 IGNORE_GLOBS；边界=文件级豁免（族内新增活动正文同样不机检）+非静默（逐文件输出 [skip] 行）。④插件签名 Provenance 漂移=短期换指纹放行+中期补齐 -trimpath——编译脚本固化 go build -trimpath -buildvcs=false 剥离非代码元数据实现跨机确定性构建；落地面=发布规范 v2.8 Phase 1 第 9 项后新增可复现构建配方（三因素表 CGO_ENABLED=0/-trimpath/-buildvcs=false）+可复现边界诚实标注（确定性范围=同 GOOS/GOARCH+同工具链版本跨机同 hash；跨平台/跨工具链仍异→SHA256 平台绑定语义不变）+短期换指纹放行口径（平台/工具链因素致不匹配=放行路径非发布阻断；阻断仅适用同平台同工具链下意外不匹配=真 provenance 事故信号）+§11 反模式 #4 与 §13.4 Go 工具链行同步+docker-publish.yml 插件构建点同刀固化。⑤Rubiks E2E 夹具缺席=显式 t.Skip 挂起杜绝物理删除——test/e2e_rubiks_cube_test.go（TestE2E_RubiksCube_GoalLifecycle）/test/e2e_artifact_verification_test.go（TestE2E_ArtifactVerification）/test/v0_2_0_week8_contract_test.go（TestFT2_ArtifactValidation）三处产线闸口加 GOALOS_RUBIKS_E2E_READY 环境变量守卫，夹具缺席=显式 t.Skip（合法先红形态 R-1452），杜绝物理删除（三函数均已登记在册，仅加守卫不加名，计数不含）；边界=t.Skip 是诚实挂起不是消除，夹具生成流程机制化仍为议程项。证据等级=已实证（通用车道 9 测试 PASS/平台车道 9 测试 PASS/跨 GOOS vet 4-4 绿/check-contract-test-assertion 7 断言≥3 PASS/check-anti-cheat 平均覆盖率 53%≥48% PASS/make test-platform exit 0/全量 go test exit 0）。disposition: 生效"
+    files: [会议纪要.md, 06安全模型文档.md, 00统一术语表.md, 08沙箱隔离与进程通信规范.md, 05软件架构文档.md, 01-prd产品需求文档.md, 07事件注册表.md, stub追踪清单.md, 12测试清单与规范.md, 发布规范.md, 开发计划/fd3-broker-设计.md]
+    verify:
+      - must_exist: "DockerProvider.*runsc"
+        in_file: 06安全模型文档.md
+        reason: "06 §1.3 档位定稿块必须载晋级生效条件（R-1695 ①）"
+      - must_exist: "议程注记"
+        in_file: 00统一术语表.md
+        reason: "00 I 族词条必须载议程注记标注（R-1695 ①）"
+      - must_exist: "IGNORE_GLOBS"
+        in_file: 00统一术语表.md
+        reason: "历史存证豁免白名单必须落地脚本（R-1695 ③）"
+      - must_exist: "可复现构建配方"
+        in_file: 发布规范.md
+        reason: "发布规范必须载可复现构建配方（R-1695 ④）"
+      - must_exist: "GOALOS_RUBIKS_E2E_READY"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 H 节必须登记 E2E 夹具守卫（R-1695 ⑤）"
+      - must_exist: "platformtest"
+        in_file: 12测试清单与规范.md
+        reason: "12 清单 H 节必须载平台专项特测车道（R-1695 ②）"
+      - must_exist: "R-1695"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1695 PM 处置包"

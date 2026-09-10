@@ -24,6 +24,11 @@ jobs:
         run: go build ./...
 
       - name: Build plugins (required for releasecheck)
+        # 可复现配方（R-1695）：CGO_ENABLED=0 + -trimpath + -buildvcs=false——剥离
+        # C 工具链/构建路径/VCS 元数据三类非代码因素（env 步骤级=shell 无关，
+        # pwsh/bash 双兼容——本 job 默认 pwsh，内联 `VAR=x cmd` 形态不可用）。
+        env:
+          CGO_ENABLED: "0"
         run: |
           go build -trimpath -buildvcs=false -o ./plugins/capability/shell-executor/plugin-shell.exe ./cmd/plugin-shell
           go build -trimpath -buildvcs=false -o ./plugins/capability/websearch/plugin-websearch.exe ./cmd/plugin-websearch
@@ -54,6 +59,12 @@ jobs:
 
       - name: Test（Windows 适用子集——build-tag 分平台）
         run: go test -count=1 -timeout 120s ./internal/... ./pkg/...
+
+      # R-1695 ②（FD3 测试分层纳管）：平台专项特测车道=物理传输面（真实命名管道
+      # bind/管道名形态/并发连接隔离）——与轻量常规车道分列（常规车道已零 OS 依赖）。
+      # 缺此步=Windows 物理传输面 CI 零实证（登记为绿灯则是冒充）。
+      - name: Test（平台专项特测车道——build tag platformtest）
+        run: go test -count=1 -v -timeout 120s -tags platformtest ./internal/...
 
       # R-1654：AppContainer smoke 显式作业——管理员态（runneradmin）机制可用性实证。
       # 非管理员面=实机/用户环境（red-evidence 族）——两面不互相冒充。

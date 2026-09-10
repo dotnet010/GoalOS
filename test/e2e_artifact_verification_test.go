@@ -12,7 +12,13 @@ import (
 // TestE2E_ArtifactVerification 验证产物质量——不只是文件存在
 // GoalOS 流程缺陷发现: Three.js 加载顺序错误→页面空白。
 // 修复: GoalCompleted 前增加依赖加载顺序验证。
+//
+// 夹具守卫（会议 #283 后处置——PM 裁定「显式 t.Skip 挂起，杜绝物理删除」）：
+// 同 TestE2E_RubiksCube_GoalLifecycle——产物夹具缺席=显式跳过（GOALOS_RUBIKS_E2E_READY=1 全量执行）。
 func TestE2E_ArtifactVerification(t *testing.T) {
+	if os.Getenv("GOALOS_RUBIKS_E2E_READY") == "" {
+		t.Skip("SKIP: requires Rubiks E2E environment fixture")
+	}
 	outputDir := filepath.Join("..", "output")
 	htmlPath := filepath.Join(outputDir, "rubiks-cube-3d.html")
 	data, err := os.ReadFile(htmlPath)

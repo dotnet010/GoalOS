@@ -10,6 +10,10 @@ import (
 // backend_xinchuang.go — 信创后端（任务 5.1）：seccomp BPF（现有自加载模型）+
 // mount namespace 隔离。信创 4.19 内核——Landlock 不可用（R-1078：I4 主路径=gVisor
 // systrap，seccomp-only 仅作 gVisor 不可用时的 I2 兜底+硬化三件——R-1087）。
+//
+// 档位注记（R-1695①——06 §1.3 档位定稿）：I4=`[议程注记 / 待落地]`（I3/I4/I5 同）。
+// 上文「I4 主路径=gVisor systrap」=设计存档——R-1679 不采纳、R-1691 退役标注已修订该路径；
+// 信创承载实况=bwrap 双引擎（R-1681，PlatformTier 3 级）。
 
 // XinchuangBackend — 信创沙箱后端（seccomp BPF+mount namespace）。
 type XinchuangBackend struct{}

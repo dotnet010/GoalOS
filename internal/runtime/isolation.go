@@ -7,6 +7,8 @@ package runtime
 type IsolationLevel int
 
 const (
+	// 档位注记（R-1695①——06 §1.3 档位定稿）：I3/I4/I5 三级=档位定义存续、生效面 `[议程注记 / 待落地]`——
+	// 严禁读作已生效档位（生效读数止于 I2/I2+；晋级生效条件=DockerProvider+runsc 真实探针全绿合并）。
 	// I0 无隔离（值=1——零值非法纪律，D-13）
 	I0 IsolationLevel = iota + 1
 	I1                // 进程边界+资源限制

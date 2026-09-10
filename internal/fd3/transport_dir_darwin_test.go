@@ -1,7 +1,12 @@
-//go:build darwin
+//go:build darwin && platformtest
 
 // transport_dir_darwin_test.go——FD3 darwin sun_path 预算决算契约测试（darwin 独占——
-// 决算面=darwin 独有，定义面=使用面构建上下文对齐）。RED→GREEN 对存证=
+// 决算面=darwin 独有，定义面=使用面构建上下文对齐）。
+//
+// 车道（R-1695 ②「分层纳管」）：平台专项特测（build tag `platformtest`）——本文件即
+// 「sun_path 预算+目录权限+镜像连带清理」的物理路径边界实测本体（darwin 专项）。
+// 触发面：`make test-platform`（darwin 本地）/ darwin-nightly（darwin 平台 CI）。
+// RED→GREEN 对存证=
 // red-evidence/2026-09-10-fd3-darwin-sunpath-{red,green}.txt：
 //
 //	D-L1：超预算深目录 Listen 成功+Name()≤103B+落短镜像（/tmp/goalos-fd3- 前缀）；
