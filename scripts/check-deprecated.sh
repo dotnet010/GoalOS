@@ -23,6 +23,17 @@
 #             复用 check-resolution-propagation.sh 的正文提取契约）
 #   兼容: repo-only 模式（GitHub Actions 无 开发文档）→ 显式降级跳过 exit 0
 #
+# 历史存证豁免（R-1695——PM 裁定「工具服务于工程，严禁为迎合静态检查修改历史存证」）:
+#   豁免族（路径白名单，见 IGNORE_GLOBS）:
+#     ① docs/stub/**          ← 本布局=开发文档/stub追踪清单.md（stub 归档索引——历史行
+#                               逐字封存「某语义已于某会议废弃」，机械命中=语义冻结的假阳性）
+#     ② docs/resolutions/**   ← 本布局=resolutions.yaml（决议注册表；不经本脚本扫描，
+#                               路径模式登记=防未来扩围）
+#     ③ red-evidence/**       ← 本布局=scripts/red-evidence/（先红/转绿存证 R-1632；
+#                               同理不经本脚本扫描，登记同上）
+#   边界（诚实标注）: 豁免=文件级——豁免族内**新增的活动正文**亦不机检；该族的档案真实性
+#   由人工评审承载（档案体裁≠活动规范正文）。豁免非静默：逐文件输出 [skip] 行。
+#
 # 废弃模式登记（新增废弃语义时在此追加）:
 #   [DEPRECATED] 物理文件不撤销       — C-11 旧 rollback 语义（R-1099，会议 #195）
 #   [DEPRECATED] 零值合法             — K-C1/D-6 零值=Level 0 放行语义（R-1106）
@@ -47,7 +58,9 @@
 #   bash scripts/check-deprecated.sh --help
 #
 # 维护者: GoalOS 架构团队
-# 最后更新: 2026-08-13（会议 #196 R-1114 L 命名族检测扩展 + 命中输出循环 [ -n ] 守卫；
+# 最后更新: 2026-09-10（R-1695——历史存证豁免白名单 IGNORE_GLOBS+is_ignored：stub 归档索引/
+#                       red-evidence 存证/resolutions 注册表逐字封存，豁免非静默；此前：
+#                       2026-08-13（会议 #196 R-1114 L 命名族检测扩展 + 命中输出循环 [ -n ] 守卫；
 #                       会议 #198 R-1164——废弃命令名增补 goalos status/list/log 防回归；
 #                       会议 #198 R-1173——PipelineWaiting 已废名增补防回归（改 StateWait））
 # =============================================================================
@@ -84,6 +97,23 @@ readonly DEPRECATED_PATTERNS=(
 # R-1656（会议 #262——顾问复审⑤采纳加牙）: Windows+真I3/已达I3/双面齐备 组合禁称——
 # 06 §1.3 修订落稿前，任何文档不得声称 Windows 已达真 I3（T1-WinAC 无 seccomp
 # 等价物——R-1652 v2）。阶梯语义收口=06 §1.3 修订任务（届时本模式随修订移除）。
+
+# ─── 历史存证豁免路径白名单（R-1695——PM 裁定：白名单而非改写历史；bash 3.2 兼容=case 匹配）───
+# 匹配对象=文件路径（find 输出形态：DOC_DIR 相对或绝对，两形态同匹）+ 基名。
+readonly IGNORE_GLOBS=(
+    "*/stub追踪清单.md"    # docs/stub/**——stub 归档索引（历史行逐字封存）
+    "*/red-evidence/*"     # red-evidence/**——先红/转绿存证（R-1632）
+    "*/resolutions.yaml"   # docs/resolutions/**——决议注册表
+)
+is_ignored() {
+    local p="$1" base="${1##*/}" g
+    for g in "${IGNORE_GLOBS[@]}"; do
+        # shellcheck disable=SC2254  # 模式须展开为 glob（刻意不加引号）
+        case "$p" in $g) return 0 ;; esac
+        case "$base" in $g) return 0 ;; esac
+    done
+    return 1
+}
 
 # ─── L 命名族废弃模式（R-1114：独立 L0-L5 记号——前后均为非词字符或行首/行尾）───
 readonly L_PATTERN='(^|[^[:alnum:]_])L[0-5]([^[:alnum:]_]|$)'
@@ -133,6 +163,9 @@ GoalOS 废弃语义残留检测 — CI 自动化（Semantic Freeze 机检）
          统一改 StateWait）
   [MUST] 仅扫描正文——跳过 frontmatter+修改记录区域
   [MUST] 排除 会议纪要.md（历史记录）/ *.bak.md / 开发计划 / 待审议规范
+  [MUST] 历史存证豁免（R-1695 路径白名单）：stub 归档索引（stub追踪清单.md）/
+         red-evidence 存证 / resolutions 注册表——档案体裁逐字封存，不因机检改写；
+         豁免非静默（逐文件 [skip] 行）
   [MUST] repo-only 模式 → 显式降级跳过 exit 0
 
 依据: 会议 #195 R-1099（Semantic Freeze）+ 会议 #196 R-1114（L 命名族废弃）
@@ -213,6 +246,7 @@ fi
 
 FAILED=0
 CHECKED=0
+IGNORED=0
 
 # ─── 代码目录 Dashboard/弹窗 扫描（R-1372/C-UI-01：拆除任务后接线；仅 .go/.html）───
 # 豁免规则：注释中以"已拆除 R-1372"或"已废弃"标注的历史说明；测试文件中的拆字字面量
@@ -237,6 +271,14 @@ echo "── ${BOLD}废弃语义残留检测${NC}（Semantic Freeze ${#DEPRECATE
 for fp in "${DOC_FILES[@]}"; do
     [ -f "$fp" ] || continue
     rel="${fp#"$DOC_DIR"/}"
+
+    # 历史存证豁免（R-1695）——豁免非静默：逐文件明示
+    if is_ignored "$fp"; then
+        IGNORED=$((IGNORED + 1))
+        echo -e "  ${YELLOW}[skip]${NC} $rel——历史存证豁免（R-1695 白名单：归档索引/存证/注册表）"
+        continue
+    fi
+
     start=$(body_start "$fp")
 
     # 正文中命中废弃模式 → FAIL（修改记录区域已跳过）
@@ -302,6 +344,7 @@ VAGUE_HITS=""
 for fp in "${DOC_FILES[@]}"; do
     [ -f "$fp" ] || continue
     rel="${fp#"$DOC_DIR"/}"
+    is_ignored "$fp" && continue   # 历史存证豁免（R-1695）——警示段同免
     start=$(body_start "$fp")
     vhits=$(tail -n +"$start" "$fp" | grep -nE "$VAGUE_PATTERN" 2>/dev/null || true)
     if [ -n "$vhits" ]; then
@@ -315,7 +358,7 @@ for fp in "${DOC_FILES[@]}"; do
 done
 [ -n "$VAGUE_HITS" ] && echo -e "  ${YELLOW}模糊词警示（R-1516）——仅警告不计失败；处置=精确化改写（非白名单）${NC}"
 
-echo "── 检查完成：${GREEN}$CHECKED 通过${NC} / ${RED}$FAILED 失败${NC} ──"
+echo "── 检查完成：${GREEN}$CHECKED 通过${NC} / ${RED}$FAILED 失败${NC} / ${YELLOW}$IGNORED 豁免${NC} ──"
 
 if [ "$FAILED" -gt 0 ]; then
     echo "[ERROR] 活动规范文档正文存在废弃语义/L 命名族残留——旧语义复活风险。请按 Contract Authority 变更流程替换为新语义（R-1099 Semantic Freeze / R-1114 命名族）。" >&2
