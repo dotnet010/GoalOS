@@ -2417,10 +2417,10 @@ resolutions:
   # ═══════════════════════════════════════════════════════════════
 
   R-1049:
-    desc: "check-resolution-propagation.sh 三缺陷修复+扫描范围修正(会议 #190——C-CI-04 系统性修复): (1)valid 集合锚定提取 grep -oE '^  R-[0-9]+:'(YAML 两空格缩进+冒号)替代全文 grep——desc 交叉引用不再污染已注册集合(消除 R-771/772/777/794/858/862 漏检) (2)删除 7 处无条件 file_not_found echo(函数尾部循环残留陈旧 $f 假警告) (3)幽灵计数公式修正——输出'注册条目: N / 幽灵: M'删除 valid-ghost 减法(负数根源) (4)find 排除 *.bak.md (5)输出契约不变(每行 ❌ R-xxx+引用文件)。disposition: 生效"
+    desc: "check-resolution-propagation.sh 三缺陷修复+扫描范围修正(会议 #190——C-CI-04 系统性修复): (1)valid 集合锚定提取 grep -oE '^  R-[0-9]+:'(YAML 两空格缩进+冒号)替代全文 grep——desc 交叉引用不再污染已注册集合(消除 R-771/772/777/794/858/862 漏检) (2)删除 7 处无条件 file_not_found echo(函数尾部循环残留陈旧 $f 假警告) (3)幽灵计数公式修正——输出'注册条目: N / 幽灵: M'删除 valid-ghost 减法(负数根源) (4)find 排除 *.bak.md (5)输出契约不变(每行 ❌ R-xxx+引用文件)。修订注记(2026-09-10——PM 指令「编号规范与提取逻辑」): 提取实现由『grep -oE '^  R-[0-9]+:' + 二次 grep -oE '[0-9]+'』升级为『sed -nE 's/^ *R-([0-9]+):.*/\\1/p'』+ 脚本文首 export LC_ALL=C——**锚定语义不变**(仍锚 YAML 注册条目行、仍以 valid_resolutions 为提取产物)，变更的是二次提取的 locale 脆弱面(实证: en_US.UTF-8 下 ERE `[0-9]` 范围表达式越界匹配 Unicode 数字类字符→幽灵虚报 48 条；LC_ALL=C 下正确)。disposition: 生效"
     files: [会议纪要.md, check-resolution-propagation.sh]
     verify:
-      - must_exist: "grep -oE '.*R-[[]0-9[]][+]:'"
+      - must_exist: "sed -nE '.*R-[(][[]0-9[]][+][)]:"
         in_file: check-resolution-propagation.sh
         reason: "脚本必须锚定注册条目行提取 valid 集合（匹配 valid_resolutions 提取行）"
 
