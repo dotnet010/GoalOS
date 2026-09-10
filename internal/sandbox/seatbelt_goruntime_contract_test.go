@@ -55,11 +55,31 @@ func TestSeatbelt_GoRuntimeBootAllowance(t *testing.T) {
 		self = c
 	}
 	home, _ := os.UserHomeDir()
-	out, err := exec.Command("/usr/bin/sandbox-exec",
+	canon := func(p string) string { // SBPL 按规范化真实路径匹配（/var→/private/var 族）
+		if c, err := filepath.EvalSymlinks(p); err == nil {
+			return c
+		}
+		return p
+	}
+	dir = canon(dir)
+	home = canon(home)
+	// 环境两面处理（coverage 插桩载体兼容——fail-closed 实证族非边界失效）：
+	// ①剥 GOCOVERDIR（atexit 写覆盖数据=越写禁闭）；②TMPDIR 重定向到沙箱授写
+	// TMP_DIR（插桩二进制启动期 MkdirTemp 暂存面——不指则落 /var/folders 被拒）。
+	env := make([]string, 0, len(os.Environ()))
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "GOCOVERDIR=") && !strings.HasPrefix(kv, "TMPDIR=") {
+			env = append(env, kv)
+		}
+	}
+	env = append(env, "TMPDIR="+dir)
+	cmd := exec.Command("/usr/bin/sandbox-exec",
 		"-f", profPath,
 		"-D", "WORKSPACE_DIR="+dir, "-D", "TMP_DIR="+dir, "-D", "HOME_DIR="+home,
 		"-D", "TARGET_BINARY="+self,
-		"--", self, "-test.run=^$").CombinedOutput()
+		"--", self, "-test.run=^$")
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
 	if strings.Contains(string(out), "sandbox-exec:") {
 		t.Fatalf("④execvp 级失败（profile 未生效伪证——不计）: %q", out)
 	}

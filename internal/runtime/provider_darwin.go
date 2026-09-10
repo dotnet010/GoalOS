@@ -348,27 +348,30 @@ func (h *seatbeltHandle) Release(context.Context) error {
 }
 
 // execInBoundary 在 Seatbelt 边界内执行命令（profile 物化路径+三参数注入）。
+// 路径参数全量 EvalSymlinks 规范化——SBPL 按规范化后真实路径匹配 literal/subpath
+// （/var→/private/var、/tmp→/private/tmp 软链族：未规范化参数=内核求值失配=
+// 授写面静默失效——2026-09-10 coverage 插桩载体实机抓获；TARGET_BINARY/FD3_SOCK_PATH
+// 既有同族处理，本次补齐三参数）。
 func (h *seatbeltHandle) execInBoundary(binary string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// TARGET_BINARY 同样需 firmlink 规范化（SBPL 按真实路径匹配 literal）
-	if c, err := filepath.EvalSymlinks(binary); err == nil {
-		binary = c
+	canon := func(p string) string {
+		if c, err := filepath.EvalSymlinks(p); err == nil {
+			return c
+		}
+		return p
 	}
+	binary = canon(binary)
 	execArgs := []string{
 		"-f", h.profilePath,
-		"-D", "WORKSPACE_DIR=" + h.p.workspace,
-		"-D", "TMP_DIR=" + h.p.tmpDir,
-		"-D", "HOME_DIR=" + h.p.homeDir,
+		"-D", "WORKSPACE_DIR=" + canon(h.p.workspace),
+		"-D", "TMP_DIR=" + canon(h.p.tmpDir),
+		"-D", "HOME_DIR=" + canon(h.p.homeDir),
 		"-D", "TARGET_BINARY=" + binary, // process-exec 仅放行目标本身（全 deny=execvp 自拒假象）
 	}
 	// FD3 变体参数注入（R-1650 v2——SBPL 按真实路径匹配，EvalSymlinks 规范化）
 	if h.fd3SockPath != "" {
-		sockPath := h.fd3SockPath
-		if c, err := filepath.EvalSymlinks(sockPath); err == nil {
-			sockPath = c
-		}
-		execArgs = append(execArgs, "-D", "FD3_SOCK_PATH="+sockPath)
+		execArgs = append(execArgs, "-D", "FD3_SOCK_PATH="+canon(h.fd3SockPath))
 	}
 	execArgs = append(execArgs, "--", binary)
 	execArgs = append(execArgs, args...)
