@@ -145,6 +145,17 @@ jobs:
             fi
             echo "Packaged goalos-${os}-${arch}"
           done
+
+          # 信创 / 麒麟 Kylin V10 SP1（PM 指令 2026-09-10——发布文件纳入信创系统）。
+          # 构建面=linux/amd64 + `-tags xinchuang`：沙箱后端切 xinchuang-sandbox
+          # （信创内核基线 4.19——Landlock 不可用族），与通用 linux/amd64 产物
+          # **分列不同产物名**（不互相冒充：同名同物才可互换）。
+          echo "Building goalos-daemon for linux/amd64 (xinchuang / Kylin V10 SP1)..."
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags xinchuang -trimpath -buildvcs=false -ldflags="-s -w" -o dist/goalos-daemon-xinchuang ./cmd/goalos/
+          echo "Building goalos for linux/amd64 (xinchuang / Kylin V10 SP1)..."
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags xinchuang -trimpath -buildvcs=false -ldflags="-s -w" -o dist/goalos-xinchuang ./cmd/goalos-cli/
+          (cd dist && tar czf goalos-kylin-v10-sp1-amd64.tar.gz goalos-daemon-xinchuang goalos-xinchuang)
+          echo "Packaged goalos-kylin-v10-sp1-amd64"
           ls -la dist/
 
       - name: Create GitHub Release
@@ -159,6 +170,11 @@ jobs:
             ### Docker
             ```
             docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ```
+
+            ### 信创（麒麟 Kylin V10 SP1）
+            ```
+            goalos-kylin-v10-sp1-amd64.tar.gz   # linux/amd64 + -tags xinchuang
             ```
           files: dist/goalos-*.tar.gz,dist/goalos-*.zip
           generate_release_notes: true
