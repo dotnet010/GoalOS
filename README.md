@@ -179,7 +179,8 @@ go build -o goalos-cli ./cmd/goalos-cli/
 ## Documentation
 
 - [User Manual (Chinese)](用户手册.md)
-- [Architecture Meeting Minutes (Chinese)](../开发文档/会议纪要.md)
+
+Internal design documents (PRD, architecture, module guide, dev/test/release specs, dev log, meeting minutes) are **not published with this repository**.
 
 ## License
 
