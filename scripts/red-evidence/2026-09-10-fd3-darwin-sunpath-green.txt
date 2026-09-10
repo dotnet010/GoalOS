@@ -1,0 +1,62 @@
+# 2026-09-10 FD3 darwin 实机 GREEN 存证（对=2026-09-10-fd3-darwin-sunpath-red.txt——会议 #270/#278 mac 窗口兑现）
+
+- 日期：2026-09-10
+- 修复 commit：39439d0（三缺陷双修）+23843e4（参数规范化补齐）（fix/fd3-darwin-sunpath-mirror——RED 存证=b424258）
+- 机器：macOS Darwin 24.5.0（darwin/arm64 物理机），go1.26.4
+- 全程约束：命令与存证均在 GoalOS 项目目录内；探针对 $HOME 的写/读尝试=边界拒绝断言对象
+  （Seatbelt deny 实证=零实际访问——PROBE-ERRNO=1 EPERM 数字证据），镜像目录 /tmp 零残留复检。
+
+## 实机转绿结果（管道退出码纪律——裸命令重定向捕获，EXIT 真实）
+
+```
+go test ./internal/fd3/ -v -count=1            → EXIT=0  8/8 PASS（含新增 D-L1~L4 镜像决算双测试）
+go test ./internal/runtime/ -run FD3|Bypass -v → EXIT=0  TestDarwin_FD3Relay PASS（D1 unix socket
+    中继回显+D3 直接出站仍拒）；TestRuntime_Bypass_SyscallDenied_Darwin PASS（TC-RT-001c
+    三探针 PROBE-ERRNO 数字证据+反虚假绿断言全过）+RefusalNotCounted PASS
+go test ./internal/sandbox/ ./internal/fd3/ ./internal/runtime/ ./internal/pluginrunner/...
+                                                 → EXIT=0（executor_darwin #270 修复面含于其中 PASS）
+go test -race ./internal/sandbox/ ./internal/fd3/ → EXIT=0
+GOOS=linux/windows build+vet、linux/arm64 build  → EXIT=0
+staticcheck v0.7.0（钉版）darwin/linux/windows 三上下文 → 零发现
+```
+
+## 修复面（三缺陷=物理机抓获，编译/vet/staticcheck 三平台绿均不可见）
+
+1. **fd3.Listen darwin sun_path=104B 预算**——超预算落 /tmp 短镜像（0700+Close 连带清理；
+   Name() 恒真值→goalos-fd3-map.txt/-D FD3_SOCK_PATH 真值链零改动随动）；linux 直通不动。
+2. **受限 Seatbelt profile Go 引导面**——deny default 下 sysctl-read 全拒致 Go 二进制启动
+   panic（「failed to get system page size」=raw sysctl MIB 形态；生产插件载体同受）。
+   差分实证：sysctl-name 精确名不命中 / sysctl-name-prefix "hw." 命中（GO-BOOT-OK）——
+   放行 hw.* 只读常量族；sysctl-write/kern.*/net.* 仍拒；不超 WinAC/模式 B 对等语义。
+3. **darwin 旁路探针 R-1666 原生形态迁移**——系统二进制探针（touch/cat/nc）退役，
+   __goalos-probe write/read/dial（PROBE-ERRNO 数字证据）。
+
+4. **execInBoundary 路径参数全量 EvalSymlinks 规范化**（23843e4——coverage 兼容验证期
+   追加抓获）：/var→/private/var 软链族下未规范化 -D 参数=内核规范化求值失配=授写面
+   静默失效（写 TMP_DIR 即 EPERM）。手写差分实锤：真实路径下授写正常。既有
+   TARGET_BINARY/FD3_SOCK_PATH 同族处理补齐到 WORKSPACE_DIR/TMP_DIR/HOME_DIR。
+
+## 插桩载体兼容面（fail-closed 实证族——非边界失效）
+
+- TSan（-race）：受限 profile 内 CHECK failed（sanitizer_mac.cpp——边界拒绝 TSan
+  运行时所需 mach/sysctl 面）；项目 race 闸口=linux CI（绿），darwin race=登记缺口。
+- coverage（-coverprofile）：插桩二进制启动期 MkdirTemp（TMPDIR 族）+atexit 写
+  GOCOVERDIR=越写禁闭被拒；测试侧处理=剥 GOCOVERDIR+TMPDIR 重定向授写 TMP_DIR。
+  两种插桩下边界均 fail-closed（拒绝=设计行为），非安全弱化。
+
+## 新增回归防线（darwin 实机常驻）
+
+- TestFD3_DarwinLongDirMirror / TestFD3_DarwinShortDirPassthrough（镜像决算四断言组）
+- TestSeatbelt_GoRuntimeBootAllowance（内容三断言+sandbox-exec 实证启动；race 构建豁免
+  实证步——TSan 载体⊥受限 Seatbelt CHECK failed=边界 fail-closed 实证，非边界失效）
+
+## 同窗口诚实登记（预存红——stash 基线实证非本次引入，非源码回归）
+
+- internal/releasecheck plugin-signatures：本地 darwin/arm64 插件二进制 vs 在册签名
+  （他工具链/平台构建 provenance）——签名闸=provenance 敏感，darwin 本地重算=跑步机
+  再触面（钉版工具链同源方绿）。本机实锤：同旗标重build darwin/arm64=296bb4b…（可复现性
+  本身成立）；跨编译 linux/amd64=c58b227…亦≠在册 c594b18…。
+- test/ e2e（TestE2E_ArtifactVerification/TestE2E_RubiksCube_GoalLifecycle/FT2）：
+  ../output/rubiks-cube-3d.html 工件缺席——夹具状态依赖，非源码回归。
+- darwin+race 下 TC-RT-001c/FD3Relay：TSan 载体受限 profile 内 CHECK failed（fail-closed
+  实证）——项目 race 闸口=linux CI 面（绿），darwin race=登记缺口非退让。

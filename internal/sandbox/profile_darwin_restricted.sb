@@ -37,3 +37,14 @@
 ;; ── 系统调用面：危险系统操作禁止 ──
 (deny sysctl-write)
 (deny iokit-open)
+
+;; ── Go 运行时引导面（2026-09-10 物理机实证——R-1666 原生探针/FD3 探针/生产插件
+;;    载体=Go 二进制，osinit→getPageSize 走 raw sysctl(CTL_HW, HW_PAGESIZE)；
+;;    deny default 下 sysctl-read 全拒 → physPageSize=0 → Go 进程启动即 panic
+;;    「failed to get system page size」。系统二进制不经此路径故既往探针未暴露）──
+;;    收窄形态实证（Darwin 24.5 差分实验）：sysctl-name 精确名不命中 MIB 形态 raw
+;;    sysctl（仍 panic）；sysctl-name-prefix "hw." 命中（GO-BOOT-OK）——放行=
+;;    hw.* 只读硬件常量族（pagesize/ncpu/memsize/hw.optional.*——零密钥面），
+;;    kern.*/net.*/debug.* 仍拒；sysctl-write 全拒不动。跨平台对等性：WinAC 无
+;;    syscall 过滤面/模式 B 不拦 sysinfo 族——本放行不超出受限档（T1）对等语义。──
+(allow sysctl-read (sysctl-name-prefix "hw."))
