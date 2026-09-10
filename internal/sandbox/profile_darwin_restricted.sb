@@ -1,4 +1,4 @@
-;; profile_darwin_restricted.sb — macOS 受限档（T1）Seatbelt 策略单一来源（R-1641③）
+;; profile_darwin_restricted.sb — macOS 受限档（T1）Seatbelt 策略单一来源（R-1641-3）
 ;; 消费方：internal/runtime darwinSeatbeltProvider + internal/pluginrunner executor（同语义）。
 ;; 禁止第三处副本——漂移即事故（E2 教训：根目录 sandbox/*.sb 三副本从未执行，已删除；
 ;; 其变体意图登记于此：agent 变体=LLM API 网络白名单+允许子验证进程 fork；network 变体=

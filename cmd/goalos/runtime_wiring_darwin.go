@@ -18,7 +18,7 @@ func registerPlatformProvider(rb *runtimeBoundary, home string, fd3dial *llm.Zon
 	}
 	var opts []goalosruntime.DarwinOption
 	if fd3dial != nil {
-		// FD3 broker 拨号面=zone dialer 同源（R-1650 v2④——darwin 面同构注入）
+		// FD3 broker 拨号面=zone dialer 同源（R-1650 v2(4)——darwin 面同构注入）
 		opts = append(opts, goalosruntime.WithDarwinDialFunc(fd3dial.DialContext))
 	}
 	p := goalosruntime.NewDarwinSeatbeltProvider(home+"/Goals", "/tmp/goalos", opts...)

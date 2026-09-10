@@ -59,7 +59,7 @@ const (
 )
 
 // goalNeedsReviewWire 是 GoalNeedsReview 的 wire 值（07 事件注册表 core 层注册，
-// R-1219 S-24②/R-1376——NeedsReview 唯一入口事件）。pkg/events 尚未导出对应常量
+// R-1219 S-24(2)/R-1376——NeedsReview 唯一入口事件）。pkg/events 尚未导出对应常量
 // （转绿任务 1.27 注册）——本测试以 wire 值字面量发布语义来源事件，不依赖常量。
 const goalNeedsReviewWire = "GoalNeedsReview"
 
@@ -136,7 +136,7 @@ func TestApproval_ReasonPreservedInAgentContext(t *testing.T) {
 			engine := missionengine.New(bus, cap)
 			engine.Start()
 
-			// 语义来源：拒绝族事件携带否定语义（GoalNeedsReview——R-1219 S-24②）。
+			// 语义来源：拒绝族事件携带否定语义（GoalNeedsReview——R-1219 S-24(2)）。
 			bus.Publish(events.Event{
 				Type:   goalNeedsReviewWire,
 				GoalID: goalID,

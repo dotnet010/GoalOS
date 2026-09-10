@@ -1,7 +1,7 @@
 //go:build windows && prototype
 
 // winlogon_windows_test.go——S-266-04 spike：CreateProcessWithLogonW 零特权性实机补证
-//（会议 #262 复审③遗留——账户路线三税之一的「CreateProcessWithLogonW 需管理员」
+//（会议 #262 复审(3)遗留——账户路线三税之一的「CreateProcessWithLogonW 需管理员」
 // 存疑税目；顾问裁文献级→本 spike 实机裁决）。
 //
 // 裁决形态（三重证据链）：
@@ -200,11 +200,11 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// childMain 受限子进程证据面：①TokenElevation=0 自证非管理员 ②嵌套再调
-// CreateProcessWithLogonW（同一受限账户自登录）③写证据文件（父侧轮询读取）。
+// childMain 受限子进程证据面：(1)TokenElevation=0 自证非管理员 (2)嵌套再调
+// CreateProcessWithLogonW（同一受限账户自登录）(3)写证据文件（父侧轮询读取）。
 func childMain() {
 	var b strings.Builder
-	// ①token 取证（GetTokenInformation TokenElevation——管理员=1）
+	// (1)token 取证（GetTokenInformation TokenElevation——管理员=1）
 	var token windows.Token
 	if err := windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_QUERY, &token); err == nil {
 		var elevation uint32
@@ -215,7 +215,7 @@ func childMain() {
 		}
 		token.Close()
 	}
-	// ②嵌套自登录（C 相——本进程已是非管理员上下文）
+	// (2)嵌套自登录（C 相——本进程已是非管理员上下文）
 	self, _ := os.Executable()
 	nestedCmd := fmt.Sprintf(`"%s" --grandchild-mode`, self)
 	// 从环境拿账户（父侧经命令行传入——child 命令行 argv[2]=marker，账户名由父写死到环境？）

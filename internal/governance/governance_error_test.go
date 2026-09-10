@@ -116,7 +116,7 @@ func TestGovernance_ApprovalTimeout(t *testing.T) {
 		},
 	})
 
-	// ① 必须进入挂起审批（否则超时无从谈起）
+	// (1) 必须进入挂起审批（否则超时无从谈起）
 	select {
 	case evt := <-pending:
 		if id, _ := evt.Payload["action_id"].(string); id != "act_timeout_001" {
@@ -126,7 +126,7 @@ func TestGovernance_ApprovalTimeout(t *testing.T) {
 		t.Fatal("L3 操作必须发布 ActionPendingApproval")
 	}
 
-	// ② 超时后必须发布 ActionRejected("approval_timeout")
+	// (2) 超时后必须发布 ActionRejected("approval_timeout")
 	select {
 	case evt := <-rejected:
 		reason, _ := evt.Payload["reject_reason"].(string)

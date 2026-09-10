@@ -7,7 +7,7 @@
 //
 // 当前契约形态: spawn 原语骨架阶段（transport_unix.go 已落 fd 继承收口）。本测试
 // 以 AST 扫描断言已落防线：
-//   - spawn 期唯一入口（R-1086 ③）：模块内 os/exec.Command 直调仅允许出现在
+//   - spawn 期唯一入口（R-1086-3）：模块内 os/exec.Command 直调仅允许出现在
 //     executor.go（散落直调=CI FAIL）；
 //   - Windows 传输层（named pipe 路径）不产生额外 spawn 点（transport_windows.go
 //     零 exec.Command 直调——HANDLE_LIST 白名单路径无旁路）。
@@ -69,31 +69,31 @@ func scanExecCommandSites(t *testing.T) map[string]int {
 	return sites
 }
 
-// TestSpawn_SingleEntryPoint — spawn 期全模块唯一入口（R-1086 ③）。
+// TestSpawn_SingleEntryPoint — spawn 期全模块唯一入口（R-1086-3）。
 // 断言：exec.Command 直调仅允许出现在 executor.go（spawn 唯一入口）——
 // 散落直调=fd 卫生防线旁路。
 func TestSpawn_SingleEntryPoint(t *testing.T) {
 	sites := scanExecCommandSites(t)
 	if len(sites) == 0 {
-		t.Error("MUST 1（R-1086 ③）: 模块内无 exec.Command 调用——spawn 唯一入口缺失（执行路径断裂）")
+		t.Error("MUST 1（R-1086-3）: 模块内无 exec.Command 调用——spawn 唯一入口缺失（执行路径断裂）")
 		return
 	}
 	for file, count := range sites {
 		if file != "executor.go" {
-			t.Errorf("MUST 1（R-1086 ③）: %s 存在 %d 处 exec.Command 直调——spawn 期唯一入口违约（散落直调=fd 卫生防线旁路）", file, count)
+			t.Errorf("MUST 1（R-1086-3）: %s 存在 %d 处 exec.Command 直调——spawn 期唯一入口违约（散落直调=fd 卫生防线旁路）", file, count)
 		}
 	}
 	if _, ok := sites["executor.go"]; !ok {
-		t.Error("MUST 1（R-1086 ③）: executor.go 无 exec.Command 调用——唯一入口锚点缺失")
+		t.Error("MUST 1（R-1086-3）: executor.go 无 exec.Command 调用——唯一入口锚点缺失")
 	}
-	// MUST 2（R-1086 ③）: 唯一入口存在时，其余文件直调数为 0（上循环已断言——
+	// MUST 2（R-1086-3）: 唯一入口存在时，其余文件直调数为 0（上循环已断言——
 	// 此处复核总数=executor.go 计数，防止集合语义误判）。
 	total := 0
 	for _, c := range sites {
 		total += c
 	}
 	if sites["executor.go"] != total {
-		t.Errorf("MUST 2（R-1086 ③）: spawn 点计数异常——executor.go=%d 总数=%d（旁路直调未归口）", sites["executor.go"], total)
+		t.Errorf("MUST 2（R-1086-3）: spawn 点计数异常——executor.go=%d 总数=%d（旁路直调未归口）", sites["executor.go"], total)
 	}
 }
 

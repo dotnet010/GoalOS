@@ -1,11 +1,11 @@
 //go:build prototype
 
-// pool.go——T2 热池原型（任务 7.1——R-1478③/R-1521/R-1588；物理隔离：prototype/ 目录+
+// pool.go——T2 热池原型（任务 7.1——R-1478-3/R-1521/R-1588；物理隔离：prototype/ 目录+
 // 构建 tag=不进发布二进制）。数据收集性质（不设性能闸）。
 // 三机制缝（断言锚点=测试内 Snapshottable 夹具 Provider——R-1556）：
-// ①RestoreFrom 前内存清零（TC-RT-040a——会话残留不得跨会话泄漏）；
-// ②挂载前卷重新校验+.tmp 清理（TC-RT-040b——卷一致性=挂载前校验 R-1529）；
-// ③恢复路径分段计时（TC-RT-062——出数不设闸，三段分解=分段归因形态）。
+// (1)RestoreFrom 前内存清零（TC-RT-040a——会话残留不得跨会话泄漏）；
+// (2)挂载前卷重新校验+.tmp 清理（TC-RT-040b——卷一致性=挂载前校验 R-1529）；
+// (3)恢复路径分段计时（TC-RT-062——出数不设闸，三段分解=分段归因形态）。
 package prototype
 
 import (
@@ -26,8 +26,8 @@ type pooledEntry struct {
 
 // RestoreTrace 恢复追踪（分段归因+机制调用留痕——出数+断言共用数据源）。
 type RestoreTrace struct {
-	ZeroizeCalled   bool          // ①恢复前内存清零被调用（TC-RT-040a）
-	ReverifyCalled  bool          // ②挂载前卷重新校验被调用（TC-RT-040b）
+	ZeroizeCalled   bool          // (1)恢复前内存清零被调用（TC-RT-040a）
+	ReverifyCalled  bool          // (2)挂载前卷重新校验被调用（TC-RT-040b）
 	ZeroizeCost     time.Duration // 清零段耗时
 	ReverifyCost    time.Duration // 校验段耗时
 	RestoreCost     time.Duration // RestoreFrom 段耗时
@@ -97,13 +97,13 @@ func (p *WarmPool) Acquire(ctx context.Context) (goalosruntime.RuntimeHandle, Re
 	var trace RestoreTrace
 	totalStart := time.Now()
 
-	// ①恢复前内存清零（TC-RT-040a——跨会话残留防线先行）
+	// (1)恢复前内存清零（TC-RT-040a——跨会话残留防线先行）
 	t0 := time.Now()
 	zeroize(entry.residue)
 	trace.ZeroizeCalled = true
 	trace.ZeroizeCost = time.Since(t0)
 
-	// ②挂载前卷重新校验（TC-RT-040b——不干净不恢复）
+	// (2)挂载前卷重新校验（TC-RT-040b——不干净不恢复）
 	t0 = time.Now()
 	if err := verifyVolume(p.volume); err != nil {
 		trace.ReverifyCost = time.Since(t0)
@@ -113,7 +113,7 @@ func (p *WarmPool) Acquire(ctx context.Context) (goalosruntime.RuntimeHandle, Re
 	trace.ReverifyCalled = true
 	trace.ReverifyCost = time.Since(t0)
 
-	// ③RestoreFrom（快照恢复——Snapshottable 接口真实调用）
+	// (3)RestoreFrom（快照恢复——Snapshottable 接口真实调用）
 	t0 = time.Now()
 	snapper := entry.handle.(goalosruntime.Snapshottable) // Return 已断言——此处必为真
 	restored, err := snapper.RestoreFrom(ctx, entry.snapshot)

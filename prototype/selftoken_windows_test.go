@@ -1,6 +1,6 @@
 //go:build prototype && windows
 
-// selftoken_windows_test.go——复审③异议的机器裁决（2026-08-31，PM 指令：
+// selftoken_windows_test.go——复审(3)异议的机器裁决（2026-08-31，PM 指令：
 // 异议用测试解决，不靠谁读文档更细）。
 //
 // 争议焦点：CreateProcessAsUserW 对「调用方主 token 的收窄副本」是否豁免
@@ -173,12 +173,12 @@ func extractLogonSIDForTest(token windows.Token) (*windows.SID, error) {
 	return nil, syscall.ERROR_NOT_FOUND
 }
 
-// TestSelfRestrictedToken_PrivilegeExemption 复审③机器裁决。
-// 裁决语义分层：①API 层=CreateProcessAsUserW 调用本身是否被特权墙拦下
-// （1314=Kees 成立；成功/他错=例外生效）；②可用性层=子进程是否真实跑起来
+// TestSelfRestrictedToken_PrivilegeExemption 复审(3)机器裁决。
+// 裁决语义分层：(1)API 层=CreateProcessAsUserW 调用本身是否被特权墙拦下
+// （1314=Kees 成立；成功/他错=例外生效）；(2)可用性层=子进程是否真实跑起来
 // （0xC0000142 族=token 配方问题，与特权墙无关——归因分离）。
 func TestSelfRestrictedToken_PrivilegeExemption(t *testing.T) {
-	// 前置断言①：当前 token 不持有（启用态）SeAssignPrimaryTokenPrivilege——
+	// 前置断言(1)：当前 token 不持有（启用态）SeAssignPrimaryTokenPrivilege——
 	// 否则成功证明不了例外（特权在场时成功=平凡）。
 	var self windows.Token
 	if err := windows.OpenProcessToken(windows.CurrentProcess(),
@@ -188,8 +188,8 @@ func TestSelfRestrictedToken_PrivilegeExemption(t *testing.T) {
 	if holdsPrivilege(t, self, "SeAssignPrimaryTokenPrivilege") {
 		t.Fatal("前置失败：当前 token 持有 SeAssignPrimaryTokenPrivilege——测试前提被污染")
 	}
-	t.Logf("前置①：当前 token 无 SeAssignPrimaryTokenPrivilege（启用态）=钉死")
-	t.Logf("前置②：SeImpersonatePrivilege 持有=%v；SeIncreaseQuotaPrivilege 持有=%v",
+	t.Logf("前置(1)：当前 token 无 SeAssignPrimaryTokenPrivilege（启用态）=钉死")
+	t.Logf("前置(2)：SeImpersonatePrivilege 持有=%v；SeIncreaseQuotaPrivilege 持有=%v",
 		holdsPrivilege(t, self, "SeImpersonatePrivilege"),
 		holdsPrivilege(t, self, "SeIncreaseQuotaPrivilege"))
 	self.Close()

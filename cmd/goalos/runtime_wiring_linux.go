@@ -22,7 +22,7 @@ import (
 func registerPlatformProvider(rb *runtimeBoundary, home string, fd3dial *llm.ZoneDialer) {
 	var opts []goalosruntime.LinuxOption
 	if fd3dial != nil {
-		// FD3 broker 拨号面=zone dialer 同源（R-1650 v2④——模式 B 消费）
+		// FD3 broker 拨号面=zone dialer 同源（R-1650 v2(4)——模式 B 消费）
 		opts = append(opts, goalosruntime.WithLinuxDialFunc(fd3dial.DialContext))
 	}
 	p := goalosruntime.NewLinuxRestrictedProvider(home+"/Goals", "/tmp/goalos", opts...)

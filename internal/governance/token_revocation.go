@@ -135,7 +135,7 @@ func (ts *TokenStore) Revoke(tokenID string) {
 }
 
 // IsRevoked 查询 tokenID 是否在撤销表（v0.3.1 W2——runtime 契约验证层吊销步骤
-// 接线点，R-1501 契约边界验证四步之③；tokenID 形态=goalID+"-"+actionID）。
+// 接线点，R-1501 契约边界验证四步之(3)；tokenID 形态=goalID+"-"+actionID）。
 func (ts *TokenStore) IsRevoked(tokenID string) bool {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()

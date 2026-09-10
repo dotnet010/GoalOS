@@ -34,7 +34,7 @@ import (
 )
 
 // waitMoreDecisionEventType 是 wait_more 决策的投递事件 wire 值（07 事件注册表
-// UserDecisionReceived——R-1161 D26① 注册："wait_more 经事件投递 GoalRunner"）。
+// UserDecisionReceived——R-1161 D26(1) 注册："wait_more 经事件投递 GoalRunner"）。
 // pkg/events 尚未导出对应常量——转绿任务应注册 events.TypeUserDecisionReceived；
 // 本测试以 wire 值字面量断言行为。
 const waitMoreDecisionEventType = "UserDecisionReceived"

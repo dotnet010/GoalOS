@@ -16,7 +16,7 @@ import (
 
 // sanitizeChildProcess 在子进程启动前设置 macOS 安全加固。
 // v0.3.0 fix (C6): 通过 sandbox-exec 实现文件系统/网络隔离。
-// R-1641③（会议 #256）收敛：profile=internal/sandbox.RestrictedSeatbeltProfile() 单源
+// R-1641-3（会议 #256）收敛：profile=internal/sandbox.RestrictedSeatbeltProfile() 单源
 // （Option B 语义=写禁闭+敏感目录禁读+网络禁闭+子进程禁+读开放；E1 事故修复——
 // 原内联 profile 含非法 filter 从未通过解析+读白名单形态启动期 abort，生产插件
 // 沙箱路径自此真实生效）。若 sandbox-exec 不可用→降级为 Setpgid 基础隔离（L2 诚实标注）。
@@ -55,7 +55,7 @@ func applySandboxExec(cmd *exec.Cmd) bool {
 		}
 	}
 
-	// 受限档 profile=单一来源（R-1641③——internal/sandbox embed；禁止内联副本）
+	// 受限档 profile=单一来源（R-1641-3——internal/sandbox embed；禁止内联副本）
 	profile := sandbox.RestrictedSeatbeltProfile()
 
 	// 写入临时 profile 文件

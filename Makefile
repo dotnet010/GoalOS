@@ -7,10 +7,10 @@
 # 可复现构建配方（R-1695——PM 裁定：非代码因素剥离，跨机确定性构建）：
 #   产物构建点（ci 插件/release/install-plugin/build-xinchuang）统一钉
 #   `CGO_ENABLED=0 go build -trimpath -buildvcs=false`。三因素各剥离一类非代码元数据：
-#     ① -trimpath          剥离构建机绝对路径（源路径烙入二进制）
-#     ② -buildvcs=false    剥离 VCS 元数据（vcs.revision/vcs.modified 随提交与脏树翻转
+#     (1) -trimpath          剥离构建机绝对路径（源路径烙入二进制）
+#     (2) -buildvcs=false    剥离 VCS 元数据（vcs.revision/vcs.modified 随提交与脏树翻转
 #                          ——R-1629 已实证的跑步机根因）
-#     ③ CGO_ENABLED=0      剥离 C 工具链/libc 面（cgo 构建标签翻转→stdlib 选择集不同→
+#     (3) CGO_ENABLED=0      剥离 C 工具链/libc 面（cgo 构建标签翻转→stdlib 选择集不同→
 #                          同机不同默认值即不同产物；R-1695 实证：darwin/arm64 同源同旗标
 #                          两档哈希 296bb4b5≠6d50aabc）
 #   残余不可剥离因素=GOOS/GOARCH+Go 工具链版本（平台/版本内在差异）——故签名指纹
@@ -30,13 +30,13 @@ test:
 
 race:
 	go test -count=1 -timeout 120s -race ./...
-	@echo "=== prototype 族（构建 tag 隔离——不进发布二进制；W7 T2 出数闸=R-1478③） ==="
+	@echo "=== prototype 族（构建 tag 隔离——不进发布二进制；W7 T2 出数闸=R-1478-3） ==="
 	go test -count=1 -timeout 60s -tags prototype ./prototype/
 
 lint:
 	go vet ./...
 
-# test-platform：平台专项特测车道（R-1695 ②——FD3 测试分层纳管）。
+# test-platform：平台专项特测车道（R-1695-2——FD3 测试分层纳管）。
 # 跑 `-tags platformtest` 的物理传输面测试：真实 socket bind、sun_path 预算、
 # 目录权限、并发连接隔离（internal/fd3 的 F3/F6 + darwin 镜像决算族）。
 # 刻意**不入 make ci / 常规车道**：本车道主体是「各开发机基底路径差异」——
@@ -55,9 +55,9 @@ test-platform:
 # （`windows || xinchuang`）与 platform_backend_darwin_test.go（`darwin`）同时被选中
 # → `platformBackend redeclared`。故本目标带 OS 硬门（非仅注释约定），且**刻意不入
 # make ci**（本机 darwin 会直接红；理由同 test-platform：平台面差异不应误伤轻量车道）。
-# windows 面不适用——windows-daily.yml 保持纯净、不接信创标签（PM 指令③）。
+# windows 面不适用——windows-daily.yml 保持纯净、不接信创标签（PM 指令(3)）。
 #
-# **显式前置 build-plugins**（PM 指令②，严禁隐式前提）：车道跑 ./internal/... 全量，
+# **显式前置 build-plugins**（PM 指令(2)，严禁隐式前提）：车道跑 ./internal/... 全量，
 # 含 releasecheck 的 plugin-signatures 闸——插件未构建则首红（红因与标签无关）。
 # 触发面：本地=本目标；CI=docker-publish test 作业（runner=ubuntu，天然 linux）。
 # 未跑=标签测试面零实证，不得冒充全绿。
@@ -96,7 +96,7 @@ all: lint race deadcode test build
 # 会议 #198 D22 R-1157: build-xinchuang 接入 make ci 交叉编译检查
 # （linux/amd64+xinchuang 信创变体, -tags xinchuang 显式传参）。
 # build-plugins：插件产物 + 签名刷新（发布规范 #9 本地签名一致性）。
-# **显式前置目标**（2026-09-10 PM 指令②）：内部测试闸口 TestReleaseReadiness_All
+# **显式前置目标**（2026-09-10 PM 指令(2)）：内部测试闸口 TestReleaseReadiness_All
 # （internal/releasecheck 的 plugin-signatures 项）要求插件二进制已构建——缺则
 # `[FAIL] plugin-signatures: binary not found`，且红因**与构建标签无关**。
 # 事故实证（2026-09-10 goalos-test 实跑）：`go test -tags xinchuang ./internal/...`

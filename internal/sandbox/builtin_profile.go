@@ -27,7 +27,7 @@ const (
 // BuiltinBaseProfile 零配置内置基础 profile（确定性派生——同输入集恒同输出）。
 // 派生规则：
 //
-//	Isolation=入参 minIsolation（契约硬地板——R-1512③ 双路径关闭后唯一来源）
+//	Isolation=入参 minIsolation（契约硬地板——R-1512-3 双路径关闭后唯一来源）
 //	文件系统：写=工作区/临时目录（标记形态）；读=系统库/二进制面（平台分族）；
 //	  敏感目录禁读（~/.goalos/.ssh/.aws/.config——R-1641 Option B 收口面）
 //	网络：无网络能力=deny（socket 全拒——R-1156）；含网络能力=allowlist（能力族符号标记，

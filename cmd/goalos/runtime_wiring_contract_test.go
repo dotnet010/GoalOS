@@ -1,4 +1,4 @@
-// runtime_wiring_contract_test.go——Runtime 边界组合根契约测试（任务 5.5 前置——R-1640②）。
+// runtime_wiring_contract_test.go——Runtime 边界组合根契约测试（任务 5.5 前置——R-1640-2）。
 // 标注=实现同步补强（非先红——诚实标注纪律）。12 清单 G 节登记。
 package main
 
@@ -15,10 +15,10 @@ import (
 )
 
 // TestDaemon_RuntimeWiring_BoundaryUp 组合根接线断言：
-// ①三件套全部非空（registry/resolver/verifier）
-// ②darwin 上受限档 Provider 经注册表可取回+租约可建可释（RegisterChecked 骨架探测过）
-// ③解析器生产路径可解析（参考输入 RRE=true/I2→T1 受限档——平台达成实证）
-// ④验证层真实拒绝（伪 token=signature_invalid 封闭枚举——非空返回式绿）。
+// (1)三件套全部非空（registry/resolver/verifier）
+// (2)darwin 上受限档 Provider 经注册表可取回+租约可建可释（RegisterChecked 骨架探测过）
+// (3)解析器生产路径可解析（参考输入 RRE=true/I2→T1 受限档——平台达成实证）
+// (4)验证层真实拒绝（伪 token=signature_invalid 封闭枚举——非空返回式绿）。
 func TestDaemon_RuntimeWiring_BoundaryUp(t *testing.T) {
 	bus := eventbus.New()
 	cfg := &config.Config{}
@@ -26,12 +26,12 @@ func TestDaemon_RuntimeWiring_BoundaryUp(t *testing.T) {
 
 	rb := runtimeWiring(bus, t.TempDir(), cfg, gov, []byte("test-secret-32-bytes-padding!!!!!"), nil)
 
-	// ①三件套
+	// (1)三件套
 	if rb == nil || rb.registry == nil || rb.resolver == nil || rb.verifier == nil {
 		t.Fatal("组合根三件套必须全部非空（registry/resolver/verifier）")
 	}
 
-	// ②darwin：Provider 注册可取回+租约生命周期（其他平台注册表空=5.1/5.2 收敛前合法态，跳过）
+	// (2)darwin：Provider 注册可取回+租约生命周期（其他平台注册表空=5.1/5.2 收敛前合法态，跳过）
 	if goalosruntime.DetectPlatformIsolation() >= goalosruntime.I2 {
 		p, err := rb.registry.AcquireProviderForTier("T1")
 		if err != nil {
@@ -46,7 +46,7 @@ func TestDaemon_RuntimeWiring_BoundaryUp(t *testing.T) {
 		}
 	}
 
-	// ③解析器参考解析
+	// (3)解析器参考解析
 	if goalosruntime.DetectPlatformIsolation() >= goalosruntime.I2 {
 		sel, err := rb.resolver.Resolve(goalosruntime.ResolveInput{
 			RequiresRealEnforcement: true, MinIsolation: goalosruntime.I2,
@@ -56,13 +56,13 @@ func TestDaemon_RuntimeWiring_BoundaryUp(t *testing.T) {
 		}
 	}
 
-	// ④验证层真实拒绝（伪 token——签名非法；封闭枚举断言非「无错即绿」）
+	// (4)验证层真实拒绝（伪 token——签名非法；封闭枚举断言非「无错即绿」）
 	_, err := rb.verifier.Verify("garbage.token.value")
 	if !goalosruntime.IsRejectReason(err, goalosruntime.RejectSignatureInvalid) {
 		t.Fatalf("伪 token 应=signature_invalid 拒绝，实际: %v", err)
 	}
 
-	// ⑤任务 5.5 呈现数据源（04 §14.3 块形状——status runtime 块全字段+
+	// (5)任务 5.5 呈现数据源（04 §14.3 块形状——status runtime 块全字段+
 	// 平台措辞：darwin=纵深防御注记/linux=原生强制隔离）
 	out := rb.presentStatus()
 	for _, key := range []string{"tier", "tier_label", "level_line", "reason", "reason_warning", "degraded", "offline_capable", "platform_max"} {

@@ -1,4 +1,4 @@
-// runtime_wiring.go——Runtime 边界组合根（任务 5.5 前置——R-1640② 会议 #255 裁决）。
+// runtime_wiring.go——Runtime 边界组合根（任务 5.5 前置——R-1640-2 会议 #255 裁决）。
 // 调研决议（会议 #257——PM 调研协议）：daemon 接线开源 top3=uber/fx（运行时反射容器，
 // 配置错误=启动 panic——与 fail-closed 纪律冲突）/Google wire（编译期 DI 代码生成——
 // 2025 年中官方归档停维护，引入=背债）/手工组合根（Go 惯用——编译期安全零运行时开销）；
@@ -33,11 +33,11 @@ type runtimeBoundary struct {
 func runtimeWiring(bus *eventbus.EventBus, home string, cfg *config.Config, gov *governance.Engine, secretKey []byte, fd3dial *llm.ZoneDialer) *runtimeBoundary {
 	rb := &runtimeBoundary{registry: goalosruntime.NewProviderRegistry()}
 
-	// ①平台 Provider 注册（per-OS 文件——darwin=Seatbelt 受限档任务 5.3；linux/windows=
+	// (1)平台 Provider 注册（per-OS 文件——darwin=Seatbelt 受限档任务 5.3；linux/windows=
 	// 任务 5.1/5.2 收敛前注册表保持空——骨架纪律 R-1468 诚实状态）
 	registerPlatformProvider(rb, home, fd3dial)
 
-	// ②解析器（平台探测+名单+RuntimeSelected/Rejected 事件发射——07 §4.14）
+	// (2)解析器（平台探测+名单+RuntimeSelected/Rejected 事件发射——07 §4.14）
 	trusted := make([]goalosruntime.TrustedWorkload, 0, len(cfg.Daemon.TrustedWorkloads))
 	for _, w := range cfg.Daemon.TrustedWorkloads {
 		trusted = append(trusted, goalosruntime.TrustedWorkload{
@@ -61,7 +61,7 @@ func runtimeWiring(bus *eventbus.EventBus, home string, cfg *config.Config, gov 
 			bus.Publish(events.Event{Type: eventType, Source: "runtime-resolver", Payload: payload})
 		})
 
-	// ③验证层（吊销桥=IsActionRevoked 生产撤销表——R-1640②；拒绝留痕=ContractRejected）
+	// (3)验证层（吊销桥=IsActionRevoked 生产撤销表——R-1640-2；拒绝留痕=ContractRejected）
 	rb.verifier = goalosruntime.NewContractVerifier(secretKey, goalosruntime.NewNonceRegistry(),
 		goalosruntime.WithRevocationChecker(func(contractID string) bool {
 			// contractID=goalID/actionID → actionID 前缀形态（现行撤销表约定）
@@ -78,7 +78,7 @@ func runtimeWiring(bus *eventbus.EventBus, home string, cfg *config.Config, gov 
 		}),
 	)
 
-	// ④启动自检（边界可解析证据——参考输入=典型受限档情形；结果入日志非事件流）
+	// (4)启动自检（边界可解析证据——参考输入=典型受限档情形；结果入日志非事件流）
 	sel, err := rb.resolver.Resolve(goalosruntime.ResolveInput{
 		RequiresRealEnforcement: true, MinIsolation: goalosruntime.I2,
 	})

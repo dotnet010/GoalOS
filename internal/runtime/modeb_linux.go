@@ -5,10 +5,10 @@
 // （goalos-test Ubuntu 24.04 AppArmor 限 userns 环境九探针全绿）。
 //
 // 机制：re-exec 自身（__goalos-modeb 标记——零外部二进制），子侧依次：
-// LockOSThread（暗坑②——per-thread 语义）→Landlock 规则集（EvalSymlinks+
-// O_NOFOLLOW 校验授权路径——P0③）→PR_SET_NO_NEW_PRIVS→restrict_self→
-// seccomp TSYNC（socket/socketpair domain 白名单——仅 AF_UNIX；暗坑①+九轮补枪）
-// →继承 FD 清理（P0④）→exec 目标（边界随 exec 继承不可撤销）。
+// LockOSThread（暗坑(2)——per-thread 语义）→Landlock 规则集（EvalSymlinks+
+// O_NOFOLLOW 校验授权路径——P0(3)）→PR_SET_NO_NEW_PRIVS→restrict_self→
+// seccomp TSYNC（socket/socketpair domain 白名单——仅 AF_UNIX；暗坑(1)+九轮补枪）
+// →继承 FD 清理（P0(4)）→exec 目标（边界随 exec 继承不可撤销）。
 //
 // 诚实声明（九轮——CVE-2020-15257 族）：模式 B 放行 AF_UNIX=抽象套接字面
 // 开放（可直连宿主 X11/D-Bus）。激活时由 daemon 启动日志+用户文档显式声明。
@@ -40,7 +40,7 @@ type modeBConfig struct {
 
 // modeBAvailable 实证式能力探测（不问静态声明——landlock ABI 版本查询+架构）。
 func modeBAvailable() bool {
-	if runtime.GOARCH != "amd64" { // P1② fail-closed——未支持架构不猜（arm64 常量施工期补）
+	if runtime.GOARCH != "amd64" { // P1(2) fail-closed——未支持架构不猜（arm64 常量施工期补）
 		return false
 	}
 	// LANDLOCK_CREATE_RULESET_VERSION=1——查 ABI 不建规则集
@@ -66,12 +66,12 @@ func modeBChildMain(args []string) {
 		os.Exit(2)
 	}
 	if runtime.GOARCH != "amd64" {
-		fmt.Fprintf(os.Stderr, "MODEB-FATAL: 未支持架构 %s（fail-closed——P1②）\n", runtime.GOARCH)
+		fmt.Fprintf(os.Stderr, "MODEB-FATAL: 未支持架构 %s（fail-closed——P1(2)）\n", runtime.GOARCH)
 		os.Exit(2)
 	}
 	target := args[0]
 
-	runtime.LockOSThread() // 暗坑②——landlock/seccomp=per-thread 语义
+	runtime.LockOSThread() // 暗坑(2)——landlock/seccomp=per-thread 语义
 
 	cfg := modeBConfig{
 		workspace:  os.Getenv("MODEB_WS"),
@@ -98,7 +98,7 @@ func modeBChildMain(args []string) {
 	if err := applyNetSeccomp(); err != nil {
 		fatalModeB("seccomp", err)
 	}
-	closeInheritedFDs() // P0④
+	closeInheritedFDs() // P0(4)
 	if err := syscall.Exec(target, args, os.Environ()); err != nil {
 		fatalModeB("exec", err)
 	}
@@ -109,8 +109,8 @@ func fatalModeB(what string, err error) {
 	os.Exit(2)
 }
 
-// assembleModeBGrants 授权集（④home 链 READ_DIR 寻路权+③标准运行时集+
-// /dev 精确单设备 P1①+自身二进制 RX（孙进程自举）+工具链 RO）。
+// assembleModeBGrants 授权集（(4)home 链 READ_DIR 寻路权+(3)标准运行时集+
+// /dev 精确单设备 P1(1)+自身二进制 RX（孙进程自举）+工具链 RO）。
 func assembleModeBGrants(cfg modeBConfig) []llGrant {
 	roX := uint64(llReadFile | llReadDir | llExec)
 	rwFile := uint64(llReadFile | llWriteFile)
@@ -129,7 +129,7 @@ func assembleModeBGrants(cfg modeBConfig) []llGrant {
 	for _, p := range []string{"/dev/null", "/dev/zero", "/dev/urandom"} {
 		grants = append(grants, llGrant{p, rwFile})
 	}
-	// ④home 链祖先=READ_DIR 寻路权（workspace 在 home 下时——~/.ssh 不授予=天然拒）
+	// (4)home 链祖先=READ_DIR 寻路权（workspace 在 home 下时——~/.ssh 不授予=天然拒）
 	home, _ := os.UserHomeDir()
 	for d := filepath.Dir(cfg.workspace); d != "/" && d != "." && strings.HasPrefix(d, "/"); d = filepath.Dir(d) {
 		grants = append(grants, llGrant{d, llReadDir})
@@ -200,7 +200,7 @@ func llCreateRuleset() (int, error) {
 	return int(fd), nil
 }
 
-// llAddPathRule 符号链接解析+O_NOFOLLOW 校验（P0③——ELOOP=熔断）+文件/目录
+// llAddPathRule 符号链接解析+O_NOFOLLOW 校验（P0(3)——ELOOP=熔断）+文件/目录
 // 权利分面（dir-only 权利施于文件=EINVAL——spike 首红实证）。
 func llAddPathRule(ruleset int, g llGrant) error {
 	real, err := filepath.EvalSymlinks(g.path)
@@ -251,7 +251,7 @@ func prctlNoNewPrivs() error {
 	return nil
 }
 
-// applyNetSeccomp socket/socketpair domain 白名单（仅 AF_UNIX——暗坑①+
+// applyNetSeccomp socket/socketpair domain 白名单（仅 AF_UNIX——暗坑(1)+
 // 九轮 socketpair 补枪；connect 无法绕过=无 INET socket 可创建）。
 func applyNetSeccomp() error {
 	const (
@@ -280,7 +280,7 @@ func applyNetSeccomp() error {
 	return nil
 }
 
-// closeInheritedFDs P0④——exec 前关闭 >2 全部继承 fd。
+// closeInheritedFDs P0(4)——exec 前关闭 >2 全部继承 fd。
 func closeInheritedFDs() {
 	ents, err := os.ReadDir("/proc/self/fd")
 	if err != nil {

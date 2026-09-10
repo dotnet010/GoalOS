@@ -39,7 +39,7 @@ type Handler struct {
 	Reviews          map[string][]*ReviewSummary // goalID → review summaries (R-846)
 	ReviewReports    map[string]*events.ReviewReport // reportKey(goalID+actionID) → full report
 	Metrics          *metrics.Registry   // v0.1.0 H8: Prometheus 指标注册表
-	runtimePresent   func() map[string]interface{} // v0.3.1 任务 5.5：Runtime 呈现数据源（R-1640②——组合根注入）
+	runtimePresent   func() map[string]interface{} // v0.3.1 任务 5.5：Runtime 呈现数据源（R-1640-2——组合根注入）
 	waitMoreFn       func(actionID string) (accepted bool, extensionsUsed int, exhausted bool) // D-4（R-1645）：wait_more 治理同步面注入（组合根——非绕过=治理权威承载）
 	mu               sync.RWMutex
 	port             int
@@ -235,8 +235,8 @@ func (h *Handler) HandleListApprovals(w http.ResponseWriter, r *http.Request) {
 
 // HandleApprove 批准 Action。POST /api/approvals/:id/approve。
 // D-3（R-1644——会议 #259 裁决，兑现 R-1379/05 §2.2 承诺）：幂等三形态——
-// ①重复同决策=200+F-04 形状（回放缓存原结果——Stripe 族）；②重复冲突决策=409；
-// ③真未知/过期=404。delete-in-lock 并发安全语义不变。
+// (1)重复同决策=200+F-04 形状（回放缓存原结果——Stripe 族）；(2)重复冲突决策=409；
+// (3)真未知/过期=404。delete-in-lock 并发安全语义不变。
 func (h *Handler) HandleApprove(w http.ResponseWriter, r *http.Request) {
 	h.serveApprovalDecision(w, r, "approved")
 }
@@ -267,12 +267,12 @@ func (h *Handler) serveApprovalDecision(w http.ResponseWriter, r *http.Request, 
 	}
 	h.mu.Unlock()
 
-	// ③真未知/过期=404（对从未存在的 id 是诚实回答）
+	// (3)真未知/过期=404（对从未存在的 id 是诚实回答）
 	if !pending && !replay && !conflict {
 		writeError(w, http.StatusNotFound, goalErr.CodeGoalNotFound, "审批不存在或已过期")
 		return
 	}
-	// ②重复冲突=409（Kees 硬语义——先批准后抢拒类竞态不粉饰）
+	// (2)重复冲突=409（Kees 硬语义——先批准后抢拒类竞态不粉饰）
 	if conflict {
 		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error": map[string]string{
@@ -282,7 +282,7 @@ func (h *Handler) serveApprovalDecision(w http.ResponseWriter, r *http.Request, 
 		})
 		return
 	}
-	// ①新裁决/幂等回放=200+F-04 形状（R-1324 单一形状对齐一并收口）
+	// (1)新裁决/幂等回放=200+F-04 形状（R-1324 单一形状对齐一并收口）
 	if pending && eventBus != nil {
 		evtType := events.TypeUserApprovedAction
 		payload := map[string]interface{}{"action_id": actionID}
@@ -866,7 +866,7 @@ func (h *Handler) HandleDaemonRestart(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SetRuntimePresentation 注入 Runtime 呈现数据源（任务 5.5——R-1640② 组合根接线；
+// SetRuntimePresentation 注入 Runtime 呈现数据源（任务 5.5——R-1640-2 组合根接线；
 // nil=未接线=status 不带 runtime 块，诚实缺省）。
 func (h *Handler) SetRuntimePresentation(f func() map[string]interface{}) { h.runtimePresent = f }
 

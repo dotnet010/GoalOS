@@ -153,7 +153,7 @@ func main() {
 				status := scheduler.CheckProviderHealth(pc, p.APIKey)
 				if status.Healthy {
 					healthyCount++
-					// R-1643 裁决④：网域感知拨号（DNS 重绑定防御+force_public_zone 覆盖标记）
+					// R-1643 裁决(4)：网域感知拨号（DNS 重绑定防御+force_public_zone 覆盖标记）
 					// R-1650 v4：tailnet peer 感知层注入（免审批语义=拨号侧实锤标记）
 					zd := llm.NewZoneDialer(p.ForcePublicZone, func(m llm.ZoneMark) {
 						log.Printf("[Daemon] LLM 出站网域: host=%s ip=%s zone=%s forced=%v tailnet_peer=%v tailnet_exempt=%v",
@@ -232,13 +232,13 @@ func main() {
 		log.Printf(`{"level":"WARN","msg":"Step 7: secret key: %v"}`, err)
 	}
 	gov := governance.New(bus, secretKey)
-	gov.SetTrustLAN(cfg.Daemon.TrustLAN) // R-1643②——data_sharing 免除=loopback 恒免/LAN 仅此开关免
+	gov.SetTrustLAN(cfg.Daemon.TrustLAN) // R-1643-2——data_sharing 免除=loopback 恒免/LAN 仅此开关免
 	gov.SetApprovalTimeout(time.Duration(cfg.Policy.ApprovalTimeout) * time.Second)
 	gov.SetTokenTTL(time.Duration(cfg.Policy.TokenTTL) * time.Second) // R-1059: 令牌执行窗口
 	gov.SetAutonomyLevel(cfg.Daemon.AutonomyLevel)
 
-	// v0.3.1 生产接线（任务 5.5 前置——R-1640②/会议 #255）：
-	// ①keyring 生产构造（secrets.key=首代际，kid=gen-1；代际窗口=token_ttl——R-1307）
+	// v0.3.1 生产接线（任务 5.5 前置——R-1640-2/会议 #255）：
+	// (1)keyring 生产构造（secrets.key=首代际，kid=gen-1；代际窗口=token_ttl——R-1307）
 	if len(secretKey) > 0 {
 		kr := governance.NewKeyring(time.Duration(cfg.Policy.TokenTTL)*time.Second, time.Now)
 		if err := kr.AddGeneration("gen-1", secretKey); err != nil {
@@ -246,7 +246,7 @@ func main() {
 		}
 		gov.SetKeyring(kr)
 	}
-	// ②WorkloadIdentity 名单+本进程哈希（R-1508/R-1561——artifact_hash 静态比对）
+	// (2)WorkloadIdentity 名单+本进程哈希（R-1508/R-1561——artifact_hash 静态比对）
 	if len(cfg.Daemon.TrustedWorkloads) > 0 {
 		view := make([]governance.TrustedWorkloadView, 0, len(cfg.Daemon.TrustedWorkloads))
 		for _, w := range cfg.Daemon.TrustedWorkloads {
@@ -262,8 +262,8 @@ func main() {
 		}
 	}
 
-	// ③Runtime 边界组合根（手工组合根纪律——会议 #257 调研决议：不引进 DI 框架）
-	// FD3 broker 拨号面=zone dialer 同源注入（网域分类/留痕不旁路——R-1650 v2④）。
+	// (3)Runtime 边界组合根（手工组合根纪律——会议 #257 调研决议：不引进 DI 框架）
+	// FD3 broker 拨号面=zone dialer 同源注入（网域分类/留痕不旁路——R-1650 v2(4)）。
 	fd3Dialer := llm.NewZoneDialer(false, nil)
 	fd3Dialer.Classifier = zoneClassifier
 	runtimeBoundary := runtimeWiring(bus, home, cfg, gov, secretKey, fd3Dialer)
@@ -353,12 +353,12 @@ func main() {
 	log.Printf(`{"level":"INFO","ts":"%s","msg":"Step 9: Mission Engine registered (%s)"}`, time.Now().Format(time.RFC3339), agentName)
 
 	runner := pluginrunner.New(bus, secretKey, nil) // R-660: tokenVerifier=nil→fallback 无撤销检查。Week 3 注入 Engine
-	// v0.3.1 执行门接线（R-1640②——契约验证强制+解析留痕；有密钥环境才激活）
+	// v0.3.1 执行门接线（R-1640-2——契约验证强制+解析留痕；有密钥环境才激活）
 	if len(secretKey) > 0 {
 		runner.SetRuntimeGate(runtimeBoundary.verifier, runtimeBoundary.resolver, "builtin-v1")
 	}
 	runner.Start()
-	// R-1645②：target_endpoints 生产者接线（discovery 在 Start() 中刷新——注入=运行时实时值）
+	// R-1645-2：target_endpoints 生产者接线（discovery 在 Start() 中刷新——注入=运行时实时值）
 	sched.SetEndpointLookup(runner.FindManifestEndpoints)
 	for _, p := range runner.DiscoveredPlugins() {
 		gov.RegisterCapabilities(p.Manifest.Name, p.Manifest.DeclaredCapabilities)

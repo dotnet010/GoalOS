@@ -99,7 +99,7 @@ func (mv *MultiLLMVerifier) callProviderCold(p ProviderClient, code string, acti
 	defer cancel()
 
 	// R-862: 升级后的审查 prompt——基于 Codex/Claude Code/OpenClaw 最佳实践
-	// ①独立性声明 ②置信度 ③结构化输出 ④严重性分层 ⑤优先级指导 ⑥用户导向
+	// (1)独立性声明 (2)置信度 (3)结构化输出 (4)严重性分层 (5)优先级指导 (6)用户导向
 	systemPrompt := `你是 GoalOS 的独立代码审查者。你审查的代码是由另一个 AI 模型生成的——你不是在审查自己的工作。你的审查结果将直接呈现给用户，帮助他们做出是否接受这段代码的决定。
 
 审查要求：

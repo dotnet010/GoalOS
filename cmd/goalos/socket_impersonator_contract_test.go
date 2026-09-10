@@ -8,8 +8,8 @@
 //
 // 先红状态（阶段 3.5 测试先行闸口——用例先红）:
 //   UDS 通道（~/.goalos/run/daemon.sock）当前未实现——治理面仍挂 TCP mux。
-//   红锚 ②: TCP 上 GET /api/approvals 当前返回 200 → 断言 404 或连接拒绝 → 红。
-//   探针 ①: config/daemon 包无 socket 路径公开配置（反射枚举公开字段）→
+//   红锚 (2): TCP 上 GET /api/approvals 当前返回 200 → 断言 404 或连接拒绝 → 红。
+//   探针 (1): config/daemon 包无 socket 路径公开配置（反射枚举公开字段）→
 //            辅助信息，不承担红锚。
 //
 // 转绿任务: 7.20（C-2 表）——UDS 治理通道落地（R-1378）后治理面移出 TCP，本测试转绿。
@@ -43,15 +43,15 @@ func newSocketContractMux(t *testing.T) *http.ServeMux {
 
 // TestSocket_ImpersonatorRejected — R-1378 核心契约: 治理面不得暴露于 TCP。
 //
-// 红锚 ②: 当前 GET /api/approvals 经 TCP 返回 200 → 断言 404/连接拒绝 → 先红。
+// 红锚 (2): 当前 GET /api/approvals 经 TCP 返回 200 → 断言 404/连接拒绝 → 先红。
 // CLI 反验 daemon 身份（对端可执行文件=goalos-daemon）的前提是 CLI↔daemon
 // 只走 UDS——TCP 上存在治理面即违约。
 func TestSocket_ImpersonatorRejected(t *testing.T) {
-	// ── 探针 ①: UDS socket 路径公开配置（辅助探针）──
+	// ── 探针 (1): UDS socket 路径公开配置（辅助探针）──
 	// 契约路径权威值 = ~/.goalos/run/daemon.sock（R-1322）。
 	probeUDSSocketConfig(t)
 
-	// ── 红锚 ②: TCP 上不得存在治理路由 ──
+	// ── 红锚 (2): TCP 上不得存在治理路由 ──
 	mux := newSocketContractMux(t)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -88,17 +88,17 @@ func TestSocket_ImpersonatorRejected(t *testing.T) {
 	}
 }
 
-// probeUDSSocketConfig 探针 ①: 反射枚举 config/daemon 公开结构字段，
+// probeUDSSocketConfig 探针 (1): 反射枚举 config/daemon 公开结构字段，
 // 寻找 UDS socket 路径配置。
 //
 //	存在 → 断言值含权威路径片段 "run/daemon.sock"（R-1322）。
-//	不存在 → t.Logf 辅助信息: UDS 通道未落地，红锚由 ② 承担。
+//	不存在 → t.Logf 辅助信息: UDS 通道未落地，红锚由 (2) 承担。
 func probeUDSSocketConfig(t *testing.T) {
 	t.Helper()
 	found := walkSocketFields(t, reflect.ValueOf(config.Default()), 0)
 	found = walkSocketFields(t, reflect.ValueOf(daemon.NewHandler()), 0) || found
 	if !found {
-		t.Logf("探针①: config/daemon 无 socket 路径公开配置——UDS 通道未实现（R-1378 先红，红锚=②）")
+		t.Logf("探针(1): config/daemon 无 socket 路径公开配置——UDS 通道未实现（R-1378 先红，红锚=(2)）")
 	}
 }
 
@@ -129,14 +129,14 @@ func walkSocketFields(t *testing.T, v reflect.Value, depth int) bool {
 		if strings.Contains(name, "sock") || strings.Contains(name, "unix") || strings.Contains(name, "uds") {
 			found = true
 			if f.Type.Kind() != reflect.String {
-				t.Errorf("探针①: socket 配置字段 %s 必须为 string（路径值），实际 %s", f.Name, f.Type)
+				t.Errorf("探针(1): socket 配置字段 %s 必须为 string（路径值），实际 %s", f.Name, f.Type)
 				continue
 			}
 			val := v.Field(i).String()
 			if !strings.Contains(val, "run/daemon.sock") {
-				t.Errorf("探针①: socket 路径配置 %s=%q 不符合 R-1322 权威路径（~/.goalos/run/daemon.sock）", f.Name, val)
+				t.Errorf("探针(1): socket 路径配置 %s=%q 不符合 R-1322 权威路径（~/.goalos/run/daemon.sock）", f.Name, val)
 			} else {
-				t.Logf("探针①: 发现 socket 路径配置 %s=%s", f.Name, val)
+				t.Logf("探针(1): 发现 socket 路径配置 %s=%s", f.Name, val)
 			}
 		}
 		if walkSocketFields(t, v.Field(i), depth+1) {

@@ -1,6 +1,6 @@
 name: W1-2 macOS 平台专项特测车道（darwin-nightly）
 
-# R-1695 ②（PM 裁定 2026-09-10——「FD3 Broker 6 测试归类：分层纳管，拒绝一刀切」）：
+# R-1695-2（PM 裁定 2026-09-10——「FD3 Broker 6 测试归类：分层纳管，拒绝一刀切」）：
 # 物理 Socket 与路径边界测试（涉及 sun_path、目录权限的实测）归入平台专项特测车道。
 # 本工作流=该车道的 darwin 触发面（linux=windows-daily/docker-publish，见各文件）。
 #

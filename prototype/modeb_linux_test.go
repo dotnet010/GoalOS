@@ -7,14 +7,14 @@
 // 模式 B=PR_SET_NO_NEW_PRIVS+Landlock LSM+seccomp BPF——三者均不需要 userns/root。
 //
 // 布防（顾问第七~九轮+暗坑四连全采纳）：
-//   ②Go 多线程漂移：runtime.LockOSThread()+seccomp TSYNC 标志
-//   ①socket/socketpair 按 domain 白名单（仅 AF_UNIX），connect 无法绕过（无 INET
+//   (2)Go 多线程漂移：runtime.LockOSThread()+seccomp TSYNC 标志
+//   (1)socket/socketpair 按 domain 白名单（仅 AF_UNIX），connect 无法绕过（无 INET
 //     socket 可创建）；防未知协议族=白名单非黑名单
-//   ③动态链接器面：/usr /lib /lib64 /etc/ld.so.cache /etc/alternatives /proc(ro)
-//   ④home 链寻路：祖先目录授 READ_DIR（不含写），~/.ssh 不授予=天然拒
-//   P0③符号链接：授权路径先 EvalSymlinks 解析+O_NOFOLLOW 校验解析后路径
-//   P0④继承 FD 清理：exec 前关闭 >2 全部 fd
-//   P1②架构：amd64 以外 fail-closed（spike 范围——arm64 常量留注记）
+//   (3)动态链接器面：/usr /lib /lib64 /etc/ld.so.cache /etc/alternatives /proc(ro)
+//   (4)home 链寻路：祖先目录授 READ_DIR（不含写），~/.ssh 不授予=天然拒
+//   P0(3)符号链接：授权路径先 EvalSymlinks 解析+O_NOFOLLOW 校验解析后路径
+//   P0(4)继承 FD 清理：exec 前关闭 >2 全部 fd
+//   P1(2)架构：amd64 以外 fail-closed（spike 范围——arm64 常量留注记）
 //   修正判断：seccomp 全域白名单不采纳（Go runtime syscall 面=跑步机）——本档
 //     仅网络族精准过滤；O_PATH|O_NOFOLLOW 拦不住链接（改 O_RDONLY|O_NOFOLLOW）
 package prototype
@@ -32,7 +32,7 @@ import (
 	"unsafe"
 )
 
-// ─── 常量（amd64；arm64=施工期补——P1② fail-closed 纪律：未支持架构不猜） ───
+// ─── 常量（amd64；arm64=施工期补——P1(2) fail-closed 纪律：未支持架构不猜） ───
 const (
 	prSetNoNewPrivs         = 38
 	seccompSetModeFilter    = 1
@@ -94,16 +94,16 @@ func modeBExecChild() {
 		os.Exit(2)
 	}
 	if runtime.GOARCH != "amd64" {
-		fmt.Fprintf(os.Stderr, "MODEB-FATAL: 未支持架构 %s（fail-closed——P1②）\n", runtime.GOARCH)
+		fmt.Fprintf(os.Stderr, "MODEB-FATAL: 未支持架构 %s（fail-closed——P1(2)）\n", runtime.GOARCH)
 		os.Exit(2)
 	}
 	target := os.Args[2]
 	targs := os.Args[2:]
 
-	// ②锁线程——landlock_restrict_self/seccomp 默认仅当前线程
+	// (2)锁线程——landlock_restrict_self/seccomp 默认仅当前线程
 	runtime.LockOSThread()
 
-	// 授权集装配（符号链接解析+O_NOFOLLOW 校验——P0③）
+	// 授权集装配（符号链接解析+O_NOFOLLOW 校验——P0(3)）
 	ws := os.Getenv("MODEB_WS")
 	tmpD := os.Getenv("MODEB_TMP")
 	selfExe, _ := os.Executable()
@@ -120,15 +120,15 @@ func modeBExecChild() {
 			grants = append(grants, llGrant{tp, roX})
 		}
 	}
-	// ③标准最小运行时集（RO）
+	// (3)标准最小运行时集（RO）
 	for _, p := range []string{"/usr", "/lib", "/lib64", "/etc/ld.so.cache", "/etc/alternatives", "/proc"} {
 		grants = append(grants, llGrant{p, roX})
 	}
-	// /dev 精确单设备（P1①）
+	// /dev 精确单设备（P1(1)）
 	for _, p := range []string{"/dev/null", "/dev/zero", "/dev/urandom"} {
 		grants = append(grants, llGrant{p, rwFile})
 	}
-	// ④home 链祖先=READ_DIR 寻路权（不含写；~/.ssh 不授予=天然拒）
+	// (4)home 链祖先=READ_DIR 寻路权（不含写；~/.ssh 不授予=天然拒）
 	home := os.Getenv("MODEB_HOME")
 	for d := filepath.Dir(ws); d != "/" && d != "." && strings.HasPrefix(d, "/"); d = filepath.Dir(d) {
 		grants = append(grants, llGrant{d, llReadDir})
@@ -200,7 +200,7 @@ func llAddPathRule(ruleset int, g llGrant) error {
 	if err != nil {
 		return fmt.Errorf("EvalSymlinks: %w", err)
 	}
-	// P0③：解析后路径 O_NOFOLLOW 校验（命中链接=ELOOP 熔断）
+	// P0(3)：解析后路径 O_NOFOLLOW 校验（命中链接=ELOOP 熔断）
 	chk, err := syscall.Open(real, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return fmt.Errorf("nofollow-check %s: %w", real, err)
@@ -247,9 +247,9 @@ func prctl(option, arg2 uintptr) error {
 	return nil
 }
 
-// applyNetSeccomp socket/socketpair domain 白名单（仅 AF_UNIX——暗坑①+九轮补枪）。
+// applyNetSeccomp socket/socketpair domain 白名单（仅 AF_UNIX——暗坑(1)+九轮补枪）。
 // BPF（amd64）：arch 校验→nr==41(socket)/53(socketpair)→args[0]==1(AF_UNIX)?
-// ALLOW:ERRNO(EACCES)。TSYNC 强制全线程同步（暗坑②）。
+// ALLOW:ERRNO(EACCES)。TSYNC 强制全线程同步（暗坑(2)）。
 func applyNetSeccomp() error {
 	const (
 		sysSocket     = 41
@@ -277,7 +277,7 @@ func applyNetSeccomp() error {
 	return nil
 }
 
-// closeInheritedFDs P0④——exec 前关闭 >2 全部 fd（父进程遗留继承面）。
+// closeInheritedFDs P0(4)——exec 前关闭 >2 全部 fd（父进程遗留继承面）。
 func closeInheritedFDs() {
 	ents, err := os.ReadDir("/proc/self/fd")
 	if err != nil {
@@ -365,7 +365,7 @@ func modeBProbeMain() int {
 		c.Close()
 		fmt.Println("PROBE unix-loop OK")
 	}()
-	// 7. 动态链接二进制（/bin/ls——暗坑③回归锚）
+	// 7. 动态链接二进制（/bin/ls——暗坑(3)回归锚）
 	func() {
 		out, err := exec.Command("/bin/ls", ws).CombinedOutput()
 		if err != nil {

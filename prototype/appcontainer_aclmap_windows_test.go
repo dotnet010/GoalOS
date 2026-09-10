@@ -43,7 +43,7 @@ func TestAppContainer_ACLMap(t *testing.T) {
 	}
 
 	// 读矩阵（「拒」格必须带 OS 拒绝证据文本——exit code/成功缺席≠拒绝证据，
-	// 复审隐藏问题②复查：sys32-cmd 单格补丁→全格同口径系统化）
+	// 复审隐藏问题(2)复查：sys32-cmd 单格补丁→全格同口径系统化）
 	for _, k := range []string{"temp-file", "home-file", "ssh-config", "sys32-hosts"} {
 		code, out := runInAppContainer(t, sid, cmd+` /c chcp 65001 >nul & type "`+targets[k]+`" 2>&1`, 30*time.Second)
 		if strings.Contains(out, "probe") || strings.Contains(out, "127.0.0.1") || code == 0 && !evidenceDenied(out) {
@@ -67,7 +67,7 @@ func TestAppContainer_ACLMap(t *testing.T) {
 	// 执行矩阵：temp/home exe（启动面）。语义诚实注记：CreateProcess 失败=测试
 	// 当场死（runInAppContainer Fatalf）——能走到本行=启动已成功，故本矩阵
 	// 只可记录「允许」；进程自身退出码（如 0x80070057 参数校验）≠启动被拒
-	// （sys32-cmd 格教训——exit code≠强制证据，复审③复查锚点）。
+	// （sys32-cmd 格教训——exit code≠强制证据，复审(3)复查锚点）。
 	for _, k := range []string{"temp-exe", "home-exe", "sys32-cmd"} {
 		code, out := runInAppContainer(t, sid, `"`+exeTargets[k]+`"`, 30*time.Second)
 		t.Logf("执行 %-10s = 允许（启动面成立——CreateProcess 成功；exit=%d 为进程自身语义 out=%q）",

@@ -1,4 +1,4 @@
-// zone_dialer_contract_test.go——网域感知拨号器契约测试（R-1643 裁决④——D-2 蓝图 §2.4）。
+// zone_dialer_contract_test.go——网域感知拨号器契约测试（R-1643 裁决(4)——D-2 蓝图 §2.4）。
 // TC-RT-013 穿透侧（force_public_zone 覆盖标记）+TC-RT-101 无感侧（loopback 本地模型
 // 静默执行——httptest 形态，会议 #258 适配：LAN Ollama 依赖改 127.0.0.1 监听）。
 // 12 清单 F/G 节登记（实现同步补强——非先红标注）。

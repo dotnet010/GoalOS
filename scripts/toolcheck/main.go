@@ -143,14 +143,14 @@ func jsonfieldMain() {
 }
 
 // senswriteMain 测试夹具敏感路径写入静态拦截（会议 #282——check-sensitive-path-write.sh
-// 三段判定的 Go 逐语义移植；事故史=WinAC Boundary② os.WriteFile(真实 ~/.ssh/config)
+// 三段判定的 Go 逐语义移植；事故史=WinAC Boundary(2) os.WriteFile(真实 ~/.ssh/config)
 // 毁损用户配置——测试可跑在任何人的机器上，夹具永不写真实用户既有文件）。
 // 判定（bash 原版语义逐字保持）：
-//  ①文件含敏感目录构造字面量（".ssh"/".aws"/".gnupg"）
-//  ②文件含敏感终段字面量行（"config"/"id_*"/"credentials"/".gitconfig"/".netrc"/
+//  (1)文件含敏感目录构造字面量（".ssh"/".aws"/".gnupg"）
+//  (2)文件含敏感终段字面量行（"config"/"id_*"/"credentials"/".gitconfig"/".netrc"/
 //    "known_hosts"）且行无豁免标记（goalos- 夹具名 / safefixture: 注释）
-//  ③文件含写入动词（os.WriteFile/os.Create/os.MkdirAll/os.Remove/os.RemoveAll）
-// 同文件①②③全命中=红（exit 1）；纯分类/纯读取（无写入动词）=合法通过。
+//  (3)文件含写入动词（os.WriteFile/os.Create/os.MkdirAll/os.Remove/os.RemoveAll）
+// 同文件(1)(2)(3)全命中=红（exit 1）；纯分类/纯读取（无写入动词）=合法通过。
 func senswriteMain() {
 	roots := os.Args[2:]
 	if len(roots) == 0 {
@@ -184,16 +184,16 @@ func senswriteMain() {
 }
 
 var (
-	// ①敏感目录构造字面量（grep '"\.(ssh|aws|gnupg)"' 语义——双引号包裹）。
+	// (1)敏感目录构造字面量（grep '"\.(ssh|aws|gnupg)"' 语义——双引号包裹）。
 	reSensDir = regexp.MustCompile(`"\.(ssh|aws|gnupg)"`)
-	// ②敏感终段字面量（grep '"(config|id_[a-zA-Z0-9_]*|credentials|\.gitconfig|\.netrc|known_hosts)"'）。
+	// (2)敏感终段字面量（grep '"(config|id_[a-zA-Z0-9_]*|credentials|\.gitconfig|\.netrc|known_hosts)"'）。
 	reSensTerm = regexp.MustCompile(`"(config|id_[a-zA-Z0-9_]*|credentials|\.gitconfig|\.netrc|known_hosts)"`)
-	// ③写入动词（grep 'os\.(WriteFile|Create|MkdirAll|Remove|RemoveAll)\('）。
+	// (3)写入动词（grep 'os\.(WriteFile|Create|MkdirAll|Remove|RemoveAll)\('）。
 	reWriteOp = regexp.MustCompile(`os\.(WriteFile|Create|MkdirAll|Remove|RemoveAll)\(`)
 )
 
-// checkSensitiveTestFile 单文件三段判定（与 bash 版一致：①=文件级，②=行级+豁免，
-// ③=文件级）。命中=打印违规行并返回 true。
+// checkSensitiveTestFile 单文件三段判定（与 bash 版一致：(1)=文件级，(2)=行级+豁免，
+// (3)=文件级）。命中=打印违规行并返回 true。
 func checkSensitiveTestFile(path string) bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -201,12 +201,12 @@ func checkSensitiveTestFile(path string) bool {
 	}
 	content := string(data)
 	if !reSensDir.MatchString(content) {
-		return false // ①不满足=无需走②③
+		return false // (1)不满足=无需走(2)(3)
 	}
 	if !reWriteOp.MatchString(content) {
-		return false // ③不满足=纯分类/纯读取=合法（反证迭代：写入动词与构造同在场才红）
+		return false // (3)不满足=纯分类/纯读取=合法（反证迭代：写入动词与构造同在场才红）
 	}
-	// ②逐行：敏感终段行且无豁免标记
+	// (2)逐行：敏感终段行且无豁免标记
 	hits := []string{}
 	for i, line := range strings.Split(content, "\n") {
 		if !reSensTerm.MatchString(line) {

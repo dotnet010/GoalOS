@@ -60,7 +60,7 @@ jobs:
       - name: Test（Windows 适用子集——build-tag 分平台）
         run: go test -count=1 -timeout 120s ./internal/... ./pkg/...
 
-      # R-1695 ②（FD3 测试分层纳管）：平台专项特测车道=物理传输面（真实命名管道
+      # R-1695-2（FD3 测试分层纳管）：平台专项特测车道=物理传输面（真实命名管道
       # bind/管道名形态/并发连接隔离）——与轻量常规车道分列（常规车道已零 OS 依赖）。
       # 缺此步=Windows 物理传输面 CI 零实证（登记为绿灯则是冒充）。
       - name: Test（平台专项特测车道——build tag platformtest）

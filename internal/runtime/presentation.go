@@ -72,11 +72,11 @@ type RuntimePresentation struct {
 }
 
 // PresentRuntime 呈现计算（04 §14 规格）：
-// ①当前级别=产品词+平台注记——macOS 受限级措辞（R-1479）：「受限（纵深防御——含已弃用
+// (1)当前级别=产品词+平台注记——macOS 受限级措辞（R-1479）：「受限（纵深防御——含已弃用
 // 系统组件的诚实标注）」不得暗示与 Linux 等价内核强制；其他平台=「受限（本平台原生强制隔离）」；
-// ②依据=RuntimeSelected.selection_reason 经映射表（行 2 命中=警告样式 R-1550）；
-// ③降级=ProviderDegraded 证据（空=「无」）；
-// ④强隔离档仅 I4 探测呈现（R-1542/R-1599——探测不到=不呈现=无死呈现；远程档不呈现 T3 不做）。
+// (2)依据=RuntimeSelected.selection_reason 经映射表（行 2 命中=警告样式 R-1550）；
+// (3)降级=ProviderDegraded 证据（空=「无」）；
+// (4)强隔离档仅 I4 探测呈现（R-1542/R-1599——探测不到=不呈现=无死呈现；远程档不呈现 T3 不做）。
 func PresentRuntime(sel Selection, platform string, degraded []string) RuntimePresentation {
 	p := RuntimePresentation{
 		TierLabel:      TierLabel(sel.Tier),

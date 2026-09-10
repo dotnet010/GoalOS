@@ -14,46 +14,46 @@ import (
 )
 
 // TestStatus_System_ThreeFieldShape /api/system/status 响应形状定稿断言：
-// ①X-GoalOS-Config-Version 头存在且=代际计数（R-1325——配置版本号=Reload 代际自增）；
-// ②代际自增语义（R-1380——IncrementConfigGeneration 后头部值递增）；
-// ③body 规范字段在位（pid/port/active_goals/uptime）；
-// ④internal-only 删除清单零泄漏（R-1140——internal_state/current_task/tasks[]/artifact_path）；
-// ⑤runtime 块=任务 5.5 缝合（呈现已映射产品语义——level_line 含产品词，tier 枚举封闭）。
+// (1)X-GoalOS-Config-Version 头存在且=代际计数（R-1325——配置版本号=Reload 代际自增）；
+// (2)代际自增语义（R-1380——IncrementConfigGeneration 后头部值递增）；
+// (3)body 规范字段在位（pid/port/active_goals/uptime）；
+// (4)internal-only 删除清单零泄漏（R-1140——internal_state/current_task/tasks[]/artifact_path）；
+// (5)runtime 块=任务 5.5 缝合（呈现已映射产品语义——level_line 含产品词，tier 枚举封闭）。
 func TestStatus_System_ThreeFieldShape(t *testing.T) {
 	h := daemon.NewHandler()
 
-	// ①②代际头存在+自增语义
+	// (1)(2)代际头存在+自增语义
 	w1 := httptest.NewRecorder()
 	h.HandleSystemStatus(w1, httptest.NewRequest("GET", "/api/system/status", nil))
 	gen1 := w1.Header().Get("X-GoalOS-Config-Version")
 	if gen1 == "" {
-		t.Fatal("①X-GoalOS-Config-Version 头缺失（R-1325）")
+		t.Fatal("(1)X-GoalOS-Config-Version 头缺失（R-1325）")
 	}
 	h.IncrementConfigGeneration()
 	w2 := httptest.NewRecorder()
 	h.HandleSystemStatus(w2, httptest.NewRequest("GET", "/api/system/status", nil))
 	gen2 := w2.Header().Get("X-GoalOS-Config-Version")
 	if gen2 == "" || gen2 == gen1 {
-		t.Fatalf("②代际自增语义违反：%q → %q（应递增）", gen1, gen2)
+		t.Fatalf("(2)代际自增语义违反：%q → %q（应递增）", gen1, gen2)
 	}
 
-	// ③④body 规范字段+零泄漏
+	// (3)(4)body 规范字段+零泄漏
 	var body map[string]interface{}
 	if err := json.Unmarshal(w1.Body.Bytes(), &body); err != nil {
-		t.Fatalf("③body 非 JSON: %v", err)
+		t.Fatalf("(3)body 非 JSON: %v", err)
 	}
 	for _, field := range []string{"pid", "port", "active_goals", "uptime"} {
 		if _, ok := body[field]; !ok {
-			t.Fatalf("③规范字段 %q 缺失", field)
+			t.Fatalf("(3)规范字段 %q 缺失", field)
 		}
 	}
 	for _, banned := range []string{"internal_state", "current_task", "tasks", "artifact_path"} {
 		if _, leaked := body[banned]; leaked {
-			t.Fatalf("④internal-only 字段 %q 泄漏（R-1140 删除清单）", banned)
+			t.Fatalf("(4)internal-only 字段 %q 泄漏（R-1140 删除清单）", banned)
 		}
 	}
 
-	// ⑤runtime 块缝合（未接线=诚实缺省不虚构；接线后=产品语义）
+	// (5)runtime 块缝合（未接线=诚实缺省不虚构；接线后=产品语义）
 	h.SetRuntimePresentation(func() map[string]interface{} {
 		return map[string]interface{}{
 			"tier": "constrained", "tier_label": "受限",
@@ -69,9 +69,9 @@ func TestStatus_System_ThreeFieldShape(t *testing.T) {
 	}
 	rt, ok := body3["runtime"].(map[string]interface{})
 	if !ok {
-		t.Fatal("⑤接线后 runtime 块缺失")
+		t.Fatal("(5)接线后 runtime 块缺失")
 	}
 	if rt["tier"] != "constrained" || rt["tier_label"] != "受限" {
-		t.Fatalf("⑤runtime 块产品语义失真: %v", rt)
+		t.Fatalf("(5)runtime 块产品语义失真: %v", rt)
 	}
 }

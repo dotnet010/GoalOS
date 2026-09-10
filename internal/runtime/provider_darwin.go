@@ -24,7 +24,7 @@ import (
 	"github.com/goalos/goalos/internal/sandbox"
 )
 
-// profile 单一来源=internal/sandbox.RestrictedSeatbeltProfile()（R-1641③——禁止副本）。
+// profile 单一来源=internal/sandbox.RestrictedSeatbeltProfile()（R-1641-3——禁止副本）。
 
 // darwinSeatbeltProvider 受限档 Provider（T1——Seatbelt 边界直接执行面）。
 type darwinSeatbeltProvider struct {
@@ -115,7 +115,7 @@ func (p *darwinSeatbeltProvider) Acquire(_ context.Context, req LeaseRequest) (R
 	if p.state != ProviderPrepared {
 		return nil, fmt.Errorf("runtime: Provider 未 Prepare（状态=%v）", p.state)
 	}
-	// R-1643 裁决④：契约声明网络能力→profile 网络授权变体（data_sharing 审批已在治理上游完成——
+	// R-1643 裁决(4)：契约声明网络能力→profile 网络授权变体（data_sharing 审批已在治理上游完成——
 	// 无契约/无网络能力=全拒变体，fail-closed）
 	netCaps := false
 	if req.Contract != nil {
@@ -145,7 +145,7 @@ type seatbeltHandle struct {
 	state       HandleState
 	profilePath string
 	activeCmd   *exec.Cmd // 当前执行进程（Interrupt/Pause/Resume 对象）
-	netCaps     bool      // 契约声明网络能力（R-1643 裁决④——profile 变体选择数据源）
+	netCaps     bool      // 契约声明网络能力（R-1643 裁决(4)——profile 变体选择数据源）
 	// FD3 面（R-1650 v2 darwin）：endpoints=契约声明集；fd3Ln=broker unix socket；
 	// fd3SockPath=socket 实路径（-D FD3_SOCK_PATH 注入+映射文件载体）。
 	endpoints    []string
@@ -172,7 +172,7 @@ func (h *seatbeltHandle) Start(context.Context) error {
 	if err := os.MkdirAll(h.p.tmpDir, 0700); err != nil {
 		return fmt.Errorf("runtime: tmpDir 建立失败: %w", err)
 	}
-	// R-1643 裁决④：按契约网络能力选变体（授权=端口级放行 tcp 443/80；未授权=全拒）
+	// R-1643 裁决(4)：按契约网络能力选变体（授权=端口级放行 tcp 443/80；未授权=全拒）
 	// R-1650 v2 darwin 面：契约声明端点集→FD3 变体优先（全拒收窄到 broker socket
 	// 点对点——比 443/80 放行更强的收窄面；两变体互斥，FD3 在位=网络授权变体不叠加）
 	var profile string
@@ -218,8 +218,8 @@ func (h *seatbeltHandle) bringUpFD3() error {
 	return nil
 }
 
-// Precheck 边界验证（真实探针——非形式检查）：Option B 语义三探针——①写工作区外
-// ②读敏感目录③出站连接，全部必须被子进程级 EPERM 拒绝（排除 execvp 级假象——
+// Precheck 边界验证（真实探针——非形式检查）：Option B 语义三探针——(1)写工作区外
+// (2)读敏感目录(3)出站连接，全部必须被子进程级 EPERM 拒绝（排除 execvp 级假象——
 // 输出含 "sandbox-exec:" 前缀=边界从未生效的伪证，一律不计）。任一未拒绝=
 // 边界建立但未生效→PrecheckFailed 语义（RTM-PRECHECK-F-001 族）。
 func (h *seatbeltHandle) Precheck(ctx context.Context) error {

@@ -1,9 +1,9 @@
 // guard_llm.go — Guard LLM 前置审查实现（任务 5.12——R-1081 会议 #193 威胁模型升级）。
 //
-// 契约：三层验证——①静态确定性层（CommandSpec/TOML profile/参数白名单，零延迟——
-// 已有机制收敛为统一入口）②Guard LLM（第二模型、跨 Provider 部署 OpenAI↔Ollama 交叉；
+// 契约：三层验证——(1)静态确定性层（CommandSpec/TOML profile/参数白名单，零延迟——
+// 已有机制收敛为统一入口）(2)Guard LLM（第二模型、跨 Provider 部署 OpenAI↔Ollama 交叉；
 // 不可信输入以数据非指令呈现+显式分隔符协议；结构化 verdict=safe/suspicious/escalate
-// ——R-1339 词汇统一）③人类终审。escalate=拒绝(fail-closed)；safe 不自证；
+// ——R-1339 词汇统一）(3)人类终审。escalate=拒绝(fail-closed)；safe 不自证；
 // guard 不可用→最高审批级（suspicious）。
 package governance
 
@@ -57,7 +57,7 @@ type ReviewInput struct {
 }
 
 // Review — 前置审查（三层验证）。
-// ①静态确定性层（零延迟）→②Guard LLM（跨 Provider 交叉）→③人类终审。
+// (1)静态确定性层（零延迟）→(2)Guard LLM（跨 Provider 交叉）→(3)人类终审。
 // 契约：escalate=拒绝（fail-closed）；guard 不可用→最高审批级（suspicious）。
 func (g *GuardLLM) Review(input ReviewInput) (skeleton.Skeleton[GuardVerdict], error) {
 	// 骨架：三层验证实现归 5.12 完成态——静态确定性层收敛为统一入口。

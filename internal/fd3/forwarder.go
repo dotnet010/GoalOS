@@ -1,7 +1,7 @@
 // forwarder.go——fd3d 沙箱内回环转发器（S3——R-1660 v2「沙箱内回环转发器承接」落地）。
 //
 // 形态：在受限档沙箱内监听 127.0.0.1:<port>（同 AC 回环=OS 原生放行——四场景
-// 实证①），agent 代码直连 localhost 无感知；每连接→命名管道→daemon 侧 broker
+// 实证(1)），agent 代码直连 localhost 无感知；每连接→命名管道→daemon 侧 broker
 // （OPEN 帧携带映射端点——契约校验+治理留痕归 broker 面）。
 // 失败方向全部 fail-closed：管道断/broker 拒=立即关连接（agent 侧=连接重置，
 // 绝不静默挂起——R-1660 v2 秒级超时坑构造性消除）。

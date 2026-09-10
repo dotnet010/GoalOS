@@ -4,7 +4,7 @@
 //  F1-lite：声明端点=OPEN_OK+DATA 双向中继（回环 echo 服务对拍）；
 //  协议纪律：OPEN 前的 DATA=协议违规=连接断开（fail-closed 不猜）。
 //
-// 车道（R-1695 ②「FD3 测试分层纳管——协议与物理传输解耦」）：**通用单测车道**——
+// 车道（R-1695-2「FD3 测试分层纳管——协议与物理传输解耦」）：**通用单测车道**——
 // 本文件零 OS 依赖（无 build tag）：不 bind socket、不落文件系统路径、不触 sun_path
 // 预算与目录权限面，经内存管道（net.Pipe）直驱 broker 协议核心（frameConn 缝），
 // 随常规 PR/CI 三平台（linux/darwin/windows）全量触发。

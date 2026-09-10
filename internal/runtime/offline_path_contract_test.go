@@ -19,16 +19,16 @@ import (
 )
 
 // TestRuntime_Offline_LocalPaths（TC-RT-061——断网全路径）：
-// ①keyring 签发→验签全链路（本地密码学——无远程依赖）；
-// ②Token 签发→契约验证全链路（HS256 本地）；
-// ③Resolver 决策（纯本地判定）；
-// ④执行段=网络全拒 OS 边界内真实执行（seatbelt deny network*——断网可执行构造性证据）；
-// ⑤密钥载体=secrets.key 文件（0600——禁止内存私钥降级：LoadOrGenerateSecret 文件路径实证）。
+// (1)keyring 签发→验签全链路（本地密码学——无远程依赖）；
+// (2)Token 签发→契约验证全链路（HS256 本地）；
+// (3)Resolver 决策（纯本地判定）；
+// (4)执行段=网络全拒 OS 边界内真实执行（seatbelt deny network*——断网可执行构造性证据）；
+// (5)密钥载体=secrets.key 文件（0600——禁止内存私钥降级：LoadOrGenerateSecret 文件路径实证）。
 func TestRuntime_Offline_LocalPaths(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 
-	// ⑤密钥载体=文件（禁止内存私钥降级——secrets.key 0600）
+	// (5)密钥载体=文件（禁止内存私钥降级——secrets.key 0600）
 	keyPath := filepath.Join(home, "secrets.key")
 	key, err := governance.LoadOrGenerateSecret(keyPath)
 	if err != nil {
@@ -39,23 +39,23 @@ func TestRuntime_Offline_LocalPaths(t *testing.T) {
 	}
 	fi, err := os.Stat(keyPath)
 	if err != nil || fi.Mode().Perm() != 0600 {
-		t.Fatalf("⑤secrets.key 载体应=文件 0600——内存降级禁止: %v mode=%v", err, fi.Mode().Perm())
+		t.Fatalf("(5)secrets.key 载体应=文件 0600——内存降级禁止: %v mode=%v", err, fi.Mode().Perm())
 	}
 
-	// ①keyring 签发→验签（本地密码学全链路）
+	// (1)keyring 签发→验签（本地密码学全链路）
 	kr := governance.NewKeyring(24*time.Hour, time.Now)
 	if err := kr.AddGeneration("gen-1", key); err != nil {
 		t.Fatal(err)
 	}
 	kid, signKey, err := kr.SignKey()
 	if err != nil || kid != "gen-1" {
-		t.Fatalf("①keyring 签发材料获取失败: %v", err)
+		t.Fatalf("(1)keyring 签发材料获取失败: %v", err)
 	}
 	if _, err := kr.VerifyKey(kid); err != nil {
-		t.Fatalf("①keyring 验签失败: %v", err)
+		t.Fatalf("(1)keyring 验签失败: %v", err)
 	}
 
-	// ②Token 签发→契约验证（HS256 本地全链路）
+	// (2)Token 签发→契约验证（HS256 本地全链路）
 	claims := governance.TokenClaims{
 		GoalID: "g-off", ActionID: "a-off", Capabilities: []string{"shell.execute"},
 		IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Unix() + 300,
@@ -71,17 +71,17 @@ func TestRuntime_Offline_LocalPaths(t *testing.T) {
 	}
 	verifier := NewContractVerifier(signKey, NewNonceRegistry())
 	if _, err := verifier.Verify(tok); err != nil {
-		t.Fatalf("②契约验证失败: %v", err)
+		t.Fatalf("(2)契约验证失败: %v", err)
 	}
 
-	// ③Resolver 决策（本地）
+	// (3)Resolver 决策（本地）
 	resolver := NewResolver(nil).WithPlatformMaxIsolation(DetectPlatformIsolation)
 	sel, err := resolver.Resolve(ResolveInput{RequiresRealEnforcement: true, MinIsolation: I2})
 	if err != nil || sel.Tier != TierRestricted {
-		t.Fatalf("③Resolver 决策失败: %v tier=%v", err, sel.Tier)
+		t.Fatalf("(3)Resolver 决策失败: %v tier=%v", err, sel.Tier)
 	}
 
-	// ④执行段=网络全拒边界内真实执行（断网可执行构造性证据）
+	// (4)执行段=网络全拒边界内真实执行（断网可执行构造性证据）
 	p := NewDarwinSeatbeltProvider(home+"/ws", home+"/tmp")
 	if err := p.Prepare(ctx, RuntimePlan{PlanID: "offline", Tier: TierRestricted}); err != nil {
 		t.Fatal(err)
@@ -101,7 +101,7 @@ func TestRuntime_Offline_LocalPaths(t *testing.T) {
 		Params: map[string]string{"binary": "/usr/bin/true"},
 	})
 	if err != nil || res.Status != "success" {
-		t.Fatalf("④断网边界内执行应成功（离线可用构造性证据），实际: status=%s err=%v", res.Status, err)
+		t.Fatalf("(4)断网边界内执行应成功（离线可用构造性证据），实际: status=%s err=%v", res.Status, err)
 	}
 	if err := h.Release(ctx); err != nil {
 		t.Fatal(err)

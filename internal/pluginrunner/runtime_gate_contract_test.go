@@ -1,4 +1,4 @@
-// runtime_gate_contract_test.go——Runtime 执行门契约测试（R-1640② 激活——会议 #255/#257）。
+// runtime_gate_contract_test.go——Runtime 执行门契约测试（R-1640-2 激活——会议 #255/#257）。
 // 标注=实现同步补强（非先红——诚实标注纪律）。12 清单 G 节登记。
 // 纪律对账：阻断路径全部行为断言（错误族/封闭枚举）——无「无错即绿」。
 package pluginrunner
@@ -77,42 +77,42 @@ func TestRuntimeGate_Enforcement(t *testing.T) {
 		return events.Event{GoalID: "g-gate", Payload: map[string]interface{}{"token": tok}}
 	}
 
-	// ①门未激活（nil）=旧路径放行
+	// (1)门未激活（nil）=旧路径放行
 	plain := &Runner{}
 	if err := plain.runtimeGate(evtWithToken("garbage"), plugin); err != nil {
-		t.Fatalf("①门未激活应放行旧路径，实际阻断: %v", err)
+		t.Fatalf("(1)门未激活应放行旧路径，实际阻断: %v", err)
 	}
 
 	r := New(bus, secret, nil)
 	r.SetRuntimeGate(verifier, resolver, "builtin-v1")
 
-	// ②激活+无 token=fail-closed 阻断（契约驱动执行——无契约不执行）
+	// (2)激活+无 token=fail-closed 阻断（契约驱动执行——无契约不执行）
 	if err := r.runtimeGate(events.Event{GoalID: "g-gate", Payload: map[string]interface{}{}}, plugin); err == nil {
-		t.Fatal("②无 token 必须阻断（无契约不执行）")
+		t.Fatal("(2)无 token 必须阻断（无契约不执行）")
 	}
 
-	// ③伪造 token=阻断（签名非法封闭枚举）
+	// (3)伪造 token=阻断（签名非法封闭枚举）
 	if err := r.runtimeGate(evtWithToken("garbage.token.value"), plugin); !goalosruntime.IsRejectReason(err, goalosruntime.RejectSignatureInvalid) {
-		t.Fatalf("③伪造 token 应=signature_invalid 阻断，实际: %v", err)
+		t.Fatalf("(3)伪造 token 应=signature_invalid 阻断，实际: %v", err)
 	}
 
-	// ④ProfileDigest 不一致=阻断（复核独立重算——默认拒绝+重新评估）
+	// (4)ProfileDigest 不一致=阻断（复核独立重算——默认拒绝+重新评估）
 	badDigestTok := gateTestToken(t, secret, "I2", "0000000000000000000000000000000000000000000000000000000000000000")
 	if err := r.runtimeGate(evtWithToken(badDigestTok), plugin); !goalosruntime.IsRejectReason(err, goalosruntime.RejectProfileDigestMismatch) {
-		t.Fatalf("④digest 篡改造应=profile_digest_mismatch 阻断，实际: %v", err)
+		t.Fatalf("(4)digest 篡改造应=profile_digest_mismatch 阻断，实际: %v", err)
 	}
 
-	// ⑤合法 token（digest 真实一致）=放行（darwin I2 达成——行 3 T1）
+	// (5)合法 token（digest 真实一致）=放行（darwin I2 达成——行 3 T1）
 	goodTok := gateTestToken(t, secret, "I2", "")
 	if goalosruntime.DetectPlatformIsolation() >= goalosruntime.I2 {
 		if err := r.runtimeGate(evtWithToken(goodTok), plugin); err != nil {
-			t.Fatalf("⑤合法 token 应放行，实际: %v", err)
+			t.Fatalf("(5)合法 token 应放行，实际: %v", err)
 		}
 	}
 
-	// ⑥MinIsolation=I4+平台无 I4 后端=解析拒绝阻断（行 5/6 严禁降档——05 §X.6.4）
+	// (6)MinIsolation=I4+平台无 I4 后端=解析拒绝阻断（行 5/6 严禁降档——05 §X.6.4）
 	i4Tok := gateTestToken(t, secret, "I4", "")
 	if err := r.runtimeGate(evtWithToken(i4Tok), plugin); err == nil {
-		t.Fatal("⑥I4 需求+无后端=必须阻断（严禁降档）")
+		t.Fatal("(6)I4 需求+无后端=必须阻断（严禁降档）")
 	}
 }

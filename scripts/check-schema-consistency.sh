@@ -2,7 +2,7 @@
 # =============================================================================
 # GoalOS Schema Consistency Checker — 借鉴 gh-aw 策略框架
 #
-# 废弃登记（2026-08-13, S'-24⑥ R-1267 裁决）: 本脚本已废弃, 不再接入 CI。
+# 废弃登记（2026-08-13, S'-24(6) R-1267 裁决）: 本脚本已废弃, 不再接入 CI。
 #   废弃原因: 数据源不存在（GoalOS/glossary.yaml 与 .goalos-ci/schema-cache.json
 #   均从未落地），三向比对功能被 check-resolution-propagation.sh（层2 正文
 #   一致性）+ check-error-codes.sh（error-codes-source.yaml↔07 内联枚举）

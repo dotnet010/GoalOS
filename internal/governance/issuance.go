@@ -1,5 +1,5 @@
 // issuance.go——签发决策表实现（06 §1.3 签发决策表=R-1507 唯一权威；
-// ExecutionContract v2 签发信息计算——任务 5.5 前置 daemon 生产接线，R-1640②）。
+// ExecutionContract v2 签发信息计算——任务 5.5 前置 daemon 生产接线，R-1640-2）。
 // 按序求值、首个匹配生效；T0 准入=静态判定（签发时——R-1528）。
 package governance
 
@@ -82,7 +82,7 @@ func ComputeIssuanceDecision(in IssuanceInput) IssuanceDecision {
 		return IssuanceDecision{RequiresRealEnforcement: true, MinIsolation: "I2", ApprovalType: "data_sharing"}
 	}
 	// 行 3L：网络出站 ∩ 全端点本地 → I2 不提升档位；审批免除=loopback 恒免/
-	//        LAN 仅 trust_lan=true 免除（Kees 修正 R-1643②——LAN 可经网关代理出境）
+	//        LAN 仅 trust_lan=true 免除（Kees 修正 R-1643-2——LAN 可经网关代理出境）
 	if in.NetworkEgress && in.NetworkZone == "lan" && !in.TrustLAN {
 		return IssuanceDecision{RequiresRealEnforcement: true, MinIsolation: "I2", ApprovalType: "data_sharing"}
 	}
@@ -129,7 +129,7 @@ func ClassifyActionAttrs(actionType string, caps []string) (arbitrarySubprocess,
 	return arbitrarySubprocess, networkEgress
 }
 
-// ─── 名单登记匹配（签发侧——R-1508/R-1549④）───
+// ─── 名单登记匹配（签发侧——R-1508/R-1549-4）───
 
 // TrustedWorkloadView 名单条目最小视图（签发侧运行时匹配用——governance 不 import config，
 // 分层纪律；publisher_key 不参与运行时验证——R-1561 厘清）。
@@ -138,7 +138,7 @@ type TrustedWorkloadView struct {
 	ExpiresAt    string // ISO8601 可空（空=永不过期）
 }
 
-// MatchTrustedWorkload 名单匹配（artifact_hash 静态比对+未过期——R-1549④ 运行时匹配）：
+// MatchTrustedWorkload 名单匹配（artifact_hash 静态比对+未过期——R-1549-4 运行时匹配）：
 // 命中未过期=true；缺失/过期/非法=false（过期=按行 2 重判，严禁静默留 T0）。
 func MatchTrustedWorkload(list []TrustedWorkloadView, workloadHashHex string, now time.Time) bool {
 	for _, w := range list {
@@ -157,7 +157,7 @@ func MatchTrustedWorkload(list []TrustedWorkloadView, workloadHashHex string, no
 }
 
 // ─── SessionID/Nonce 生成（05 §X.6.3——SessionID=唯一 ExecutionSession 绑定预分配；
-// Nonce=32B crypto/rand hex，仅会话建立时单次消费——R-1510 时序句①）───
+// Nonce=32B crypto/rand hex，仅会话建立时单次消费——R-1510 时序句(1)）───
 
 // newSessionID 会话 ID（crypto/rand 128bit——碰撞概率可忽略；前缀 sess- 审计可读）。
 func newSessionID() string {
@@ -178,7 +178,7 @@ func newNonceHex() (string, error) {
 }
 
 // WorkloadHashOf 工作负载主二进制 SHA-256 hex（R-1561 运行时验证值计算点——
-// 「工作负载二进制首次加载时计算 SHA-256」R-1549④）。
+// 「工作负载二进制首次加载时计算 SHA-256」R-1549-4）。
 func WorkloadHashOf(binaryPath string) (string, error) {
 	data, err := os.ReadFile(binaryPath)
 	if err != nil {

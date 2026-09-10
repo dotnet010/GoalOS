@@ -1,6 +1,6 @@
 //go:build prototype && windows
 
-// appcontainer_profile_windows_test.go——顾问疑虑③（Profile 生命周期/残留泄漏）
+// appcontainer_profile_windows_test.go——顾问疑虑(3)（Profile 生命周期/残留泄漏）
 // 实机裁决（2026-08-31）：删活竞争的错误码实锤 + Job KILL_ON_JOB_CLOSE 绞杀 +
 // 退避重试删除=收敛性实证。裁决顾问推荐的修复链是否必要且充分。
 package prototype
@@ -27,7 +27,7 @@ func deleteProfileE(profile string) error {
 	return syscall.Errno(uint32(hr)) // 保留原始 HRESULT 值（如 0x80070005）
 }
 
-// TestAppContainer_ProfileLifecycle 疑虑③裁决。
+// TestAppContainer_ProfileLifecycle 疑虑(3)裁决。
 func TestAppContainer_ProfileLifecycle(t *testing.T) {
 	const profile = "GoalOS-Spike-AC-Life"
 	_ = deleteProfileE(profile) // 清场

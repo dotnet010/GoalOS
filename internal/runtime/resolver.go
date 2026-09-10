@@ -1,7 +1,7 @@
 // resolver.go——Runtime Resolver 决策表全表（05 §X.6.4 权威；解析期——每个
 // ExecutionSession 解析一次并冻结，Execute 路径零判断，R-1012；任务 3.1 全表施工）。
 // 行 1（T0 名单登记——R-1601 硬地板显式条件 MinIsolation≤I1）/行 2（名单缺失/过期→
-// 按 true 重判，严禁静默留 T0——R-1549④）/行 3（RRE=true ∧ MinIsolation≤I3 ∧ 平台达成
+// 按 true 重判，严禁静默留 T0——R-1549-4）/行 3（RRE=true ∧ MinIsolation≤I3 ∧ 平台达成
 // ≥MinIsolation 且已验证——R-1544）/行 3b（平台落差→治理升级标记，非静默降级——R-1544
 // 平台落差治理）/行 4（MinIsolation=I4 ∧ 本机 I4 后端可用→T2——v0.3.1 无后端=永不命中，
 // R-1599 诚实降级）/行 5（I4 需求+后端不可用→拒绝，T3 分支 v0.3.1=拒绝 R-1483）/
@@ -23,7 +23,7 @@ type TrustedWorkload struct {
 // ResolveInput Resolver 输入（解析期一次冻结的输入集）。
 type ResolveInput struct {
 	RequiresRealEnforcement bool           // 签发决策表产出（06 §1.3）——本层不重算（R-1507）
-	MinIsolation            IsolationLevel // 契约硬地板（typed I 族——R-1628③）
+	MinIsolation            IsolationLevel // 契约硬地板（typed I 族——R-1628-3）
 	WorkloadHashHex         string         // 工作负载主二进制 SHA-256 hex（运行时验证值——R-1561）
 }
 
@@ -42,7 +42,7 @@ type Resolver struct {
 	now           func() time.Time                  // 时钟注入（测试可控）
 	platformMax   func() IsolationLevel             // 平台实际达成 I 级探测（生产=internal/sandbox detect）
 	i4Available   func() bool                       // 本机 I4 后端可用探测（v0.3.1=永不命中——R-1599；默认 false）
-	onEvent       func(eventType string, sel Selection, rejectDetail string) // 事件发射点（nil=不发射——daemon 生产接线=W5 任务 5.5 前置，R-1640②）
+	onEvent       func(eventType string, sel Selection, rejectDetail string) // 事件发射点（nil=不发射——daemon 生产接线=W5 任务 5.5 前置，R-1640-2）
 }
 
 // NewResolver 构造解析器（名单=启动校验四规则已过的载入结果——config 层 R-1549）。
@@ -75,7 +75,7 @@ func (r *Resolver) WithEventHook(f func(eventType string, sel Selection, rejectD
 	return r
 }
 
-// matchWorkload 运行时匹配（R-1549④）：artifact_hash 静态比对+未过期；
+// matchWorkload 运行时匹配（R-1549-4）：artifact_hash 静态比对+未过期；
 // 命中返回条目短码（publisher_key 前 8 字符——R-1589 身份标签读取点）。
 // 已过期条目=不匹配（走行 2 重判——严禁静默留 T0）。
 func (r *Resolver) matchWorkload(hashHex string, now time.Time) (shortCode string, ok bool) {
@@ -107,7 +107,7 @@ func (r *Resolver) Resolve(in ResolveInput) (Selection, error) {
 			return sel, nil
 		}
 	}
-	// 行 2：RRE=false 但名单登记缺失/未命中/已过期 → 按 true 重新判定（不静默留 T0——R-1549④）
+	// 行 2：RRE=false 但名单登记缺失/未命中/已过期 → 按 true 重新判定（不静默留 T0——R-1549-4）
 	rre := in.RequiresRealEnforcement
 	row2Hit := false
 	if !rre {
@@ -162,7 +162,7 @@ func (r *Resolver) Resolve(in ResolveInput) (Selection, error) {
 	return Selection{}, err
 }
 
-// emit 事件发射（nil hook=不发射——daemon 生产接线=W5 任务 5.5 前置，R-1640②）。
+// emit 事件发射（nil hook=不发射——daemon 生产接线=W5 任务 5.5 前置，R-1640-2）。
 func (r *Resolver) emit(eventType string, sel Selection, rejectDetail string) {
 	if r.onEvent != nil {
 		r.onEvent(eventType, sel, rejectDetail)

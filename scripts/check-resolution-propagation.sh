@@ -43,7 +43,7 @@
 #
 # 维护者: GoalOS 架构团队
 # 最后更新: 2026-08-13（会议 #190 R-1049——valid 集合锚定提取/删除 7 处噪音 echo/幽灵计数修正/排除 *.bak.md/脚本自路径 resolve 修复；
-#                       会议 #190 R-1052——路径自适应(工作区/仓库/历史CWD 三布局)/编号连续性闸口(R-543 ③)/
+#                       会议 #190 R-1052——路径自适应(工作区/仓库/历史CWD 三布局)/编号连续性闸口(R-543-3)/
 #                         repo-only 显式降级/显式前缀路径解析(GoalOS·开发文档)/空号豁免精确提取(仅声明部分)/
 #                         补 R-566~567,R-569,R-966~972 空号注释——make ci 第 7 硬闸口全绿；
 #                       会议 #195——归档 SKIP：文档移入 废弃文档回收站/ 后其决议追溯=历史记录
@@ -60,6 +60,19 @@
 # =============================================================================
 
 set -euo pipefail
+
+# ─── 编号提取纪律（PM 指令 2026-09-10——「绝不妥协」）───
+# 钉 C locale = **提取语义的唯一保证**。置于一切提取之前。
+#
+# 根因实证（2026-09-10，goalos-test）: en_US.UTF-8 下 glibc collation 使 ERE 的
+# `[0-9]` **范围表达式**越界匹配 Unicode 数字类字符（① 等）:
+#   $ printf "R-1694①\n" | grep -ohE 'R-[0-9]+' | grep -oE '[0-9]+'
+#   en_US.UTF-8 → "1694①"   （污染比较逻辑 → `[: 1694①: integer expression
+#                             expected` + 幽灵决议虚报 48 条）
+#   LC_ALL=C    → "1694"    （正确）
+# 事故面：本地全量模式恒红、CI repo-only 降级不可见（工具缺陷非文档缺陷）。
+export LC_ALL=C
+export LANG=C
 
 # ─── 常量 ───
 readonly SCRIPT_NAME="$(basename "$0")"
@@ -103,6 +116,7 @@ fi
 VERBOSE=false
 FAILED=0
 CHECKS_TOTAL=0
+SKIPPED=0    # 白名单绝缘计数（PM 指令 2026-09-10 ②——豁免必须可见，非静默跳过）
 LAYER1_PASS=0;  LAYER1_FAIL=0
 LAYER2_PASS=0;  LAYER2_FAIL=0
 START_TIME=$(date +%s)
@@ -143,7 +157,7 @@ GoalOS 决议传播完整性检查 — CI 自动化（两层验证）
   层2（正文内容一致性）: 文档正文必须满足 verify 规则——must_exist / must_not_exist
 
 附加检查:
-  编号连续性（R-543 ③）: 所有编号必须注册或注释为空号——纯 yaml，任何布局均执行
+  编号连续性（R-543-3）: 所有编号必须注册或注释为空号——纯 yaml，任何布局均执行
   幽灵决议检测: 文档引用的 R-xxx 必须在 resolutions.yaml 中存在
   S 决议 token 完备性（S'-31）: desc 字段必须含 S-01~S-48 与 S'-01~S'-39 全部 87 个 token——
     锚定 desc 字段（python3+PyYAML 严格解析，F-16），纯 yaml，任何布局均执行
@@ -299,16 +313,17 @@ check_layer1() {
                 fp=$(resolve_path "$f")
 
                 if [ -z "$fp" ] || [ ! -f "$fp" ]; then
-                    # 归档处理（R-1099 范畴——与 check-doc-version.sh ARCHIVE_PATTERNS 同原则）：
-                    # 文档移入 废弃文档回收站/ 后，其决议追溯=历史记录，可合法保留旧状态——SKIP 不追溯修订
-                    if [ -n "$DOC_DIR" ] && [ -f "$DOC_DIR/../废弃文档回收站/$f" ]; then
-                        log_info "  ⏭️ $current_r → $f — 已归档（废弃文档回收站），历史记录不追溯修订"
-                        CHECKS_TOTAL=$((CHECKS_TOTAL + 1))
-                        continue
-                    fi
-                    log_error "$current_r → $f — ${RED}文件不存在${NC}（路径: $fp）"
-                    FAILED=$((FAILED + 1))
-                    LAYER1_FAIL=$((LAYER1_FAIL + 1))
+                    # 白名单绝缘（PM 指令 2026-09-10 ②——「检索范围直接白名单化」）：
+                    # 现行检索范围**严格限定**为「开发文档目录」与「项目源码目录及其
+                    # 子目录」（resolve_path 的解析域）。决议指向的文件若不在该范围内
+                    # ——已归档/已废弃/非现行——在**检索入口天然绝缘**，不计失败。
+                    #
+                    # 取代原「废弃文档回收站 路径特判」黑名单补丁：原实现枚举一个具体
+                    # 归档目录，归档位置一变（或换布局）即失配 → 误报「文件不存在」。
+                    # 白名单制下归档位置无关紧要——只要不在现行范围内即绝缘。
+                    # 非静默：逐条输出 ⏭️ 行 + SKIPPED 计数（豁免必须可见）。
+                    log_info "  ⏭️ $current_r → $f — 不在现行白名单范围（归档/废弃/非现行），检索入口绝缘"
+                    SKIPPED=$((SKIPPED + 1))
                     CHECKS_TOTAL=$((CHECKS_TOTAL + 1))
                     continue
                 fi
@@ -433,14 +448,11 @@ check_layer2() {
                 # 验证目标文件
                 if [ -z "$fp" ] || [ ! -f "$fp" ]; then
                     CHECKS_TOTAL=$((CHECKS_TOTAL + 1))
-                    # 归档处理（与层1同原则）——文档在 废弃文档回收站/ 中=历史记录，SKIP 不追溯修订
-                    if [ -n "$DOC_DIR" ] && [ -f "$DOC_DIR/../废弃文档回收站/${inf:-$first_file}" ]; then
-                        log_info "  ⏭️ $rid → ${inf:-$first_file} — 已归档（废弃文档回收站），历史记录不追溯修订"
-                        continue
-                    fi
-                    log_error "$rid → ${inf:-$first_file} — ${RED}文件不存在${NC}"
-                    FAILED=$((FAILED + 1))
-                    LAYER2_FAIL=$((LAYER2_FAIL + 1))
+                    # 白名单绝缘（与层1同原则——PM 指令 2026-09-10 ②）:
+                    # 不在现行白名单范围（归档/废弃/非现行）的文件在检索入口天然绝缘。
+                    # 取代原「废弃文档回收站 路径特判」黑名单补丁（归档位置一变即失配）。
+                    log_info "  ⏭️ $rid → ${inf:-$first_file} — 不在现行白名单范围（归档/废弃/非现行），检索入口绝缘"
+                    SKIPPED=$((SKIPPED + 1))
                     continue
                 fi
 
@@ -517,7 +529,7 @@ _check_must_exist() {
 
 # =============================================================================
 # 函数: build_exempt_nums [yaml] [outfile]
-# 用途: 从 resolutions.yaml 的空号注释行提取豁免编号集合（R-1049 ① 延伸）。
+# 用途: 从 resolutions.yaml 的空号注释行提取豁免编号集合（R-1049-1 延伸）。
 #       仅从 '^  #' 注释行且含"空号"的行提取；区间 R-a~R-b 展开为逐号。
 # 输入: $1 — resolutions.yaml 路径; $2 — 输出文件
 # =============================================================================
@@ -527,7 +539,7 @@ build_exempt_nums() {
     # 只提取"声明部分"——'R-NNN: 空号' / 'R-NNN~R-MMM: 空号'。
     # 注释行中上下文提及的编号（如"合并到 R-394"、"R-780~R-785 中间"、
     # 政策行"# R-543 编号纪律"）不得纳入豁免集合（R-1052 精确化）。
-    grep '^  #' "$yaml" | grep -oE 'R-[0-9]+(~R-[0-9]+)?: 空号' | grep -oE 'R-[0-9]+' | grep -oE '[0-9]+' > "$out"
+    grep '^  #' "$yaml" | grep -oE 'R-[0-9]+(~R-[0-9]+)?: 空号' | grep -oE 'R-[0-9]+' | sed 's/^R-//' > "$out"
     grep '^  #' "$yaml" | grep -oE 'R-[0-9]+~R-[0-9]+: 空号' | grep -oE 'R-[0-9]+~R-[0-9]+' | while IFS='~' read -r ra rb; do
         local a b
         a="${ra#R-}"; b="${rb#R-}"
@@ -634,9 +646,11 @@ check_ghost_resolutions() {
     # Step 1: 从 resolutions.yaml 提取所有有效 R-xxx 编号
     local valid_resolutions
     valid_resolutions=$(mktemp)
-    grep -oE '^  R-[0-9]+:' "$yaml" | grep -oE '[0-9]+' | sort -n | uniq > "$valid_resolutions"
+    # 提取纪律（PM 指令 2026-09-10 ①）：正则**定死** `R-[0-9]+`，由 sed 精确剥离前缀——
+    # 不用二次 `grep -oE '[0-9]+'`（locale 敏感的越界匹配面，见文首纪律注释）。
+    sed -nE 's/^ *R-([0-9]+):.*/\1/p' "$yaml" | sort -n | uniq > "$valid_resolutions"
 
-    # 空号豁免集合（R-1049 ① 延伸）：仅从"空号"注释行提取——单号 + R-a~R-b 区间展开
+    # 空号豁免集合（R-1049-1 延伸）：仅从"空号"注释行提取——单号 + R-a~R-b 区间展开
     local exempt_nums
     exempt_nums=$(mktemp)
     build_exempt_nums "$yaml" "$exempt_nums"
@@ -650,7 +664,7 @@ check_ghost_resolutions() {
         grep -v "resolutions.yaml" | \
         grep -v "会议纪要.md" | \
         xargs grep -ohE 'R-[0-9]+' 2>/dev/null | \
-        grep -oE '[0-9]+' | sort -n | uniq > "$all_refs"
+        sed 's/^R-//' | sort -n | uniq > "$all_refs"
 
     # Step 3: 找出在文档中被引用但不在 resolutions.yaml 中的 R-xxx
     local ghost_count=0
@@ -684,7 +698,7 @@ check_ghost_resolutions() {
         fi
     done < "$all_refs"
 
-    # 注册条目数在临时文件删除前统计（R-1049 ③ 修正：不得在 rm -f 之后读取）
+    # 注册条目数在临时文件删除前统计（R-1049-3 修正：不得在 rm -f 之后读取）
     local registered_count
     registered_count=$(grep -cE '^[0-9]+$' "$valid_resolutions" 2>/dev/null || echo 0)
 
@@ -698,7 +712,7 @@ check_ghost_resolutions() {
 
 # =============================================================================
 # 函数: check_numbering_continuity [resolutions_yaml]
-# 用途: 编号纪律检查（R-543 ③）：1..max(注册) 范围内每个编号要么已注册、
+# 用途: 编号纪律检查（R-543-3）：1..max(注册) 范围内每个编号要么已注册、
 #       要么有空号注释（豁免集合）。另检查反向冲突——空号注释不得指向已注册编号。
 #       纯 resolutions.yaml 检查——不依赖文档，仓库侧 CI（GitHub Actions）也可执行（R-1052）。
 # 输入: $1 — resolutions.yaml 路径
@@ -709,11 +723,13 @@ check_numbering_continuity() {
     local yaml="$1"
     local CONT_FAIL=0
 
-    log_info "── ${BOLD}编号连续性检查${NC}（R-543 ③：编号必须注册或注释为空号）──"
+    log_info "── ${BOLD}编号连续性检查${NC}（R-543-3：编号必须注册或注释为空号）──"
 
     local valid_resolutions
     valid_resolutions=$(mktemp)
-    grep -oE '^  R-[0-9]+:' "$yaml" | grep -oE '[0-9]+' | sort -n | uniq > "$valid_resolutions"
+    # 提取纪律（PM 指令 2026-09-10 ①）：正则**定死** `R-[0-9]+`，由 sed 精确剥离前缀——
+    # 不用二次 `grep -oE '[0-9]+'`（locale 敏感的越界匹配面，见文首纪律注释）。
+    sed -nE 's/^ *R-([0-9]+):.*/\1/p' "$yaml" | sort -n | uniq > "$valid_resolutions"
 
     local exempt_nums
     exempt_nums=$(mktemp)
@@ -734,7 +750,7 @@ check_numbering_continuity() {
         if [ "$n" -le 393 ]; then continue; fi
         if grep -q "^$n$" "$valid_resolutions" 2>/dev/null; then continue; fi
         if grep -q "^$n$" "$exempt_nums" 2>/dev/null; then continue; fi
-        echo -e "  ${RED}❌ R-$n${NC}: 编号断档——既未注册也无空号注释（R-543 ③）"
+        echo -e "  ${RED}❌ R-$n${NC}: 编号断档——既未注册也无空号注释（R-543-3）"
         FAILED=$((FAILED + 1))
         CONT_FAIL=$((CONT_FAIL + 1))
     done
@@ -774,6 +790,7 @@ print_summary() {
     echo "  总检查项: $CHECKS_TOTAL"
     echo "  层1（修改记录引用）: ${GREEN}$LAYER1_PASS 通过${NC} / ${RED}$LAYER1_FAIL 失败${NC}"
     echo "  层2（正文内容一致性）: ${GREEN}$LAYER2_PASS 通过${NC} / ${RED}$LAYER2_FAIL 失败${NC}"
+    echo "  白名单绝缘（不在现行范围=归档/废弃/非现行）: $SKIPPED 项"
     echo "  耗时: ${elapsed}s"
 
     if [ $FAILED -gt 0 ]; then

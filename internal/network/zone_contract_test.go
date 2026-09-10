@@ -52,7 +52,7 @@ func TestNetwork_ZoneClassifier_IPv6Bypass(t *testing.T) {
 	}
 }
 
-// TestNetwork_Zone_ExemptionKeesRule 免除规则（Kees 修正——R-1643②）：
+// TestNetwork_Zone_ExemptionKeesRule 免除规则（Kees 修正——R-1643-2）：
 // loopback 恒免除；LAN 默认不免除、trust_lan=true 免除；公网恒不免除。
 func TestNetwork_Zone_ExemptionKeesRule(t *testing.T) {
 	if !ExemptFromDataSharing(ZoneLoopback, false) {

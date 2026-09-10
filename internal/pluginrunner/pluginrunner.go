@@ -33,7 +33,7 @@ type Runner struct {
 	tokenVerifier TokenVerifier // R-660: 支持撤销检查的 Token 验证器
 	seq           int
 
-	// v0.3.1 执行门（R-1640② 激活——会议 #255/#257）：
+	// v0.3.1 执行门（R-1640-2 激活——会议 #255/#257）：
 	contractVerifier *goalosruntime.ContractVerifier // 契约验证强制门（验签/时效/吊销/ProfileDigest/字段）
 	resolver         *goalosruntime.Resolver         // 解析留痕（RuntimeSelected/Rejected 事件——5.5 数据源）
 	policyRevision   string                          // 策略版本（digest 复核输入——缺省 builtin-v1）
@@ -41,7 +41,7 @@ type Runner struct {
 
 // SetRuntimeGate 接线 Runtime 执行门（daemon 组合根注入——nil=门未激活=旧路径；
 // 激活后：契约验证失败/解析拒绝=阻断执行（fail-closed）；Nonce 消费不激活——
-// 凭据时序句①消费点=ExecutionSession 建立（Provider 路径收敛窗口落地——R-1640② 注记）。
+// 凭据时序句(1)消费点=ExecutionSession 建立（Provider 路径收敛窗口落地——R-1640-2 注记）。
 func (r *Runner) SetRuntimeGate(cv *goalosruntime.ContractVerifier, res *goalosruntime.Resolver, policyRevision string) {
 	r.contractVerifier = cv
 	r.resolver = res
@@ -84,7 +84,7 @@ func (r *Runner) Start() {
 	}
 }
 
-// FindManifestEndpoints 按 actionType 查插件声明的网络出站白名单（R-1645②——
+// FindManifestEndpoints 按 actionType 查插件声明的网络出站白名单（R-1645-2——
 // D-2 断点闭合：scheduler 发布 ActionScheduled 的 target_endpoints 数据源；
 // 未命中/未声明=空集——签发侧公网保守兜底语义不变）。
 func (r *Runner) FindManifestEndpoints(actionType string) []string {
@@ -213,7 +213,7 @@ func (r *Runner) executeAction(evt events.Event) (execResult, error) {
 		return execResult{}, fmt.Errorf("no plugin found for action type: %s", actionType)
 	}
 
-	// ─── v0.3.1 Runtime 执行门（R-1640② 激活）───
+	// ─── v0.3.1 Runtime 执行门（R-1640-2 激活）───
 	if err := r.runtimeGate(evt, plugin); err != nil {
 		return execResult{}, err
 	}
@@ -280,10 +280,10 @@ type execResult struct {
 	durationMs int
 }
 
-// runtimeGate Runtime 执行门（R-1640②——契约验证强制+解析留痕）：
-// ①验证强制：Verify（验签/时效/吊销/v2 字段）→ProfileDigest 复核（永远独立重算——
+// runtimeGate Runtime 执行门（R-1640-2——契约验证强制+解析留痕）：
+// (1)验证强制：Verify（验签/时效/吊销/v2 字段）→ProfileDigest 复核（永远独立重算——
 // D-1 PM 裁决硬约束，不读签发侧缓存）→VerifyWithProfile 比对（不一致=默认拒绝）；
-// ②解析留痕：Resolver.Resolve（WorkloadIdentity=插件二进制哈希——R-1561）；
+// (2)解析留痕：Resolver.Resolve（WorkloadIdentity=插件二进制哈希——R-1561）；
 // 拒绝（行 5/6 无候选/严禁降档）=阻断；行 3b 平台落差=事件留痕+放行
 // （治理升级链落地前——D-2 裁决待定，PM 决策后收紧）。
 func (r *Runner) runtimeGate(evt events.Event, plugin *DiscoveredPlugin) error {

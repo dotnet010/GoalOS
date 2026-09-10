@@ -103,12 +103,12 @@ func TestWinACProvider_Boundary(t *testing.T) {
 	defer guard.Release(context.Background())
 
 	home, _ := os.UserHomeDir()
-	// ①home 写=拒（断言绑定 Win32 原生常量——R-1670：禁魔数字面量/POSIX 误读）
+	// (1)home 写=拒（断言绑定 Win32 原生常量——R-1670：禁魔数字面量/POSIX 误读）
 	res := execProbe(t, guard, "__goalos-probe write "+filepath.Join(home, "goalos-winac-probe.txt"))
 	if errnoOf(t, res.Output) != int(windows.ERROR_ACCESS_DENIED) {
-		t.Fatalf("①home 写未按预期拒绝（应 ERRNO=ERROR_ACCESS_DENIED）: out=%q errno=%d", res.Output, errnoOf(t, res.Output))
+		t.Fatalf("(1)home 写未按预期拒绝（应 ERRNO=ERROR_ACCESS_DENIED）: out=%q errno=%d", res.Output, errnoOf(t, res.Output))
 	}
-	// ②~/.ssh 读=拒（夹具纪律——2026-09-06 事故实证：严禁覆盖真实用户文件！
+	// (2)~/.ssh 读=拒（夹具纪律——2026-09-06 事故实证：严禁覆盖真实用户文件！
 	// 曾直接写 ~/.ssh/config 致用户 SSH 配置毁损；夹具=新建专用名文件
 	// （绝不触碰 config/id_rsa 等真实条目——断言语义不变：AC token 读 .ssh 内文件=拒），用后删除）
 	sshDir := filepath.Join(home, ".ssh")
@@ -122,20 +122,20 @@ func TestWinACProvider_Boundary(t *testing.T) {
 	defer os.Remove(fixture)
 	res = execProbe(t, guard, "__goalos-probe read "+fixture)
 	if errnoOf(t, res.Output) != int(windows.ERROR_ACCESS_DENIED) {
-		t.Fatalf("②~/.ssh 读未拒（errno 应=ERROR_ACCESS_DENIED）: out=%q errno=%d", res.Output, errnoOf(t, res.Output))
+		t.Fatalf("(2)~/.ssh 读未拒（errno 应=ERROR_ACCESS_DENIED）: out=%q errno=%d", res.Output, errnoOf(t, res.Output))
 	}
-	// ③出站=拒（零 capability AppContainer——WSAEACCES 常量绑定 R-1670）
+	// (3)出站=拒（零 capability AppContainer——WSAEACCES 常量绑定 R-1670）
 	res = execProbe(t, guard, "__goalos-probe dial 192.0.2.1:80")
 	if errnoOf(t, res.Output) == 0 {
-		t.Fatalf("③CRITICAL：出站成功——网络禁闭失效: %q", res.Output)
+		t.Fatalf("(3)CRITICAL：出站成功——网络禁闭失效: %q", res.Output)
 	}
 	if errnoOf(t, res.Output) != int(windows.WSAEACCES) {
-		t.Fatalf("③出站拒绝但 errno 非 WSAEACCES: errno=%d out=%q", errnoOf(t, res.Output), res.Output)
+		t.Fatalf("(3)出站拒绝但 errno 非 WSAEACCES: errno=%d out=%q", errnoOf(t, res.Output), res.Output)
 	}
-	// ④workspace 写=通（WritableRoots 语义）
+	// (4)workspace 写=通（WritableRoots 语义）
 	res = execProbe(t, guard, "__goalos-probe write "+filepath.Join(ws, "ok.txt"))
 	if errnoOf(t, res.Output) != 0 {
-		t.Fatalf("④workspace 写被拒（WritableRoots 语义失守）: errno=%d out=%q", errnoOf(t, res.Output), res.Output)
+		t.Fatalf("(4)workspace 写被拒（WritableRoots 语义失守）: errno=%d out=%q", errnoOf(t, res.Output), res.Output)
 	}
 }
 
