@@ -17,7 +17,7 @@ var validCheckResults = map[string]bool{
 }
 
 // IsValidCheckResult 验证 CheckResult 是否为合法枚举值。
-// B4: switch 不验证 check() 返回合法枚举值→现在强制验证。
+// B4: switch 过去跳过 check() 返回值的合法性校验→现在强制验证。
 func IsValidCheckResult(result string) bool {
 	return validCheckResults[result]
 }

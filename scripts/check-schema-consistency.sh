@@ -157,7 +157,11 @@ fi
 echo -e "    ${G}✅ Validate() 调用者已统一${N}"
 
 echo "  2.4 新概念一致性——核心术语跨文档定义一致..."
-ROOT="/Users/haochen/work/workspace/pi2"
+# 路径自适应（2026-09-11 PM 指令「清理绝对路径」）：原为硬编码的开发机绝对路径，
+# 既污染 Phase 1 敏感扫描（用户主目录前缀命中），又使脚本离开该机即失效。
+# 改为环境变量覆盖 + 默认当前工作目录（与 check-doc-version 等同族脚本的
+# 三布局自适应口径一致）。
+ROOT="${GOALOS_ROOT:-.}"
 for term in "SafeMap" "Fan-Out" "Validatable" "CategorizedError" "MissionNode" "PluginRegistered"; do
     glossary_count=$(grep -c "$term" "$ROOT/开发文档/GLOSSARY.md" 2>/dev/null || echo 0)
     arch_count=$(grep -c "$term" "$ROOT/开发文档/05软件架构文档.md" 2>/dev/null || echo 0)
