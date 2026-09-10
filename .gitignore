@@ -31,6 +31,10 @@ Thumbs.db
 *.tmp
 *.log
 
+# ─── 运行/演示产物（R-1692⑥——会议 #283：output/=Goal 运行演示产物，
+# 非源码资产——停追踪不入库）───
+output/
+
 # ─── Go ───
 # vendor/ 例外（R-931/C-EXEC-04 供应链锁定入库——外部依赖全部 vendor pin；
 # 2026-09-08 agentbox 族移除后余 BurntSushi/toml+sashabaranov/go-openai+yaml.v3）

@@ -5,6 +5,7 @@ package network
 import (
 	"context"
 	"net/netip"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 // fakeQuerier 可注入查询器（计数+可控错误）。
 type fakeQuerier struct {
+	mu    sync.Mutex // 夹具竞态防护（race 实证：测试主协程改 peers vs 后台刷新协程读——2026-09-10 修复）
 	peers []netip.Addr
 	err   error
 	calls atomic.Int32
@@ -19,7 +21,19 @@ type fakeQuerier struct {
 
 func (f *fakeQuerier) q(_ context.Context) ([]netip.Addr, error) {
 	f.calls.Add(1)
-	return f.peers, f.err
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	// 快照拷贝（返回独立副本——调用方持有不共享底层数组）
+	out := make([]netip.Addr, len(f.peers))
+	copy(out, f.peers)
+	return out, f.err
+}
+
+// setPeers 变更 peer 集（测试主协程侧——锁内写）。
+func (f *fakeQuerier) setPeers(ips []netip.Addr) {
+	f.mu.Lock()
+	f.peers = ips
+	f.mu.Unlock()
 }
 
 // 直注缓存（同包测试钩子——绕后台协程构造确定态）。
@@ -170,7 +184,7 @@ func TestTailnet_EventSeam(t *testing.T) {
 		t.Fatal("首刷后 Version 应>0（初始 peer 集=一次变更事件）")
 	}
 	// 变更 peer 集 → 下轮刷新 Version 跳变
-	fq.peers = []netip.Addr{p1, p2}
+	fq.setPeers([]netip.Addr{p1, p2})
 	deadline = time.Now().Add(6 * time.Second) // 刷新周期 3s+余量
 	for c.Version() == v1 && time.Now().Before(deadline) {
 		time.Sleep(50 * time.Millisecond)
