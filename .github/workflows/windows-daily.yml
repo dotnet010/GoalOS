@@ -24,6 +24,11 @@ jobs:
         run: go build ./...
 
       - name: Build plugins (required for releasecheck)
+        # 可复现配方（R-1695）：CGO_ENABLED=0 + -trimpath + -buildvcs=false——剥离
+        # C 工具链/构建路径/VCS 元数据三类非代码因素（env 步骤级=shell 无关，
+        # pwsh/bash 双兼容——本 job 默认 pwsh，内联 `VAR=x cmd` 形态不可用）。
+        env:
+          CGO_ENABLED: "0"
         run: |
           go build -trimpath -buildvcs=false -o ./plugins/capability/shell-executor/plugin-shell.exe ./cmd/plugin-shell
           go build -trimpath -buildvcs=false -o ./plugins/capability/websearch/plugin-websearch.exe ./cmd/plugin-websearch
