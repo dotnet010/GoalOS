@@ -69,6 +69,24 @@ jobs:
       - name: Platform-lane tests (build tag platformtest)
         run: go test -p 1 -count=1 -v -timeout 300s -tags platformtest ./internal/...
 
+      # 信创构建标签车道（`-tags xinchuang` 的**测试面**）。此前 `-tags xinchuang`
+      # 只有编译验证（make ci 的 build-xinchuang + 本文件 release 作业第 6 目标），
+      # 无任何 go test——本步骤补齐。承载面澄清：信创**生产**承载 = 运行期 bwrap
+      # 探测（internal/runtime，与构建标签无关）；本车道验证 internal/sandbox 编译面
+      # 选中的骨架族（backend_xinchuang.go + platform_backend_other_test.go）测试行为。
+      #
+      # 位置纪律（PM 指令②，严禁隐式前提）：**必须在 Build plugins 步骤之后**——
+      # 车道跑 ./internal/... 全量，含 releasecheck 的 plugin-signatures 闸；插件未
+      # 构建则首红，且该红因**与构建标签无关**（2026-09-10 goalos-test 实证：干净
+      # 检出首跑 TEST_EXIT=1 = `[FAIL] plugin-signatures: binary not found`；补建
+      # 插件后复跑 TEST_EXIT=0）。与 Makefile 的 test-xinchuang: build-plugins 同构。
+      #
+      # 平台纪律（PM 指令③）：runner=ubuntu-latest（天然 linux）——darwin+xinchuang
+      # 为编译错误（platformBackend 重声明）；windows 面不适用，windows-daily.yml
+      # 保持纯净、不接信创标签。
+      - name: Xinchuang-lane tests (build tag xinchuang)
+        run: go test -p 1 -count=1 -v -timeout 300s -tags xinchuang ./internal/...
+
       - name: L6 Release Readiness (v0.1.1)
         run: go test -v -run TestReleaseReadiness ./internal/releasecheck/
 
@@ -166,6 +184,21 @@ jobs:
           echo "Packaged goalos-kylin-v10-sp1-amd64"
           ls -la dist/
 
+      # Docker 引用名实修正（PM 指令 2026-09-10——OCI 规范：全小写 + 去 v 前缀）。
+      # ghcr.io 实况实测（registry `tags/list`，2026-09-10）：仓库名全小写
+      # `dotnet010/goalos`，标签 `0.3.5` / `0.3` / `latest`——**无** `v0.3.5`。
+      # 原 Release 正文写 `ghcr.io/${{ github.repository }}:${{ github.ref_name }}`
+      # → `ghcr.io/dotnet010/GoalOS:v0.3.5` = 大写 + v 前缀**双失配**（照抄必拉取失败）。
+      # 本步骤产出**唯一**引用值：同一变量同时供下方 metadata-action 推送面与 Release
+      # 正文文档面消费——两者不可能再分叉（名实联动机制化，非一次性改正）。
+      - name: "Compute Docker image reference (OCI: 全小写 + 去 v 前缀)"
+        id: dkref
+        run: |
+          IMAGE="$(echo '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')"
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -195,7 +228,7 @@ jobs:
 
             ### Docker
             ```
-            docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            docker pull ${{ steps.dkref.outputs.image }}:${{ steps.dkref.outputs.version }}
             ```
           files: dist/goalos-*.tar.gz,dist/goalos-*.zip
           generate_release_notes: true
@@ -211,7 +244,10 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # 与 Release 正文**同一变量**（steps.dkref）——推送面与文档面单一真相源。
+          # 标签面实测（2026-09-10）：`0.3.5`（{{version}}）+ `0.3`（{{major}}.{{minor}}）
+          # + `latest`（metadata-action 默认 flavor `latest=auto` 对非预发布 semver 自动追加）。
+          images: ${{ steps.dkref.outputs.image }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

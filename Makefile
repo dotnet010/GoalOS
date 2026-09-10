@@ -1,4 +1,4 @@
-.PHONY: build test lint race deadcode clean install-plugin release ci build-xinchuang test-platform
+.PHONY: build test lint race deadcode clean install-plugin release ci build-xinchuang build-plugins test-platform test-xinchuang
 
 # EXE_EXT：Windows 下插件产物带 .exe 后缀（update_plugin_signatures.go 按平台
 # 补 .exe 解析产物——裸名输出=工具找不到=签名跳闸空转，releasecheck 红）。
@@ -46,6 +46,34 @@ lint:
 test-platform:
 	go test -count=1 -v -timeout 120s -tags platformtest ./internal/...
 
+# test-xinchuang：信创构建标签车道（`-tags xinchuang` 的**测试面**——此前只有编译面）。
+# 承载面澄清（勿混淆）：信创**生产**承载 = 运行期 bwrap 探测（internal/runtime，
+# 与构建标签无关）；本车道验证的是 `-tags xinchuang` 在 internal/sandbox 编译面
+# 选中的骨架族（backend_xinchuang.go + platform_backend_other_test.go）的测试行为。
+#
+# **linux-only**：darwin + xinchuang 是**编译错误**——platform_backend_other_test.go
+# （`windows || xinchuang`）与 platform_backend_darwin_test.go（`darwin`）同时被选中
+# → `platformBackend redeclared`。故本目标带 OS 硬门（非仅注释约定），且**刻意不入
+# make ci**（本机 darwin 会直接红；理由同 test-platform：平台面差异不应误伤轻量车道）。
+# windows 面不适用——windows-daily.yml 保持纯净、不接信创标签（PM 指令③）。
+#
+# **显式前置 build-plugins**（PM 指令②，严禁隐式前提）：车道跑 ./internal/... 全量，
+# 含 releasecheck 的 plugin-signatures 闸——插件未构建则首红（红因与标签无关）。
+# 触发面：本地=本目标；CI=docker-publish test 作业（runner=ubuntu，天然 linux）。
+# 未跑=标签测试面零实证，不得冒充全绿。
+#
+# 实证锚（2026-09-10 goalos-test：Ubuntu 24.04 / kernel 6.8.0-139 / go1.25.14）：
+#   TEST_EXIT=0；29 包全 ok；`ok internal/sandbox 0.002s`；--- FAIL 计数=0。
+#   4 处 platformBackend 调用点全 PASS——TestSandbox_GVisorTier_DetectAndRoute /
+#   TestSandbox_L5Disposable_HonestDeferral / TestSandbox_Spawn_AllFdsClosedExceptAllowlist /
+#   TestSandbox_MinimalRuntimeExec（骨架期 Execute 必返非 nil error 的 fail-closed 契约）。
+test-xinchuang: build-plugins
+	@if [ "$$(go env GOOS)" != "linux" ]; then \
+		echo "test-xinchuang: 仅限 linux（当前 GOOS=$$(go env GOOS)）——darwin+xinchuang 为编译错误（platformBackend 重声明），windows 面不适用"; \
+		exit 1; \
+	fi
+	go test -p 1 -count=1 -v -timeout 300s -tags xinchuang ./internal/...
+
 deadcode:
 	@which staticcheck > /dev/null 2>&1 || (echo "install staticcheck: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0  # 钉版本：v0.8.0 起要求 Go >= 1.26" && exit 1)
 	staticcheck ./...
@@ -67,11 +95,21 @@ all: lint race deadcode test build
 # 数据源重算比对 05 映射表）。
 # 会议 #198 D22 R-1157: build-xinchuang 接入 make ci 交叉编译检查
 # （linux/amd64+xinchuang 信创变体, -tags xinchuang 显式传参）。
-ci: lint build
+# build-plugins：插件产物 + 签名刷新（发布规范 #9 本地签名一致性）。
+# **显式前置目标**（2026-09-10 PM 指令②）：内部测试闸口 TestReleaseReadiness_All
+# （internal/releasecheck 的 plugin-signatures 项）要求插件二进制已构建——缺则
+# `[FAIL] plugin-signatures: binary not found`，且红因**与构建标签无关**。
+# 事故实证（2026-09-10 goalos-test 实跑）：`go test -tags xinchuang ./internal/...`
+# 在干净检出下 TEST_EXIT=1，首红即本项；补建插件后复跑 TEST_EXIT=0。
+# 故凡跑全量 `./internal/...` 的车道**必须**显式依赖本目标——严禁隐式前提。
+build-plugins:
 	@echo "=== Building plugins (releasecheck 前置——发布规范 #9 本地签名一致性) ==="
 	@CGO_ENABLED=0 go build -trimpath -buildvcs=false -o plugins/capability/shell-executor/plugin-shell$(EXE_EXT) ./cmd/plugin-shell
 	@CGO_ENABLED=0 go build -trimpath -buildvcs=false -o plugins/capability/websearch/plugin-websearch$(EXE_EXT) ./cmd/plugin-websearch
 	@go run scripts/update_plugin_signatures.go
+
+ci: lint build
+	@$(MAKE) build-plugins
 	@echo "=== Running CI check scripts ==="
 	@bash scripts/check-anti-cheat.sh . || exit 1
 	@bash scripts/check-naked-map.sh . || exit 1
