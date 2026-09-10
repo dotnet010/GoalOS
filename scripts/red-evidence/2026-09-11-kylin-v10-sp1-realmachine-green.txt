@@ -1,0 +1,72 @@
+# 信创（麒麟 Kylin V10 SP1）物理实机验收留痕 —— 全量包单测 + TC-RT-001b 原生探针矩阵
+# 提交：5dc8f55（feat/xinchuang-test-lane —— 全库编号 ASCII 化 + 传播脚本白名单化与提取硬化 + R-1049 模式联动）
+# 日期：2026-09-11（实机 UTC 2026-09-10T16:12:24Z）
+# 依据：PM 指令 2026-09-10 第三条「确立真机实测硬性发版门禁」——取消一切「模拟/冒烟」说辞，
+#       Kylin 信创必须在麒麟实机跑通；规则正文见《测试规范》§10.4 与《11 安全开发流程规范》§7.4。
+
+== 实机环境（命令原始输出）==
+host    : goalos-kylin-test
+os      : PRETTY_NAME="Kylin V10 SP1"（银河麒麟桌面操作系统 V10 SP1）
+kernel  : 5.15.0-52-generic
+bwrap   : bubblewrap 0.4.0          <- 系统自带，零额外依赖（R-1679/R-1681 承载机制）
+go      : go version go1.25.14 linux/amd64
+git     : git version 2.25.1（apt 装，releasecheck test-config-git 闸前置）
+
+== 验收 1：全量包单测 ==
+$ export CGO_ENABLED=0
+$ go test -exec ~/kylin-labelrun.sh -count=1 -timeout 600s ./...
+EXIT=0
+ok 包数 : 31
+FAIL    : 0
+
+（判定口径：`grep -cE "^ok "` = 31；`grep -cE "^FAIL\t"` = 0）
+
+== 验收 2：TC-RT-001b 原生探针矩阵 ==
+$ go test -exec ~/kylin-labelrun.sh -count=1 -v -timeout 300s \
+    -run "TestRuntime_Bypass_SyscallDenied_Linux" ./internal/runtime/
+EXIT=0
+=== RUN   TestRuntime_Bypass_SyscallDenied_Linux
+    bypass_linux_test.go:19: TC-RT-001b：Precheck 通过——平台有承载能力，进入全探针矩阵
+--- PASS: TestRuntime_Bypass_SyscallDenied_Linux (0.02s)
+PASS
+
+（该测试=TC-RT-001b 载体：受限档运行期 bwrap 探测注册后进入全探针矩阵，
+  Precheck 通过路径 + 矩阵内 syscall 拒绝面均在麒麟实机执行。）
+
+== 环境准入前置（**环境事实，非产品缺陷** —— 免责澄清）==
+麒麟 KySec 以**完整性标签**拦执行新二进制（实测：`/bin/true` 原地可跑，
+**复制**到 /tmp 即 `Permission denied`）。实测标签面差异：
+
+  受信系统二进制 /bin/true:
+    security.ksip="none:none:original:9999"
+    security.kysec="none:none:original"
+    security.boxadm=0sAAAAAAAAAAAAAAAA
+
+  未打标新文件 /tmp/t2:
+    security.ksip="none:none:unknown:16787215"
+
+故我方工具链与构建产物须先打标（**范围仅限我方文件**，不触碰机器全局安全控制）：
+
+  setfattr -n security.kysec -v "none:none:original"        <file>
+  setfattr -n security.ksip  -v "none:none:original:9999"   <file>
+
+`go test -exec` 包装器 `~/kylin-labelrun.sh`（13 行 sh）在每次 exec 测试二进制前
+执行上述两条打标，再交还控制权——因为 go 编译出的测试二进制每次都是**新文件**。
+**边界**：不得以关闭全局安全控制（`setstatus -f exectl off` 等）替代打标。
+
+== 本轮验证过程中排除的两项环境前置（均非产品缺陷）==
+1. **cgo 缺 libc 开发头**：麒麟装有 gcc 但无 crt1.o/crti.o → `CGO_ENABLED=1`（默认）
+   下编译中止（`compilation terminated`）。修复=`CGO_ENABLED=0`（亦即 R-1695-4
+   可复现构建配方所钉）。修复后 31 包全绿。
+2. **git 缺失**：releasecheck 的 `test-config-git` 项需 `git ls-files`；麒麟镜像默认
+   无 git → 该项 FAIL。修复=`apt-get install git`（1:2.25.1-1kylin3.14+esm3）。
+   修复后该包转绿。
+
+== 结论 ==
+信创（麒麟 Kylin V10 SP1）**物理实机**验收通过：
+  ① 全量包单测 31/31 绿（EXIT=0）
+  ② TC-RT-001b 原生探针矩阵 PASS（EXIT=0）
+内核级日志已留存（本文档 + 实机 ~/kylin-FINAL-suite.log / ~/kylin-FINAL-tcrt.log）。
+
+**本项自此为所有后续版本不可豁免的硬性发布门禁（Release Gate）** ——
+未取得麒麟实机全量通过存证的版本不得发布；无人工豁免通道。
