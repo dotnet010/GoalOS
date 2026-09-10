@@ -59,8 +59,8 @@ func (c *ContractChain) Record(goalID string, criteria CompletionCriteria, ancho
 }
 
 // Revise 修订（RequirementAdded 消费链核心——R-1597 合并规则）：
-// ①继承锚点只增不减：新版本 FrozenAnchors 必须 ⊇ 旧版本（缺任一=fail-closed 契约违规）；
-// ②旧版本转 Superseded；③新版本 status=Revised、version+1、supersedes=旧 ContractID。
+// (1)继承锚点只增不减：新版本 FrozenAnchors 必须 ⊇ 旧版本（缺任一=fail-closed 契约违规）；
+// (2)旧版本转 Superseded；(3)新版本 status=Revised、version+1、supersedes=旧 ContractID。
 // 无既有版本=错误（修订必须先有首版——Record 先行）。
 func (c *ContractChain) Revise(goalID string, criteria CompletionCriteria, newAnchors []string) (*ContractVersion, error) {
 	c.mu.Lock()
@@ -70,7 +70,7 @@ func (c *ContractChain) Revise(goalID string, criteria CompletionCriteria, newAn
 		return nil, fmt.Errorf("contract chain: goal %s 无首版契约——Record 先行（修订不能凭空）", goalID)
 	}
 	prev := chain[len(chain)-1]
-	// ①继承锚点只增不减（fail-closed——R-1597：缺任一已审批约束=契约违规）
+	// (1)继承锚点只增不减（fail-closed——R-1597：缺任一已审批约束=契约违规）
 	for _, anchor := range prev.FrozenAnchors {
 		found := false
 		for _, na := range newAnchors {
@@ -83,9 +83,9 @@ func (c *ContractChain) Revise(goalID string, criteria CompletionCriteria, newAn
 			return nil, fmt.Errorf("contract chain: 继承锚点缺失 %q——已 Frozen 审批约束只增不减（fail-closed 契约违规）", anchor)
 		}
 	}
-	// ②旧版本转 Superseded（终态——线性链）
+	// (2)旧版本转 Superseded（终态——线性链）
 	prev.Status = ContractSuperseded
-	// ③新版本
+	// (3)新版本
 	c.seq++
 	nv := &ContractVersion{
 		ContractID:    fmt.Sprintf("%s-contract-%d", goalID, c.seq),

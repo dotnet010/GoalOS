@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# GoalOS 错误码单一数据源验证（R-1022/R-1118 / R-1267 S''-24② / R-1300 F-18）
+# GoalOS 错误码单一数据源验证（R-1022/R-1118 / R-1267 S''-24(2) / R-1300 F-18）
 #
 # 唯一维护侧: scripts/error-codes-source.yaml（事件字段映射 32 行:
 #   error_type 14 + failure_type 7 + reason 10 + reject_reason 1）。
@@ -141,7 +141,7 @@ done
 
 # ═══ 3.5. 09 §2 条目 category 属性校验（R-1572/S-245-02——会议 #245：category 权威四值=
 #      internal/errorcategory/category.go 定稿 Temporary/Permanent/Security/Fatal；
-#      09 §2 模板已声明封闭集合（R-1512⑤），本段为机检兜底——category=validation_error
+#      09 §2 模板已声明封闭集合（R-1512-5），本段为机检兜底——category=validation_error
 #      残留 CI 绿实证（会议 #245 F-9/C-9）。CLI-* 聚合条目「按底层错误码继承」豁免）═══
 echo "── 3. 09 §2 条目 category 属性校验 ──"
 CAT_TMP=$(mktemp)

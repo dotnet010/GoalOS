@@ -2,12 +2,12 @@
 
 // appcontainer_fix2_windows_test.go——顾问第五轮两条的机器裁决（2026-08-31）：
 //
-//  ①具名能力粒度：「GoalOS-Sandbox-RX 一笼统能力管所有工具链」违背 D-1
+//  (1)具名能力粒度：「GoalOS-Sandbox-RX 一笼统能力管所有工具链」违背 D-1
 //    按 Action 编译能力集原则——修正为每工具链一具名能力、session 按声明
 //    携带。裁决：携带 cap-node 的 session 读 python 授予目录必须=拒
 //    （选择性成立），携带对应能力=通。
 //
-//  ②双单向管道并发转发（R-1662 根治——替代「一根双向管道两端阻塞读写」
+//  (2)双单向管道并发转发（R-1662 根治——替代「一根双向管道两端阻塞读写」
 //    的经典死锁形态）：请求/响应各走独立管道句柄，两客户端并发×双向
 //    全链——生产并发形态的正面实证（不拿顺序单请求冒充并发）。
 package prototype
@@ -25,7 +25,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// TestAppContainer_CapabilityGranularity ①具名能力选择性裁决。
+// TestAppContainer_CapabilityGranularity (1)具名能力选择性裁决。
 func TestAppContainer_CapabilityGranularity(t *testing.T) {
 	const sessProfile = "GoalOS-Spike-AC-Gran"
 	deleteAppContainer(sessProfile)
@@ -256,7 +256,7 @@ func hostPipePair(t *testing.T, base string, idx int, backendAddr string) {
 	}()
 }
 
-// TestAppContainer_DuplexPipeForwarder ②双单向管道并发根治裁决：
+// TestAppContainer_DuplexPipeForwarder (2)双单向管道并发根治裁决：
 // 两客户端并发×双向全链——响应归属正确（payload 区分）。
 func TestAppContainer_DuplexPipeForwarder(t *testing.T) {
 	const profile = "GoalOS-Spike-AC-Fwd2"
@@ -323,5 +323,5 @@ func TestAppContainer_DuplexPipeForwarder(t *testing.T) {
 	if okCount != 2 {
 		t.Fatalf("并发全链未全通（%d/2）——fwd 侧=%q", okCount, strings.TrimSpace(readSpawnOut(fwdOut)))
 	}
-	t.Logf("②双单向管道并发转发=根治实证（2 客户端并发×双向，归属全对）")
+	t.Logf("(2)双单向管道并发转发=根治实证（2 客户端并发×双向，归属全对）")
 }

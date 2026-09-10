@@ -23,7 +23,7 @@ import (
 )
 
 // TestSandbox_Spawn_AllFdsClosedExceptAllowlist — spawn 骨架期 fail-closed 契约
-// （R-1086 ④验证期对抗契约的前置形态）。
+// （R-1086-4验证期对抗契约的前置形态）。
 // 断言：无 spawn 路径=无 fd 泄漏路径（后端 Execute fail-closed——不伪装执行成功）；
 // profile 白名单编译正确（Compile 期冻结）。
 func TestSandbox_Spawn_AllFdsClosedExceptAllowlist(t *testing.T) {

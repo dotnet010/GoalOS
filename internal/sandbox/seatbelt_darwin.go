@@ -1,6 +1,6 @@
 //go:build darwin
 
-// seatbelt_darwin.go——macOS Seatbelt 受限档 profile 单一来源（R-1641③ 收敛落地——会议 #256）。
+// seatbelt_darwin.go——macOS Seatbelt 受限档 profile 单一来源（R-1641-3 收敛落地——会议 #256）。
 // 消费方双方：internal/runtime darwinSeatbeltProvider（W5 任务 5.3）+internal/pluginrunner
 // executor_darwin.go（插件路径）。禁止第三处副本——漂移即事故（E2 教训：副本从不执行）。
 package sandbox
@@ -22,7 +22,7 @@ func RestrictedSeatbeltProfile() string { return restrictedDarwinSB }
 // 网络授权变体锚点（单源文件内的网络节——漂移即 fail-closed）。
 const networkSectionAnchor = "(deny network*)"
 
-// RestrictedSeatbeltProfileForNetwork 网络授权变体（R-1643 裁决④——D-2 蓝图 macOS 机制适配）：
+// RestrictedSeatbeltProfileForNetwork 网络授权变体（R-1643 裁决(4)——D-2 蓝图 macOS 机制适配）：
 // networkAuthorized=true（契约含网络能力且审批已过——data_sharing 上游已审）时，
 // 网络节从全拒替换为「默认拒出站+端口级放行 tcp 443/80」。
 // 实证纪律：SBPL 无 CIDR/裸 IP 粒度（会议 #258 会前实证）——OS 层=端口面；

@@ -17,28 +17,28 @@ import (
 )
 
 // TestSeatbelt_GoRuntimeBootAllowance：
-// ①基础受限 profile 含 hw. 前缀放行（Go 引导面在位）；②sysctl-write 仍全拒（危险面不动）；
-// ③绝不含裸 (allow sysctl-read)（收窄纪律——前缀形态在位，防全量放行漂移）；
-// ④实证：profile 物化+sandbox-exec 内跑 Go 二进制（自身测试二进制）=启动成功
+// (1)基础受限 profile 含 hw. 前缀放行（Go 引导面在位）；(2)sysctl-write 仍全拒（危险面不动）；
+// (3)绝不含裸 (allow sysctl-read)（收窄纪律——前缀形态在位，防全量放行漂移）；
+// (4)实证：profile 物化+sandbox-exec 内跑 Go 二进制（自身测试二进制）=启动成功
 //
 //	（反虚假绿：execvp 级 "sandbox-exec:" 前缀=profile 未生效，不计——R-1641 纪律）。
 func TestSeatbelt_GoRuntimeBootAllowance(t *testing.T) {
 	p := RestrictedSeatbeltProfile()
 	if !strings.Contains(p, `(allow sysctl-read (sysctl-name-prefix "hw."))`) {
-		t.Fatal("①Go 引导面缺席：受限 profile 应含 (allow sysctl-read (sysctl-name-prefix \"hw.\"))——删除即 darwin Go 载体红回归")
+		t.Fatal("(1)Go 引导面缺席：受限 profile 应含 (allow sysctl-read (sysctl-name-prefix \"hw.\"))——删除即 darwin Go 载体红回归")
 	}
 	if !strings.Contains(p, "(deny sysctl-write)") {
-		t.Fatal("②sysctl-write 拒绝面失守")
+		t.Fatal("(2)sysctl-write 拒绝面失守")
 	}
 	if strings.Contains(p, "(allow sysctl-read)") {
-		t.Fatal("③收窄纪律失守：绝不含裸 (allow sysctl-read) 全量放行")
+		t.Fatal("(3)收窄纪律失守：绝不含裸 (allow sysctl-read) 全量放行")
 	}
 
-	// ④实证执行（仅非 race 构建）：TSan 载体在受限 Seatbelt 内 CHECK failed
+	// (4)实证执行（仅非 race 构建）：TSan 载体在受限 Seatbelt 内 CHECK failed
 	// （sanitizer_mac.cpp——边界拒绝 TSan 运行时所需面=fail-closed 实证，非边界失效；
-	// darwin+race 实证面=登记缺口，内容断言①②③在所有构建面在位）
+	// darwin+race 实证面=登记缺口，内容断言(1)(2)(3)在所有构建面在位）
 	if raceInstrumented {
-		t.Log("④实证步跳过：race 构建（TSan 载体⊥受限 Seatbelt——fail-closed 实证）")
+		t.Log("(4)实证步跳过：race 构建（TSan 载体⊥受限 Seatbelt——fail-closed 实证）")
 		return
 	}
 	// 物化 profile+三参数注入（生产同源形态），边界内跑 Go 二进制
@@ -64,7 +64,7 @@ func TestSeatbelt_GoRuntimeBootAllowance(t *testing.T) {
 	dir = canon(dir)
 	home = canon(home)
 	// 环境两面处理（coverage 插桩载体兼容——fail-closed 实证族非边界失效）：
-	// ①剥 GOCOVERDIR（atexit 写覆盖数据=越写禁闭）；②TMPDIR 重定向到沙箱授写
+	// (1)剥 GOCOVERDIR（atexit 写覆盖数据=越写禁闭）；(2)TMPDIR 重定向到沙箱授写
 	// TMP_DIR（插桩二进制启动期 MkdirTemp 暂存面——不指则落 /var/folders 被拒）。
 	env := make([]string, 0, len(os.Environ()))
 	for _, kv := range os.Environ() {
@@ -81,9 +81,9 @@ func TestSeatbelt_GoRuntimeBootAllowance(t *testing.T) {
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if strings.Contains(string(out), "sandbox-exec:") {
-		t.Fatalf("④execvp 级失败（profile 未生效伪证——不计）: %q", out)
+		t.Fatalf("(4)execvp 级失败（profile 未生效伪证——不计）: %q", out)
 	}
 	if err != nil || strings.Contains(string(out), "failed to get system page size") {
-		t.Fatalf("④Go 二进制边界内启动失败（引导面回归）——err=%v out=%q", err, out)
+		t.Fatalf("(4)Go 二进制边界内启动失败（引导面回归）——err=%v out=%q", err, out)
 	}
 }

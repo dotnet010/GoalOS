@@ -57,12 +57,12 @@ type DaemonConfig struct {
 	// SocketPath 是 UDS 治理通道路径（R-1322/R-1378）——审批族端点 UDS-only，
 	// 治理面不得暴露于 TCP。默认 "~/.goalos/run/daemon.sock"
 	SocketPath string `yaml:"socket_path"`
-	// TrustLAN 管理员显式信任局域网（R-1643② Kees 修正——data_sharing 免除=loopback 恒免/
+	// TrustLAN 管理员显式信任局域网（R-1643-2 Kees 修正——data_sharing 免除=loopback 恒免/
 	// LAN 仅此开关免除；默认 false=LAN 仍触发审查——LAN 可经网关代理出境）。
 	TrustLAN bool `yaml:"trust_lan"`
 	// TrustedWorkloads 名单登记工作负载（05 §X.6.3 R-1508/R-1549——人工审核名单；
 	// T0 信任=本机管理员显式登记白名单的管理员信任决策，非发行者密码学认证——R-1619）。
-	// 启动校验四规则（R-1549③）：hex 格式非法/ISO8601 非法/条目重复→拒绝启动。
+	// 启动校验四规则（R-1549-3）：hex 格式非法/ISO8601 非法/条目重复→拒绝启动。
 	TrustedWorkloads []TrustedWorkloadEntry `yaml:"trusted_workloads"`
 }
 
@@ -335,7 +335,7 @@ func (cfg *Config) Validate() error {
 	if cfg.Policy.TokenTTL <= 0 {
 		return fmt.Errorf("policy.token_ttl 必须为正整数，当前: %d", cfg.Policy.TokenTTL)
 	}
-	// trusted_workloads 启动校验四规则（R-1549③——名单登记工作负载）：
+	// trusted_workloads 启动校验四规则（R-1549-3——名单登记工作负载）：
 	// hex 格式非法/expires_at 非法 ISO8601/条目重复（同 publisher_key+artifact_hash）→拒绝启动。
 	if err := validateTrustedWorkloads(cfg.Daemon.TrustedWorkloads); err != nil {
 		return err

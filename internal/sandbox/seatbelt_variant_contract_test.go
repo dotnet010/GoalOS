@@ -13,34 +13,34 @@ import (
 )
 
 // TestSeatbelt_NetworkAuthorizedVariant（TC-RT-051）：
-// ①授权变体恰好含端口放行规则（tcp 443/80）+默认拒出站；②绝不含裸通配 (allow network*)；
-// ③未授权变体=全拒（deny network*）；④实证：变体可被 sandbox-exec 解析且边界内可执行；
-// ⑤实证：授权变体下 443 端口可出站（127.0.0.1:443 无监听=connection refused 非 EPERM——
-// 端口放行生效的可分辨证据）；⑥单源漂移 fail-closed（锚点缺失=错误不产出）。
+// (1)授权变体恰好含端口放行规则（tcp 443/80）+默认拒出站；(2)绝不含裸通配 (allow network*)；
+// (3)未授权变体=全拒（deny network*）；(4)实证：变体可被 sandbox-exec 解析且边界内可执行；
+// (5)实证：授权变体下 443 端口可出站（127.0.0.1:443 无监听=connection refused 非 EPERM——
+// 端口放行生效的可分辨证据）；(6)单源漂移 fail-closed（锚点缺失=错误不产出）。
 func TestSeatbelt_NetworkAuthorizedVariant(t *testing.T) {
 	base, err := RestrictedSeatbeltProfileForNetwork(false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(base, "(deny network*)") {
-		t.Fatal("③未授权变体=网络全拒（deny network*）")
+		t.Fatal("(3)未授权变体=网络全拒（deny network*）")
 	}
 	variant, err := RestrictedSeatbeltProfileForNetwork(true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// ①内容断言
+	// (1)内容断言
 	for _, want := range []string{`(deny network-outbound)`, `(allow network-outbound (to tcp "*:443"))`, `(allow network-outbound (to tcp "*:80"))`} {
 		if !strings.Contains(variant, want) {
-			t.Fatalf("①授权变体缺规则 %q", want)
+			t.Fatalf("(1)授权变体缺规则 %q", want)
 		}
 	}
-	// ②Invariant：裸通配禁止
+	// (2)Invariant：裸通配禁止
 	if strings.Contains(variant, "(allow network*)") || strings.Contains(variant, "(allow network ") {
-		t.Fatal("②Invariant 违反：含裸 network 通配")
+		t.Fatal("(2)Invariant 违反：含裸 network 通配")
 	}
 	if strings.Contains(variant, "(deny network*)") {
-		t.Fatal("①授权变体残留全拒段（与端口放行矛盾）")
+		t.Fatal("(1)授权变体残留全拒段（与端口放行矛盾）")
 	}
 
 	if _, err := exec.LookPath("sandbox-exec"); err != nil {
@@ -49,7 +49,7 @@ func TestSeatbelt_NetworkAuthorizedVariant(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	dir := t.TempDir()
 
-	// ④实证：变体解析+边界内执行
+	// (4)实证：变体解析+边界内执行
 	pf := dir + "/variant.sb"
 	if err := os.WriteFile(pf, []byte(variant), 0600); err != nil {
 		t.Fatal(err)
@@ -58,25 +58,25 @@ func TestSeatbelt_NetworkAuthorizedVariant(t *testing.T) {
 		"-D", "WORKSPACE_DIR="+dir, "-D", "TMP_DIR="+dir, "-D", "HOME_DIR="+home,
 		"-D", "TARGET_BINARY=/usr/bin/true", "/usr/bin/true").CombinedOutput()
 	if err != nil {
-		t.Fatalf("④授权变体解析/执行失败: %v\n%s", err, out)
+		t.Fatalf("(4)授权变体解析/执行失败: %v\n%s", err, out)
 	}
 
-	// ⑤实证：443 端口出站放行生效（connection refused=端口通而服务无监听；EPERM=仍被拦）
+	// (5)实证：443 端口出站放行生效（connection refused=端口通而服务无监听；EPERM=仍被拦）
 	out2, _ := exec.Command("/usr/bin/sandbox-exec", "-f", pf,
 		"-D", "WORKSPACE_DIR="+dir, "-D", "TMP_DIR="+dir, "-D", "HOME_DIR="+home,
 		"-D", "TARGET_BINARY=/usr/bin/nc", "/usr/bin/nc", "-v", "-w", "1", "127.0.0.1", "443").CombinedOutput()
 	if strings.Contains(string(out2), "Operation not permitted") {
-		t.Fatalf("⑤443 端口仍被拦（EPERM）——端口放行未生效: %s", out2)
+		t.Fatalf("(5)443 端口仍被拦（EPERM）——端口放行未生效: %s", out2)
 	}
 	if !strings.Contains(string(out2), "Connection refused") && !strings.Contains(string(out2), "succeeded") {
-		t.Fatalf("⑤出站证据形态不可分辨: %s", out2)
+		t.Fatalf("(5)出站证据形态不可分辨: %s", out2)
 	}
 
-	// ⑤b 对照：非授权端口（22）仍被拒
+	// (5)b 对照：非授权端口（22）仍被拒
 	out3, _ := exec.Command("/usr/bin/sandbox-exec", "-f", pf,
 		"-D", "WORKSPACE_DIR="+dir, "-D", "TMP_DIR="+dir, "-D", "HOME_DIR="+home,
 		"-D", "TARGET_BINARY=/usr/bin/nc", "/usr/bin/nc", "-v", "-w", "1", "127.0.0.1", "22").CombinedOutput()
 	if !strings.Contains(string(out3), "Operation not permitted") {
-		t.Fatalf("⑤b 非授权端口 22 应 EPERM 拒绝，实际: %s", out3)
+		t.Fatalf("(5)b 非授权端口 22 应 EPERM 拒绝，实际: %s", out3)
 	}
 }

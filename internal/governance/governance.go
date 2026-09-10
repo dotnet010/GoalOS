@@ -45,7 +45,7 @@ type Decision struct {
 	Approval   string // "AUTO" | "GRANTED" | "DENIED" | "TIMEOUT"
 	TokenID    string // Capability Token ID
 	TokenStr   string // Capability Token 字符串（JWT）
-	// v0.3.1 签发决策入载体（R-1640②/R-1643——审计/事件同链）：
+	// v0.3.1 签发决策入载体（R-1640-2/R-1643——审计/事件同链）：
 	RequiresRealEnforcement bool   // 签发决策表产出（06 §1.3）
 	MinIsolation            string // I 族 wire 值
 	ApprovalType            string // 审批类型（""=默认行为审批；data_sharing=数据外发审查——R-1643 行 3P）
@@ -73,12 +73,12 @@ type Engine struct {
 	maxExtensions   int           // D-4（R-1645）：wait_more 上限（默认 3——R-1603 上限结局逐字）。由 pendingMu 保护
 	seq             atomic.Int64
 
-	// v0.3.1 签发接线（任务 5.5 前置——R-1640②/05 §X.6.3 字段表）：
+	// v0.3.1 签发接线（任务 5.5 前置——R-1640-2/05 §X.6.3 字段表）：
 	keyring        *Keyring            // 签名密钥族（IssuerKeyID 数据源——R-1389 代际窗口）
 	trustedWorkloads []TrustedWorkloadView // 名单登记视图（daemon.yaml trusted_workloads——R-1508）
 	workloadHash   string              // 本守护进程主二进制 SHA-256 hex（WorkloadIdentity 运行时验证值——R-1561）
 	policyRevision string              // 策略版本（内置默认=builtin-v1——R-1524 策略载体）
-	trustLAN       bool                // 管理员显式信任 LAN（daemon.yaml trust_lan——Kees 修正 R-1643②）
+	trustLAN       bool                // 管理员显式信任 LAN（daemon.yaml trust_lan——Kees 修正 R-1643-2）
 	profileDigestCache map[string]string // 签发侧 digest 缓存（D-1 PM 裁决：能力集+risk+平台+PolicyRevision 四元键）
 	profileDigestMu    sync.RWMutex
 
@@ -158,7 +158,7 @@ done:             make(chan struct{}),
 	return e
 }
 
-// ─── v0.3.1 签发接线 setter 群（任务 5.5 前置——R-1640②；daemon 组合根注入）───
+// ─── v0.3.1 签发接线 setter 群（任务 5.5 前置——R-1640-2；daemon 组合根注入）───
 
 // SetKeyring 注入签名密钥族（IssuerKeyID 数据源——R-1389；06 §X.8 密钥纪律）。
 func (e *Engine) SetKeyring(kr *Keyring) { e.keyring = kr }
@@ -172,7 +172,7 @@ func (e *Engine) SetWorkloadHash(hashHex string) { e.workloadHash = hashHex }
 // SetPolicyRevision 注入策略版本（缺省 builtin-v1——R-1524 策略载体）。
 func (e *Engine) SetPolicyRevision(rev string) { e.policyRevision = rev }
 
-// SetTrustLAN 注入 LAN 显式信任（R-1643②——data_sharing 免除=loopback 恒免/LAN 仅此开关免除）。
+// SetTrustLAN 注入 LAN 显式信任（R-1643-2——data_sharing 免除=loopback 恒免/LAN 仅此开关免除）。
 func (e *Engine) SetTrustLAN(trust bool) { e.trustLAN = trust }
 
 // v2 签发信息装配（05 §X.6.3 字段表——SessionID/Nonce 本次生成；RRE/MinIsolation 经
@@ -424,7 +424,7 @@ func (e *Engine) handleActionScheduled(evt events.Event) error {
 		caps := make([]string, len(requiredCaps))
 		for i, c := range requiredCaps { caps[i] = fmt.Sprint(c) }
 		claims := TokenClaims{GoalID: evt.GoalID, ActionID: actionID, Capabilities: caps, IssuedAt: now, ExpiresAt: now + ttl}
-		e.fillV2Claims(&claims, issDec, caps, riskLevel) // v0.3.1 接线（R-1640②/R-1643 唯一计算点同值）
+		e.fillV2Claims(&claims, issDec, caps, riskLevel) // v0.3.1 接线（R-1640-2/R-1643 唯一计算点同值）
 		if tok, err := IssueToken(claims, e.secretKey); err == nil { tokenStr = tok; tokenID = fmt.Sprintf("%s_token_%d", actionID, now) }
 	}
 	if tokenStr != "" {
@@ -499,7 +499,7 @@ func (e *Engine) handleUserApproved(evt events.Event) error {
 			RequiresRealEnforcement: pending.decision.RequiresRealEnforcement,
 			MinIsolation:            pending.decision.MinIsolation,
 			ApprovalType:            pending.decision.ApprovalType,
-		}, claims.Capabilities, pending.decision.Risk) // v0.3.1 接线（R-1640②/R-1643 唯一计算点同值）
+		}, claims.Capabilities, pending.decision.Risk) // v0.3.1 接线（R-1640-2/R-1643 唯一计算点同值）
 		if tok, err := IssueToken(claims, e.secretKey); err == nil {
 			decision.TokenStr = tok
 			decision.TokenID = fmt.Sprintf("%s_token_%d", actionID, now)
@@ -835,7 +835,7 @@ func (e *Engine) SetApprovalTimeout(d time.Duration) {
 	e.pendingMu.Unlock()
 }
 
-// IsActionRevoked 撤销查询（R-1640② 接线——runtime 契约验证层吊销步骤的
+// IsActionRevoked 撤销查询（R-1640-2 接线——runtime 契约验证层吊销步骤的
 // 生产桥：现行撤销表=revokedTokens（actionID 前缀形态，handlePluginTerminated 写入）。
 // TokenStore 平行结构归 v0.4.0 统一（D2-REV-01 登记——两机制合一）。
 func (e *Engine) IsActionRevoked(actionID string) bool {

@@ -43,10 +43,10 @@ func p95(samples []time.Duration) time.Duration {
 }
 
 // TestRuntime_Latency_Gate（TC-RT-060——延迟门槛标定，真实硬件 n≥100）：
-// ①六段全打点（治理签发/契约验证/Resolver/Acquire→Start 门槛段/边界验证+挂载/执行）；
-// ②门槛段 P95 出数（darwin 工程实测值——R-1616 语义三分：darwin 不入 Product SLA）；
-// ③形态断言（样本数/单调非负/P95≥P50——出数可信性）；
-// ④标定判定注册：darwin 数据点（硬闸转换=Linux/信创平台 CI 窗口——预案 R-1600 预登记）。
+// (1)六段全打点（治理签发/契约验证/Resolver/Acquire→Start 门槛段/边界验证+挂载/执行）；
+// (2)门槛段 P95 出数（darwin 工程实测值——R-1616 语义三分：darwin 不入 Product SLA）；
+// (3)形态断言（样本数/单调非负/P95≥P50——出数可信性）；
+// (4)标定判定注册：darwin 数据点（硬闸转换=Linux/信创平台 CI 窗口——预案 R-1600 预登记）。
 func TestRuntime_Latency_Gate(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
@@ -65,7 +65,7 @@ func TestRuntime_Latency_Gate(t *testing.T) {
 	observed := 0
 	for i := 0; i < n; i++ {
 		var sm segmentSample
-		// ①治理签发（签发决策表+Token 签发——真实链路）
+		// (1)治理签发（签发决策表+Token 签发——真实链路）
 		t0 := time.Now()
 		dec := governance.ComputeIssuanceDecision(governance.IssuanceInput{
 			ArbitrarySubprocess: true, RiskLevel: "R2",
@@ -85,14 +85,14 @@ func TestRuntime_Latency_Gate(t *testing.T) {
 		}
 		sm.issue = time.Since(t0)
 
-		// ②契约验证（真实验签——digest 复核段在 ProfileDigest 比对；本测量=Verify 四步）
+		// (2)契约验证（真实验签——digest 复核段在 ProfileDigest 比对；本测量=Verify 四步）
 		t0 = time.Now()
 		if _, err := verifier.Verify(tok); err != nil {
 			t.Fatalf("契约验证失败: %v", err)
 		}
 		sm.verify = time.Since(t0)
 
-		// ③Resolver 决策（真实解析——R-1012 解析期一次冻结）
+		// (3)Resolver 决策（真实解析——R-1012 解析期一次冻结）
 		t0 = time.Now()
 		if _, err := resolver.Resolve(ResolveInput{
 			RequiresRealEnforcement: dec.RequiresRealEnforcement, MinIsolation: I2,
@@ -101,7 +101,7 @@ func TestRuntime_Latency_Gate(t *testing.T) {
 		}
 		sm.resolve = time.Since(t0)
 
-		// ④门槛段=Acquire→Start（R-1502 门槛口径——本段=唯一硬闸候选）
+		// (4)门槛段=Acquire→Start（R-1502 门槛口径——本段=唯一硬闸候选）
 		t0 = time.Now()
 		h, err := provider.Acquire(ctx, LeaseRequest{GoalID: "g-lat", ActionID: "a-lat"})
 		if err != nil {
@@ -113,14 +113,14 @@ func TestRuntime_Latency_Gate(t *testing.T) {
 		sm.gateAcquireStart = time.Since(t0)
 		gateSamples = append(gateSamples, sm.gateAcquireStart)
 
-		// ⑤边界验证+挂载（观测段——真实三探针子进程；抽样降本=每 10 次测 1 次）
+		// (5)边界验证+挂载（观测段——真实三探针子进程；抽样降本=每 10 次测 1 次）
 		if i%10 == 0 {
 			t0 = time.Now()
 			if err := h.Precheck(ctx); err != nil {
 				t.Fatalf("Precheck 失败: %v", err)
 			}
 			sm.precheck = time.Since(t0)
-			// ⑥执行（观测段——/usr/bin/true 真实子进程）
+			// (6)执行（观测段——/usr/bin/true 真实子进程）
 			t0 = time.Now()
 			if _, err := h.Execute(ctx, ExecuteRequest{ActionID: "a-lat", ActionType: "process.exec",
 				Params: map[string]string{"binary": "/usr/bin/true"}}); err != nil {
@@ -135,7 +135,7 @@ func TestRuntime_Latency_Gate(t *testing.T) {
 		samples = append(samples, sm)
 	}
 
-	// ③形态断言（出数可信性）
+	// (3)形态断言（出数可信性）
 	if len(gateSamples) != n {
 		t.Fatalf("门槛段样本数应=%d，实际 %d", n, len(gateSamples))
 	}
@@ -151,7 +151,7 @@ func TestRuntime_Latency_Gate(t *testing.T) {
 		resolveSum += sm.resolve
 	}
 
-	// ②出数报告（标定数据源——t.Log 输出+开发日志登记）
+	// (2)出数报告（标定数据源——t.Log 输出+开发日志登记）
 	t.Logf("TC-RT-060 标定出数（darwin 工程实测 n=%d）:", n)
 	t.Logf("  门槛段（Acquire→Start——R-1502 口径）: P95=%v", gateP95)
 	t.Logf("  观测段均值: 治理签发=%v 契约验证=%v Resolver=%v", issueSum/n, verifySum/n, resolveSum/n)

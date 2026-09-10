@@ -1,11 +1,11 @@
-// progress.go — ProgressMessage 实现（任务 7.26——D49⑤ 会议 #198）。
+// progress.go — ProgressMessage 实现（任务 7.26——D49(5) 会议 #198）。
 //
 // 契约（08 §3.2 消息类型表）：{type:"progress", action_id, progress:{completed_tokens,
 // total_tokens_estimate, phase, message?}}；发送频率=每 500 token 或每 5s 取先到
 // （policy.progress_interval_tokens 透传）。
 package daemon
 
-// ProgressMessage — 进度消息（08 §3.2 消息类型表新增——D49⑤）。
+// ProgressMessage — 进度消息（08 §3.2 消息类型表新增——D49(5)）。
 type ProgressMessage struct {
 	Type     string         `json:"type"`      // "progress"
 	ActionID string         `json:"action_id"` // Action ID

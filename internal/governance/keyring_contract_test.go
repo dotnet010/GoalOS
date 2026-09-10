@@ -9,8 +9,8 @@ import (
 )
 
 // TestRuntime_KeyRotation_OverlapWindow（TC-RT-030——12 清单 F 节）：
-// 密钥轮换演练——HS256+kid 代际窗口：①轮换后新 kid 签发/验签 ②旧代际窗口内保留验签
-// ③unknown-kid fail-closed ④窗口过期后旧代际拒绝。
+// 密钥轮换演练——HS256+kid 代际窗口：(1)轮换后新 kid 签发/验签 (2)旧代际窗口内保留验签
+// (3)unknown-kid fail-closed (4)窗口过期后旧代际拒绝。
 func TestRuntime_KeyRotation_OverlapWindow(t *testing.T) {
 	now := time.Now()
 	clock := func() time.Time { return now }
@@ -72,7 +72,7 @@ func TestRuntime_Keystore_NoPlaintextDisk(t *testing.T) {
 	if _, _, err := kr.SignKey(); err == nil {
 		t.Fatal("Zeroize 后仍可签发——内存清零未生效")
 	}
-	// R-1640④：清零后写操作 fail-closed（静默 no-op=调用方误以为注册成功——Kees 裁决）
+	// R-1640-4：清零后写操作 fail-closed（静默 no-op=调用方误以为注册成功——Kees 裁决）
 	if err := kr.AddGeneration("kid-9", []byte("late-key-material-32-bytes!!!!!!")); !errors.Is(err, ErrKeyringZeroized) {
 		t.Fatalf("Zeroize 后 AddGeneration 应=ErrKeyringZeroized，实际: %v", err)
 	}

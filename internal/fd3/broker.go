@@ -20,7 +20,7 @@ import (
 // DialFunc 拨号函数签名（zone dialer 注入面——生产=ZoneDialer.DialContext 适配）。
 type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
-// frameConn 帧面连接抽象（协议核心的传输中立缝——R-1695 ②「FD3 测试分层纳管」）：
+// frameConn 帧面连接抽象（协议核心的传输中立缝——R-1695-2「FD3 测试分层纳管」）：
 // 协议与帧解包测试=通用单测车道（零 OS 依赖，内存管道直驱本接口，随常规 PR/CI
 // 三平台全量触发）；物理 socket/路径边界测试=平台专项特测车道（build tag
 // platformtest）。两平台 *Conn 形态（unix=单句柄 / windows=双单向句柄对）均隐式

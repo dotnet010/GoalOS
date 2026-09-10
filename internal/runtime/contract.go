@@ -39,7 +39,7 @@ func (e *ContractError) Error() string {
 }
 
 // IsRejectReason 判定错误是否携带指定 reject_reason（TC-RT 族断言入口）。
-// errors.As 穿透包装层（执行门 fmt.Errorf %w 包装语义不破坏判定——R-1640② 落地实证）。
+// errors.As 穿透包装层（执行门 fmt.Errorf %w 包装语义不破坏判定——R-1640-2 落地实证）。
 func IsRejectReason(err error, reason string) bool {
 	var ce *ContractError
 	if errors.As(err, &ce) {
@@ -62,7 +62,7 @@ func (v *VerifiedContract) ContractID() string {
 	return v.claims.GoalID + "/" + v.claims.ActionID
 }
 
-// NonceRegistry Nonce 消费登记（R-1510 时序句①：Nonce 消费点=ExecutionSession 建立，
+// NonceRegistry Nonce 消费登记（R-1510 时序句(1)：Nonce 消费点=ExecutionSession 建立，
 // 单次消费防跨会话重放；05 §X.6.3 并发所有权——本表唯一写者=验证层）。
 type NonceRegistry struct {
 	mu      sync.Mutex
@@ -87,7 +87,7 @@ func (r *NonceRegistry) tryConsume(nonce string) bool {
 
 // ContractVerifier 契约验证层（daemon 侧唯一验证点——05 §X.6.3 时序四句）。
 // 验证四步+重放防线：验签→时效→吊销→ProfileDigest→（消费时）Nonce。
-// 零值非法（R-1106 同纪律）：v2 五字段空值/格式非法=拒绝（reject_reason=invalid_fields——R-1628①）。
+// 零值非法（R-1106 同纪律）：v2 五字段空值/格式非法=拒绝（reject_reason=invalid_fields——R-1628-1）。
 type ContractVerifier struct {
 	secret   []byte
 	nonces   *NonceRegistry
@@ -111,7 +111,7 @@ func WithRevocationChecker(f func(string) bool) func(*ContractVerifier) {
 }
 
 // WithRevocationStore 吊销接线=治理层 TokenStore 既有机制（W2 闭合——
-// 吊销=验证四步之③，非可选：tokenID 形态=goalID+"-"+actionID，R-1392 族）。
+// 吊销=验证四步之(3)，非可选：tokenID 形态=goalID+"-"+actionID，R-1392 族）。
 func WithRevocationStore(ts *governance.TokenStore) func(*ContractVerifier) {
 	return func(v *ContractVerifier) {
 		v.revoked = func(contractID string) bool {
@@ -140,7 +140,7 @@ func checkRequiredFields(c *governance.TokenClaims) error {
 	return nil
 }
 
-// verify 验签+时效+吊销+字段合法性（不消费 Nonce——凭据时序句③：会话内 Acquire 不重验）。
+// verify 验签+时效+吊销+字段合法性（不消费 Nonce——凭据时序句(3)：会话内 Acquire 不重验）。
 // 时效与验签分因（TC-RT-021）：过期=governance.ErrTokenExpired 哨兵映射 reject_reason=expired。
 func (v *ContractVerifier) verify(tokenStr string) (*governance.TokenClaims, error) {
 	claims, err := governance.VerifyToken(tokenStr, v.secret)
@@ -159,7 +159,7 @@ func (v *ContractVerifier) verify(tokenStr string) (*governance.TokenClaims, err
 	return claims, nil
 }
 
-// Verify 只验不消费（会话内后续 Acquire——凭据时序句③）。
+// Verify 只验不消费（会话内后续 Acquire——凭据时序句(3)）。
 func (v *ContractVerifier) Verify(tokenStr string) (*VerifiedContract, error) {
 	claims, err := v.verify(tokenStr)
 	if err != nil {
@@ -186,7 +186,7 @@ func (v *ContractVerifier) VerifyWithProfile(tokenStr, currentProfileDigestHex s
 	return &VerifiedContract{claims: *claims}, nil
 }
 
-// VerifyAndConsume 验证+消费 Nonce（会话建立点——凭据时序句①）。
+// VerifyAndConsume 验证+消费 Nonce（会话建立点——凭据时序句(1)）。
 // 同一 Nonce 第二次消费=重放拒绝（TC-RT-020）。
 func (v *ContractVerifier) VerifyAndConsume(tokenStr string) (*VerifiedContract, error) {
 	claims, err := v.verify(tokenStr)

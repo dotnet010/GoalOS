@@ -29,7 +29,7 @@ func TestGovernance_IssuanceDecisionTable(t *testing.T) {
 		// 行 3P：网络出站∩公网（或端点缺失保守）→ {true, I2, data_sharing}（治理门非档位门）
 		{"行3P-网络出站公网", IssuanceInput{WorkloadRegistered: false, CapsSubsetDeclared: true, NetworkEgress: true, NetworkZone: "public", RiskLevel: "R2"}, true, "I2"},
 		{"行3P-端点缺失保守", IssuanceInput{WorkloadRegistered: false, CapsSubsetDeclared: true, NetworkEgress: true, NetworkZone: "", RiskLevel: "R2"}, true, "I2"},
-		// TC-RT-013 矩阵（R-1643② Kees 修正）：LAN 默认仍审查/信任后免除/回环恒免
+		// TC-RT-013 矩阵（R-1643-2 Kees 修正）：LAN 默认仍审查/信任后免除/回环恒免
 		{"行3P-LAN默认审查", IssuanceInput{WorkloadRegistered: false, CapsSubsetDeclared: true, NetworkEgress: true, NetworkZone: "lan", TrustLAN: false, RiskLevel: "R2"}, true, "I2"},
 		{"行3L-LAN信任免除", IssuanceInput{WorkloadRegistered: false, CapsSubsetDeclared: true, NetworkEgress: true, NetworkZone: "lan", TrustLAN: true, RiskLevel: "R2"}, true, "I2"},
 		{"行3L-回环恒免", IssuanceInput{WorkloadRegistered: false, CapsSubsetDeclared: true, NetworkEgress: true, NetworkZone: "loopback", RiskLevel: "R2"}, true, "I2"},

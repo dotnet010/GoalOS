@@ -23,7 +23,7 @@ type upgradeFakeHandle struct {
 	id            string
 	state         HandleState
 	interruptSeq  []string         // Interrupt 调用时序记录（取消协议链断言数据源）
-	executed      []ExecuteRequest // 已执行 Action 序列（完整请求——R-1640③ 保真断言数据源）
+	executed      []ExecuteRequest // 已执行 Action 序列（完整请求——R-1640-3 保真断言数据源）
 	interruptErr  error
 	releaseErr    error
 }
@@ -76,8 +76,8 @@ func (h *upgradeFakeHandle) Release(context.Context) error {
 func (h *upgradeFakeHandle) State() HandleState { return h.state }
 
 // TestRuntime_Escalate_NewSessionSameVolume（TC-RT-070——12 清单 F 节）：
-// T0→受限档升级端到端——①取消时序（Interrupt 链被调用一次）②被中断 Action 标记 Cancelled
-// ③新会话挂同卷重执行该 Action（已完成 Action 产出物不重复、审计事件链完整——R-1499）。
+// T0→受限档升级端到端——(1)取消时序（Interrupt 链被调用一次）(2)被中断 Action 标记 Cancelled
+// (3)新会话挂同卷重执行该 Action（已完成 Action 产出物不重复、审计事件链完整——R-1499）。
 func TestRuntime_Escalate_NewSessionSameVolume(t *testing.T) {
 	ctx := context.Background()
 	handle := &upgradeFakeHandle{id: "h-t0", state: HandleAcquired}
@@ -109,17 +109,17 @@ func TestRuntime_Escalate_NewSessionSameVolume(t *testing.T) {
 		t.Fatalf("升级失败: %v", err)
 	}
 
-	// 断言①取消时序：Interrupt 被调用恰好一次（优雅取消协议链入口）
+	// 断言(1)取消时序：Interrupt 被调用恰好一次（优雅取消协议链入口）
 	if len(handle.interruptSeq) != 1 {
-		t.Fatalf("断言①失败：Interrupt 应调用 1 次，实际 %d", len(handle.interruptSeq))
+		t.Fatalf("断言(1)失败：Interrupt 应调用 1 次，实际 %d", len(handle.interruptSeq))
 	}
-	// 断言②被中断 Action 标记 Cancelled
+	// 断言(2)被中断 Action 标记 Cancelled
 	if got := sess.ActionStatus("act-2"); got != "Cancelled" {
-		t.Fatalf("断言②失败：act-2 应=Cancelled，实际 %q", got)
+		t.Fatalf("断言(2)失败：act-2 应=Cancelled，实际 %q", got)
 	}
-	// 断言③新会话挂同卷+重执行 act-2+已完成 act-1 不重复产出
+	// 断言(3)新会话挂同卷+重执行 act-2+已完成 act-1 不重复产出
 	if newSess.Workspace().VolumeID != "vol-1" {
-		t.Fatalf("断言③失败：新会话卷=%q 应=vol-1（同卷引用不变）", newSess.Workspace().VolumeID)
+		t.Fatalf("断言(3)失败：新会话卷=%q 应=vol-1（同卷引用不变）", newSess.Workspace().VolumeID)
 	}
 	if err := newSess.ReexecuteInterrupted(ctx); err != nil {
 		t.Fatalf("重执行失败: %v", err)
@@ -127,22 +127,22 @@ func TestRuntime_Escalate_NewSessionSameVolume(t *testing.T) {
 	// act-1 不在新会话重执行（已完成产出物不重复）
 	for _, r := range handleT1.executed {
 		if r.ActionID == "act-1" {
-			t.Fatal("断言③失败：已完成 act-1 在新会话被重复执行——产出物重复")
+			t.Fatal("断言(3)失败：已完成 act-1 在新会话被重复执行——产出物重复")
 		}
 	}
 	found := false
 	for _, r := range handleT1.executed {
 		if r.ActionID == "act-2" {
 			found = true
-			// R-1640③ 请求保真断言：重执行=同一 Action（原 ActionType/Timeout 不丢——
+			// R-1640-3 请求保真断言：重执行=同一 Action（原 ActionType/Timeout 不丢——
 			// 修复前硬编码 "reexecute" 占位的架空行为已消除）
 			if r.ActionType != "shell.execute" || r.Timeout != 5*1e9 {
-				t.Fatalf("断言③保真失败：act-2 重执行请求被篡改——ActionType=%q Timeout=%v（应=shell.execute/5s）", r.ActionType, r.Timeout)
+				t.Fatalf("断言(3)保真失败：act-2 重执行请求被篡改——ActionType=%q Timeout=%v（应=shell.execute/5s）", r.ActionType, r.Timeout)
 			}
 		}
 	}
 	if !found {
-		t.Fatal("断言③失败：act-2 未在新会话重执行")
+		t.Fatal("断言(3)失败：act-2 未在新会话重执行")
 	}
 	// 升级事件链：旧会话终态=已升级关闭
 	if sess.State() != SessionEscalated {
@@ -175,7 +175,7 @@ func TestRuntime_Session_EscalateInterruptFailure(t *testing.T) {
 	}
 }
 
-// ─── R-1640① 夹具：Precheck 失败 Provider（P1——句柄清理断言）───
+// ─── R-1640-1 夹具：Precheck 失败 Provider（P1——句柄清理断言）───
 
 type precheckFailHandle struct {
 	id            string
@@ -219,7 +219,7 @@ func (p *precheckFailProvider) Acquire(context.Context, LeaseRequest) (RuntimeHa
 	return p.handle, nil
 }
 
-// TestRuntime_Attach_PrecheckFailure_ReleasesHandle（R-1640①——会议 #255 P1；12 清单 G 节）：
+// TestRuntime_Attach_PrecheckFailure_ReleasesHandle（R-1640-1——会议 #255 P1；12 清单 G 节）：
 // Precheck 失败=边界建立但未生效——句柄必须清理（07 §4.14 PrecheckFailed：销毁非归还热池；
 // 销毁 vs 归还的区分=W7 热池窗口落地，当前 Release=唯一清理路径）；会话不得进 Running。
 func TestRuntime_Attach_PrecheckFailure_ReleasesHandle(t *testing.T) {

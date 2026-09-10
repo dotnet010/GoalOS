@@ -1,5 +1,5 @@
 // tailnet_test.go——tailnet peer 校验契约测试（R-1650 v3/v4——顾问二轮 checklist
-// ①②④ 落地；③ MagicDNS 真机集成=需 tailnet 主机，诚实登记待验）。
+// (1)(2)(4) 落地；(3) MagicDNS 真机集成=需 tailnet 主机，诚实登记待验）。
 package network
 
 import (
@@ -48,7 +48,7 @@ func seedCache(c *TailnetPeerCache, ips []netip.Addr, age time.Duration, alive b
 	c.alive = alive
 }
 
-// 顾问 checklist①：tailscaled 缺席/查询失败→CGNAT 任意地址 100% ZonePublic。
+// 顾问 checklist(1)：tailscaled 缺席/查询失败→CGNAT 任意地址 100% ZonePublic。
 func TestTailnet_Absent_FailClosed(t *testing.T) {
 	c := NewTailnetPeerCache((&fakeQuerier{err: ErrTailscaleAbsent}).q)
 	cls := &Classifier{Peers: c}
@@ -67,7 +67,7 @@ func TestTailnet_Absent_FailClosed(t *testing.T) {
 	}
 }
 
-// 顾问 checklist②：已知 peer 精确匹配→ZoneLAN；非 peer CGNAT（如 100.64.1.1）→ZonePublic。
+// 顾问 checklist(2)：已知 peer 精确匹配→ZoneLAN；非 peer CGNAT（如 100.64.1.1）→ZonePublic。
 func TestTailnet_PeerGranularity(t *testing.T) {
 	peer := netip.MustParseAddr("100.64.7.7")
 	c := NewTailnetPeerCache(nil)
@@ -77,7 +77,7 @@ func TestTailnet_PeerGranularity(t *testing.T) {
 		t.Fatalf("peer 100.64.7.7 应 ZoneLAN（tailnet 成员），实得 %s", got)
 	}
 	if !cls.IsTailnetExempt(peer, 443) {
-		t.Fatal("peer 任意端口应免除（R-1650 v3④ Jobs 直批免审批）")
+		t.Fatal("peer 任意端口应免除（R-1650 v3(4) Jobs 直批免审批）")
 	}
 	nonPeer := netip.MustParseAddr("100.64.1.1")
 	if got := cls.Classify(nonPeer); got != ZonePublic {
@@ -90,13 +90,13 @@ func TestTailnet_PeerGranularity(t *testing.T) {
 	if cls.IsTailnetExempt(netip.MustParseAddr("100.100.100.100"), 8443) {
 		t.Fatal("Quad100 非 53 端口不应免除")
 	}
-	// Quad100:53 + tailscaled 在线=MagicDNS 基础设施例外（顾问①收窄形态）
+	// Quad100:53 + tailscaled 在线=MagicDNS 基础设施例外（顾问(1)收窄形态）
 	if !cls.IsTailnetExempt(netip.MustParseAddr("100.100.100.100"), 53) {
 		t.Fatal("Quad100:53 + tailscaled 在线应免除（MagicDNS 基础设施 DNS 例外）")
 	}
 }
 
-// 缓存超龄=fail-closed（tailscaled 僵死——顾问②③ TOCTOU 收窄）。
+// 缓存超龄=fail-closed（tailscaled 僵死——顾问(2)(3) TOCTOU 收窄）。
 func TestTailnet_StaleCache_FailClosed(t *testing.T) {
 	peer := netip.MustParseAddr("100.64.7.7")
 	c := NewTailnetPeerCache(nil)
@@ -113,7 +113,7 @@ func TestTailnet_StaleCache_FailClosed(t *testing.T) {
 	}
 }
 
-// 顾问 checklist④：决策路径零阻塞——缓存热态后 10k 次判定零查询调用
+// 顾问 checklist(4)：决策路径零阻塞——缓存热态后 10k 次判定零查询调用
 //（结构证：决策路径=纯缓存读，查询只在后台协程——比 30ms 超时更强的挂起免疫）。
 func TestTailnet_DecisionPathNeverQueries(t *testing.T) {
 	fq := &fakeQuerier{peers: []netip.Addr{netip.MustParseAddr("100.64.7.7")}}
@@ -163,9 +163,9 @@ func TestTailnet_CLIQueryAbsent_RealMachine(t *testing.T) {
 	t.Logf("CLI 查询结果: err=%v（缺席=fail-closed 实锤；在场=查询可达）", err)
 }
 
-// TestTailnet_EventSeam 事件驱动接缝（会议 #280——顾问二轮③收窄落地）：
-// ①peer 集变更=Version 跳变（轮询内哈希比对=变更事件消费面）；
-// ②Invalidate=立即 fail-closed（IsPeer=false——外部事件源插拔点）。
+// TestTailnet_EventSeam 事件驱动接缝（会议 #280——顾问二轮(3)收窄落地）：
+// (1)peer 集变更=Version 跳变（轮询内哈希比对=变更事件消费面）；
+// (2)Invalidate=立即 fail-closed（IsPeer=false——外部事件源插拔点）。
 func TestTailnet_EventSeam(t *testing.T) {
 	p1 := netip.MustParseAddr("100.64.7.7")
 	p2 := netip.MustParseAddr("100.64.9.9")

@@ -9,8 +9,8 @@
 //   pkg/events 注册表无 FlowGenerationRequested 事件类型；missionengine 对未知
 //   flow_name 直接透传给 Agent.Plan（静默继续）。
 //   红锚: 构造无匹配输入（flow_name 在注册表零命中）→
-//     ① 未产出确认 Flow 标记（红）
-//     ② 未先确认即产出 MissionGenerated（静默回退，红）
+//     (1) 未产出确认 Flow 标记（红）
+//     (2) 未先确认即产出 MissionGenerated（静默回退，红）
 //
 // 转绿任务: 7.23（C-2 表）——FlowRecommender 确认流程落地（R-1368）后本测试转绿。
 //

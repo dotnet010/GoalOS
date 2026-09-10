@@ -1,6 +1,6 @@
 //go:build darwin
 
-// provider_t0_darwin.go——协作档（T0）Provider（任务 5.4——R-1478②/R-1479）。
+// provider_t0_darwin.go——协作档（T0）Provider（任务 5.4——R-1478-2/R-1479）。
 // T0 语义（05 §X.6.4 行 1+R-1619）：名单登记工作负载（trusted_workloads 命中=管理员显式
 // 登记的信任决策，非发行者密码学认证）+能力代理语义——Execute 仅放行契约声明能力集
 // （声明集外=能力代理拒绝——非 OS 边界拒绝，BypassCounters 分离计数 TC-RT-002 联动）。

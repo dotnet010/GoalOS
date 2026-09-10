@@ -56,11 +56,11 @@ type ExecutionSession struct {
 	state     SessionState
 	handle    *HandleGuard
 
-	// Action 台账（升级语义数据源——已完成产出物不重复，R-1499 断言③）
+	// Action 台账（升级语义数据源——已完成产出物不重复，R-1499 断言(3)）
 	completed  map[string][]string // actionID → 产出物清单
-	executing  map[string]ExecuteRequest // 执行中 actionID → 原始请求（R-1640③——重执行保真：请求不丢）
-	cancelled  map[string]bool     // 被中断标记 Cancelled（断言②）
-	interrupted []ExecuteRequest   // 待重执行队列（升级时被中断的 Action——完整请求，R-1640③）
+	executing  map[string]ExecuteRequest // 执行中 actionID → 原始请求（R-1640-3——重执行保真：请求不丢）
+	cancelled  map[string]bool     // 被中断标记 Cancelled（断言(2)）
+	interrupted []ExecuteRequest   // 待重执行队列（升级时被中断的 Action——完整请求，R-1640-3）
 }
 
 // NewExecutionSession 建会话（准备中——未挂句柄）。
@@ -92,7 +92,7 @@ func (s *ExecutionSession) Attach(ctx context.Context, p Provider, req LeaseRequ
 		return fmt.Errorf("runtime: Start 失败: %w", err)
 	}
 	if err := guard.Precheck(ctx); err != nil {
-		// R-1640①（会议 #255 P1）：边界建立未生效——句柄必须清理（07 §4.14 PrecheckFailed：
+		// R-1640-1（会议 #255 P1）：边界建立未生效——句柄必须清理（07 §4.14 PrecheckFailed：
 		// 销毁非归还热池；销毁 vs 归还的区分=W7 热池窗口落地，当前 Release=唯一清理路径）。
 		// 不清理=真实 Provider 持有进程/沙箱资源时的泄漏面。
 		_ = guard.Release(context.Background())
@@ -136,7 +136,7 @@ func (s *ExecutionSession) MarkActionCompleted(actionID string, artifacts []stri
 }
 
 // MarkActionExecuting 登记 Action 执行中（升级时被中断=Cancelled 标记来源；
-// 存完整请求——R-1640③ 重执行保真）。
+// 存完整请求——R-1640-3 重执行保真）。
 func (s *ExecutionSession) MarkActionExecuting(req ExecuteRequest) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -159,8 +159,8 @@ func (s *ExecutionSession) ActionStatus(actionID string) string {
 	return "Unknown"
 }
 
-// Escalate 升级（新会话挂同卷——R-1499 三断言：①Interrupt 链优雅取消②被中断 Action
-// 标记 Cancelled③新会话重执行且不重复已完成产出）。
+// Escalate 升级（新会话挂同卷——R-1499 三断言：(1)Interrupt 链优雅取消(2)被中断 Action
+// 标记 Cancelled(3)新会话重执行且不重复已完成产出）。
 // signal=capability_proxy|risk_reeval（EscalationSignaled 枚举——R-1560）。
 // 取消/清理失败=升级失败+旧会话强制销毁（不留热池——R-1525）。
 func (s *ExecutionSession) Escalate(ctx context.Context, newProvider Provider, signal string) (*ExecutionSession, error) {
@@ -170,7 +170,7 @@ func (s *ExecutionSession) Escalate(ctx context.Context, newProvider Provider, s
 		return nil, fmt.Errorf("runtime: 升级非法状态 %v（仅运行中可升级）", s.state)
 	}
 	s.state = SessionEscalating
-	// 被中断 Action=执行中集合 → Cancelled+待重执行队列（完整请求——R-1640③）
+	// 被中断 Action=执行中集合 → Cancelled+待重执行队列（完整请求——R-1640-3）
 	for id, req := range s.executing {
 		s.cancelled[id] = true
 		s.interrupted = append(s.interrupted, req)
@@ -178,7 +178,7 @@ func (s *ExecutionSession) Escalate(ctx context.Context, newProvider Provider, s
 	handle := s.handle
 	s.mu.Unlock()
 
-	// ①优雅取消（Interrupt 链——CancelMessage→SIGTERM→2s→SIGKILL 归 Provider 实现）
+	// (1)优雅取消（Interrupt 链——CancelMessage→SIGTERM→2s→SIGKILL 归 Provider 实现）
 	if handle != nil {
 		if err := handle.Interrupt(ctx); err != nil {
 			// 取消失败=升级失败；旧会话强制销毁+留痕（R-1525——不留热池）
@@ -197,7 +197,7 @@ func (s *ExecutionSession) Escalate(ctx context.Context, newProvider Provider, s
 
 	// 新会话挂同卷
 	newSess := NewExecutionSession(s.id+"-escalated", s.goalID, s.workspace)
-	// 台账继承：已完成（重执行跳过判定）+被中断队列（重执行对象——R-1499 断言③）
+	// 台账继承：已完成（重执行跳过判定）+被中断队列（重执行对象——R-1499 断言(3)）
 	newSess.completed = s.completed
 	newSess.interrupted = append([]ExecuteRequest{}, s.interrupted...)
 
@@ -209,12 +209,12 @@ func (s *ExecutionSession) Escalate(ctx context.Context, newProvider Provider, s
 	if err := newSess.Attach(ctx, newProvider, LeaseRequest{GoalID: s.goalID}); err != nil {
 		return nil, fmt.Errorf("runtime: 新会话挂接失败（重签失败=任务失败——RTM-RESOLVE-F-001 族）: %w", err)
 	}
-	_ = signal // signal 入事件载荷（SessionEscalated.escalation_signal——daemon 生产接线=W5 任务 5.5 前置，R-1640②）
+	_ = signal // signal 入事件载荷（SessionEscalated.escalation_signal——daemon 生产接线=W5 任务 5.5 前置，R-1640-2）
 	return newSess, nil
 }
 
-// ReexecuteInterrupted 重执行升级时被中断的 Action（已完成 Action 跳过——产出物不重复，R-1499 断言③；
-// 原始请求保真重放——R-1640③：重执行=同一 Action 的再执行，非硬编码占位请求）。
+// ReexecuteInterrupted 重执行升级时被中断的 Action（已完成 Action 跳过——产出物不重复，R-1499 断言(3)；
+// 原始请求保真重放——R-1640-3：重执行=同一 Action 的再执行，非硬编码占位请求）。
 func (s *ExecutionSession) ReexecuteInterrupted(ctx context.Context) error {
 	s.mu.Lock()
 	if s.state != SessionRunning {

@@ -285,7 +285,7 @@ func (pr *PipelineRunner) decide(goalID string, actionID string, execErr error) 
 				pr.publishVerdict(actionID, verdict)
 				switch {
 				case verdict.QuorumUnmet:
-					// R-1595 规则①：有效票<quorum(2)——不静默继续（verification_quorum_unmet——
+					// R-1595 规则(1)：有效票<quorum(2)——不静默继续（verification_quorum_unmet——
 					// GoalNeedsReview 事件链全量接线=GoalRunner 侧后续窗口；当前=升级链留痕）
 					return pr.decidePath(goalID, actionID, DecideESCALATE, "verification_quorum_unmet: 多模型验证有效票不足")
 				}
@@ -293,7 +293,7 @@ func (pr *PipelineRunner) decide(goalID string, actionID string, execErr error) 
 				case "FAIL":
 					return pr.decidePath(goalID, actionID, DecideESCALATE, "multi_llm_fail: code review failed") // REPLAN
 				case "DIVERGENCE":
-					// R-1595 规则③：含 FAIL 非全 FAIL=分歧→人工裁定（不静默继续——
+					// R-1595 规则(3)：含 FAIL 非全 FAIL=分歧→人工裁定（不静默继续——
 					// GoalNeedsReview 事件链全量接线=GoalRunner 侧后续窗口）
 					return pr.decidePath(goalID, actionID, DecideESCALATE, "multi_llm_divergence: 验证结论分歧需人工裁定")
 				case "WARN":

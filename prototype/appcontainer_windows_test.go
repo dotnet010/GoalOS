@@ -5,13 +5,13 @@
 // 真边界原语可行性）。
 //
 // 第一性断言（全部实机验证，非文档声称）：
-//  ①网络禁闭：零 named capability 的 AppContainer 进程出站连接=WSAEACCES 即时拒绝
+//  (1)网络禁闭：零 named capability 的 AppContainer 进程出站连接=WSAEACCES 即时拒绝
 //    （内核 WFP 强制——与"路由不可达超时"可分辨，反虚假绿）；
-//  ②敏感读禁闭：AppContainer 进程读 ~/.ssh\config=Access is denied
+//  (2)敏感读禁闭：AppContainer 进程读 ~/.ssh\config=Access is denied
 //    （用户 profile 未授予 ALL APPLICATION PACKAGES——OS 默认拒绝，非配置声明）；
-//  ③fs 写禁闭：AppContainer 进程写 C:\Windows=Access is denied；
-//  ④边界内执行：cmd /c echo 真实执行+输出回传（非 execvp 级假象）；
-//  ⑤边界内合法读：读 System32 内文件成功（ALL APPLICATION PACKAGES 默认授予面）。
+//  (3)fs 写禁闭：AppContainer 进程写 C:\Windows=Access is denied；
+//  (4)边界内执行：cmd /c echo 真实执行+输出回传（非 execvp 级假象）；
+//  (5)边界内合法读：读 System32 内文件成功（ALL APPLICATION PACKAGES 默认授予面）。
 //
 // 非管理员可行性（第一性关键）：CreateAppContainerProfile/进程属性化不需管理员——
 // 与 agentbox Tier2（沙箱用户+防火墙=管理员）路线本质区别。
@@ -62,7 +62,7 @@ func createAppContainer(t *testing.T, name string) *windows.SID {
 		uintptr(unsafe.Pointer(namePtr)),
 		uintptr(unsafe.Pointer(namePtr)), // displayName
 		uintptr(unsafe.Pointer(namePtr)), // description
-		0, 0, // 零 named capability=无网络能力（第一性断言①的载体）
+		0, 0, // 零 named capability=无网络能力（第一性断言(1)的载体）
 		uintptr(unsafe.Pointer(&sid)),
 	)
 	// 0x800700B7=ERROR_ALREADY_EXISTS（幂等重入）；此时 SID 未出参=derive 获取
@@ -178,7 +178,7 @@ func evidenceNetDenied(out string) bool {
 	return strings.Contains(out, "\xb7\xc3\xce\xca\xc8\xa8\xcf\xde")
 }
 
-// TestAppContainer_FirstPrinciples 第一性五断言实机验证（spike 出数性质——R-1478③）。
+// TestAppContainer_FirstPrinciples 第一性五断言实机验证（spike 出数性质——R-1478-3）。
 func TestAppContainer_FirstPrinciples(t *testing.T) {
 	const profile = "GoalOS-Spike-AC"
 	deleteAppContainer(profile) // 幂等清理前次残留
@@ -188,61 +188,61 @@ func TestAppContainer_FirstPrinciples(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	cmd := `C:\Windows\System32\cmd.exe`
 
-	// ④边界内执行（先证非 execvp 假象——进程真实启动+输出回传）
+	// (4)边界内执行（先证非 execvp 假象——进程真实启动+输出回传）
 	code, out := runInAppContainer(t, sid, cmd+` /c echo spike-ok`, 30*time.Second)
 	if code != 0 || !strings.Contains(out, "spike-ok") {
-		t.Fatalf("④边界内执行失败（exit=%d）——AppContainer 启动面未成立: %q", code, out)
+		t.Fatalf("(4)边界内执行失败（exit=%d）——AppContainer 启动面未成立: %q", code, out)
 	}
-	t.Logf("④边界内执行=成功输出 %q", strings.TrimSpace(out))
+	t.Logf("(4)边界内执行=成功输出 %q", strings.TrimSpace(out))
 
-	// ③fs 写禁闭：写 C:\Windows 必拒
+	// (3)fs 写禁闭：写 C:\Windows 必拒
 	// chcp 65001：本机中文 MUI 下 cmd 错误文本=GBK「被拒绝访问」——统一 UTF-8 再断言
 	code, out = runInAppContainer(t, sid, cmd+` /c chcp 65001 >nul & echo x > C:\Windows\goalos-ac-probe.txt`, 30*time.Second)
 	if code == 0 {
-		t.Fatalf("③CRITICAL：写 C:\\Windows 成功——AppContainer 写禁闭失效: %q", out)
+		t.Fatalf("(3)CRITICAL：写 C:\\Windows 成功——AppContainer 写禁闭失效: %q", out)
 	}
 	if !evidenceDenied(out) {
-		t.Fatalf("③写拒绝非 OS 证据形态（应含 Access is denied/拒绝）: %q", out)
+		t.Fatalf("(3)写拒绝非 OS 证据形态（应含 Access is denied/拒绝）: %q", out)
 	}
-	t.Logf("③写 C:\\Windows=拒绝（%q）", strings.TrimSpace(out))
+	t.Logf("(3)写 C:\\Windows=拒绝（%q）", strings.TrimSpace(out))
 
-	// ②敏感读禁闭：读 ~/.ssh\config 必拒（profile 未授 ALL APPLICATION PACKAGES）
+	// (2)敏感读禁闭：读 ~/.ssh\config 必拒（profile 未授 ALL APPLICATION PACKAGES）
 	sshCfg := filepath.Join(home, ".ssh", "config")
 	if _, err := os.Stat(sshCfg); err != nil {
-		t.Skipf("②无 ~/.ssh/config 实体——读禁闭探针无靶标（本机环境）")
+		t.Skipf("(2)无 ~/.ssh/config 实体——读禁闭探针无靶标（本机环境）")
 	}
 	code, out = runInAppContainer(t, sid, cmd+` /c chcp 65001 >nul & type "`+sshCfg+`"`, 30*time.Second)
 	if code == 0 {
-		t.Fatalf("②CRITICAL：读 ~/.ssh/config 成功——AppContainer 读禁闭失效")
+		t.Fatalf("(2)CRITICAL：读 ~/.ssh/config 成功——AppContainer 读禁闭失效")
 	}
 	if !evidenceDenied(out) {
-		t.Fatalf("②读拒绝非 OS 证据形态: %q", out)
+		t.Fatalf("(2)读拒绝非 OS 证据形态: %q", out)
 	}
-	t.Logf("②读 ~/.ssh/config=拒绝（%q）", strings.TrimSpace(out))
+	t.Logf("(2)读 ~/.ssh/config=拒绝（%q）", strings.TrimSpace(out))
 
-	// ①网络禁闭：零 capability=出站 WSAEACCES 即时拒绝（与超时/无路由可分辨）
+	// (1)网络禁闭：零 capability=出站 WSAEACCES 即时拒绝（与超时/无路由可分辨）
 	psCmd := `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`
 	netProbe := ` -NoProfile -Command "try { $c=New-Object Net.Sockets.TcpClient; $c.Connect('192.0.2.1',80); exit 1 } catch { Write-Output $_.Exception.InnerException.Message; exit 3 }"`
 	code, out = runInAppContainer(t, sid, psCmd+netProbe, 60*time.Second)
 	if code == 1 {
-		t.Fatalf("①CRITICAL：出站连接成功——AppContainer 网络禁闭失效")
+		t.Fatalf("(1)CRITICAL：出站连接成功——AppContainer 网络禁闭失效")
 	}
 	if code != 3 {
-		t.Fatalf("①探针形态异常（exit=%d 应=3 捕获分支）: %q", code, out)
+		t.Fatalf("(1)探针形态异常（exit=%d 应=3 捕获分支）: %q", code, out)
 	}
 	// WSAEACCES=10013「以其访问权限不允许的方式访问套接字」=OS 强制证据；
 	// 超时/无路由（10060/10065）=非边界证据——反虚假绿关键分辨面（本地化鲁棒匹配）
 	if !evidenceNetDenied(out) {
-		t.Fatalf("①网络拒绝非 WSAEACCES 证据（疑似超时/无路由假象）: %q", out)
+		t.Fatalf("(1)网络拒绝非 WSAEACCES 证据（疑似超时/无路由假象）: %q", out)
 	}
-	t.Logf("①出站 192.0.2.1:80=WSAEACCES 拒绝（%q）", strings.TrimSpace(out))
+	t.Logf("(1)出站 192.0.2.1:80=WSAEACCES 拒绝（%q）", strings.TrimSpace(out))
 
-	// ⑤边界内合法读：System32 文件可读（默认授予面——边界不是"全锁死"）
+	// (5)边界内合法读：System32 文件可读（默认授予面——边界不是"全锁死"）
 	code, out = runInAppContainer(t, sid, cmd+` /c type C:\Windows\System32\drivers\etc\hosts`, 30*time.Second)
 	if code != 0 {
-		t.Fatalf("⑤边界内合法读失败（应可读系统目录）: %q", out)
+		t.Fatalf("(5)边界内合法读失败（应可读系统目录）: %q", out)
 	}
-	t.Logf("⑤边界内读 System32=成功（%d 字节）", len(out))
+	t.Logf("(5)边界内读 System32=成功（%d 字节）", len(out))
 
 	// 对照组：同一探针在 AppContainer 外（主进程）——网络超时/无路由语义区分
 	extOut, _ := exec.Command(psCmd, "-NoProfile", "-Command",

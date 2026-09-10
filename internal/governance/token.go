@@ -37,7 +37,7 @@ type TokenClaims struct {
 	SessionID               string `json:"session_id"`                // 唯一 ExecutionSession 绑定（签发时预分配——E-05B-07 专项复核）
 	RequiresRealEnforcement bool   `json:"requires_real_enforcement"` // T0 适用性唯一判据（计算规则=06 §1.3 签发决策表）
 	MinIsolation            string `json:"min_isolation"`             // I 族最小隔离强度（I1/I2/I3/I4——I5=拒绝 R-1602）
-	Nonce                   string `json:"nonce"`                     // hex(32B)——仅会话建立时单次消费（防跨会话重放，R-1510 时序句①）
+	Nonce                   string `json:"nonce"`                     // hex(32B)——仅会话建立时单次消费（防跨会话重放，R-1510 时序句(1)）
 	IssuerKeyID             string `json:"issuer_key_id"`             // keyring kid（R-1389）
 	PolicyRevision          string `json:"policy_revision"`
 	// NetworkEndpoints 契约声明端点集（"host:port"——R-1650 v2 FD3 broker 白名单：

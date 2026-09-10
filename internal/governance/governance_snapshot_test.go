@@ -15,8 +15,8 @@ import (
 
 // TestGovernance_TimeoutSnapshot_InFlightUnaffected
 // 进行中的审批在超时配置热更新后，仍使用创建时刻的快照值：
-// ①载荷 timeout_seconds 等于创建时刻引擎值（非硬编码 300）；
-// ②热更新为 10ms 后，进行中审批不得被新值秒杀。
+// (1)载荷 timeout_seconds 等于创建时刻引擎值（非硬编码 300）；
+// (2)热更新为 10ms 后，进行中审批不得被新值秒杀。
 func TestGovernance_TimeoutSnapshot_InFlightUnaffected(t *testing.T) {
 	bus := eventbus.New()
 	eng := governance.New(bus, nil)

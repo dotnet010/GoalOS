@@ -56,7 +56,7 @@ func NewCloudLLMClient(baseURL, apiKey, model string, maxTokens int) *CloudLLMCl
 	return newCloudLLMClientWithHTTP(cfg, model, baseURL, apiKey, maxTokens, nil)
 }
 
-// NewCloudLLMClientWithZone 网域感知变体（R-1643 裁决④——D-2 蓝图 §2.4）：
+// NewCloudLLMClientWithZone 网域感知变体（R-1643 裁决(4)——D-2 蓝图 §2.4）：
 // zoneDialer 非 nil 时 HTTP 传输层挂接网域感知拨号（DNS 重绑定防御=解析后直连锁定 IP；
 // force_public_zone 覆盖=内网代理端点按公网标记）。
 func NewCloudLLMClientWithZone(baseURL, apiKey, model string, maxTokens int, zoneDialer *llm.ZoneDialer) *CloudLLMClient {

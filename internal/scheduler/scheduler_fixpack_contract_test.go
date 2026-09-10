@@ -77,10 +77,10 @@ func TestWakeupSet_PostExec_CompletionWakes(t *testing.T) {
 
 // TestMultiLLM_Synthesis_TimeoutQuorum（12 清单 G 节——R-1595 五规则合成函数对齐）：
 // 四行矩阵（TIMEOUT 票=采集层重试 1 次退避 5s 后的最终票值——合成层只见最终票）：
-// ①1 TIMEOUT+2 PASS→PASS+degraded=true（TIMEOUT 独立票值不计 FAIL——自动化不被网络抖动打断）
-// ②1 FAIL+2 PASS→DIVERGENCE（人工裁定）
-// ③全 FAIL→FAIL
-// ④有效票<quorum(2)（2 TIMEOUT+1 PASS）→quorum 不足→NeedsReview(verification_quorum_unmet)——Kees 加固：不静默吞票
+// (1)1 TIMEOUT+2 PASS→PASS+degraded=true（TIMEOUT 独立票值不计 FAIL——自动化不被网络抖动打断）
+// (2)1 FAIL+2 PASS→DIVERGENCE（人工裁定）
+// (3)全 FAIL→FAIL
+// (4)有效票<quorum(2)（2 TIMEOUT+1 PASS）→quorum 不足→NeedsReview(verification_quorum_unmet)——Kees 加固：不静默吞票
 // 先红状态（2026-08-28 W3 周一）: Combine 当前=加权评分（无 DIVERGENCE/TIMEOUT/quorum 语义——
 // R-1250 S-20 四规则规格与代码双侧失锚的代码侧）——矩阵全红。
 // 转绿任务: 3.6——Combine 五规则重写。
@@ -88,24 +88,24 @@ func TestMultiLLM_Synthesis_TimeoutQuorum(t *testing.T) {
 	vc := &VerdictCombiner{}
 	vote := func(v string) ProviderVote { return ProviderVote{Provider: "p", Model: "m", Vote: v} }
 
-	// ①1 TIMEOUT+2 PASS → PASS+degraded=true
+	// (1)1 TIMEOUT+2 PASS → PASS+degraded=true
 	v1 := vc.Combine([]ProviderVote{vote("TIMEOUT"), vote("PASS"), vote("PASS")})
 	if v1.Result != "PASS" || !v1.Degraded {
-		t.Errorf("①失败: 1 TIMEOUT+2 PASS 应=PASS+degraded=true，实际 result=%s degraded=%v", v1.Result, v1.Degraded)
+		t.Errorf("(1)失败: 1 TIMEOUT+2 PASS 应=PASS+degraded=true，实际 result=%s degraded=%v", v1.Result, v1.Degraded)
 	}
-	// ②1 FAIL+2 PASS → DIVERGENCE
+	// (2)1 FAIL+2 PASS → DIVERGENCE
 	v2 := vc.Combine([]ProviderVote{vote("FAIL"), vote("PASS"), vote("PASS")})
 	if v2.Result != "DIVERGENCE" {
-		t.Errorf("②失败: 1 FAIL+2 PASS 应=DIVERGENCE，实际 %s", v2.Result)
+		t.Errorf("(2)失败: 1 FAIL+2 PASS 应=DIVERGENCE，实际 %s", v2.Result)
 	}
-	// ③全 FAIL → FAIL
+	// (3)全 FAIL → FAIL
 	v3 := vc.Combine([]ProviderVote{vote("FAIL"), vote("FAIL"), vote("FAIL")})
 	if v3.Result != "FAIL" {
-		t.Errorf("③失败: 全 FAIL 应=FAIL，实际 %s", v3.Result)
+		t.Errorf("(3)失败: 全 FAIL 应=FAIL，实际 %s", v3.Result)
 	}
-	// ④有效票<quorum(2) → quorum 不足
+	// (4)有效票<quorum(2) → quorum 不足
 	v4 := vc.Combine([]ProviderVote{vote("TIMEOUT"), vote("TIMEOUT"), vote("PASS")})
 	if !v4.QuorumUnmet {
-		t.Errorf("④失败: 有效票 1<quorum 2 应=QuorumUnmet=true（→NeedsReview(verification_quorum_unmet)），实际 result=%s quorum_unmet=%v", v4.Result, v4.QuorumUnmet)
+		t.Errorf("(4)失败: 有效票 1<quorum 2 应=QuorumUnmet=true（→NeedsReview(verification_quorum_unmet)），实际 result=%s quorum_unmet=%v", v4.Result, v4.QuorumUnmet)
 	}
 }

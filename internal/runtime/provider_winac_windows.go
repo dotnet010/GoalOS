@@ -132,7 +132,7 @@ func winACCreateProfileFresh(actionID string) (string, *windows.SID, error) {
 	return "", nil, fmt.Errorf("profile 撞名重试 3 次耗尽（fail-closed——R-1667 v2）")
 }
 
-// winACDeleteProfile 删除（退避重试——R-1661 v2②；幂等=不存在不炸）。
+// winACDeleteProfile 删除（退避重试——R-1661 v2(2)；幂等=不存在不炸）。
 func winACDeleteProfile(name string) error {
 	namePtr, perr := windows.UTF16PtrFromString(name)
 	if perr != nil {
@@ -347,7 +347,7 @@ func (p *winACProvider) Prepare(_ context.Context, _ RuntimePlan) error {
 		}
 		const genericReadExecute = windows.GENERIC_READ | windows.GENERIC_EXECUTE
 		if err := winACGrantACE(path, capSid, genericReadExecute, subContainersAndObjectsInherit); err != nil {
-			return fmt.Errorf("%w: 工具链授予失败 %s→%s: %w（fail-closed 禁止降级裸跑——R-1659③）", ErrNoBackend, name, path, err)
+			return fmt.Errorf("%w: 工具链授予失败 %s→%s: %w（fail-closed 禁止降级裸跑——R-1659-3）", ErrNoBackend, name, path, err)
 		}
 	}
 	p.prepared = true
@@ -380,7 +380,7 @@ func (p *winACProvider) Acquire(_ context.Context, req LeaseRequest) (RuntimeHan
 	if err != nil {
 		return nil, fmt.Errorf("runtime: AppContainer profile 创建失败: %w", err)
 	}
-	// Job（KILL_ON_JOB_CLOSE——内核级绞杀，R-1661 v2①）
+	// Job（KILL_ON_JOB_CLOSE——内核级绞杀，R-1661 v2(1)）
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		windows.FreeSid(sid)
@@ -394,7 +394,7 @@ func (p *winACProvider) Acquire(_ context.Context, req LeaseRequest) (RuntimeHan
 		windows.FreeSid(sid)
 		return nil, fmt.Errorf("runtime: SetInformationJobObject: %w", err)
 	}
-	// 写面授予（session 包 SID 粒度——R-1659 v3④）：workspace+tmpDir=RWX+DELETE
+	// 写面授予（session 包 SID 粒度——R-1659 v3(4)）：workspace+tmpDir=RWX+DELETE
 	const rwMask = windows.GENERIC_READ | windows.GENERIC_WRITE | windows.GENERIC_EXECUTE | windows.DELETE
 	for _, root := range []string{p.workspace, p.tmpDir} {
 		if err := winACGrantACE(root, sid, rwMask, subContainersAndObjectsInherit); err != nil {
@@ -413,7 +413,7 @@ func (p *winACProvider) Acquire(_ context.Context, req LeaseRequest) (RuntimeHan
 	}, nil
 }
 
-// winACSelectCaps 按契约声明挑选具名能力（R-1659 v3②——"toolchain:<name>" 前缀映射；
+// winACSelectCaps 按契约声明挑选具名能力（R-1659 v3(2)——"toolchain:<name>" 前缀映射；
 // SE_GROUP_ENABLED=4——Attributes=0 静默无效实机实锤）。
 func winACSelectCaps(capSids map[string]*windows.SID, contract *VerifiedContract) []windows.SIDAndAttributes {
 	var caps []windows.SIDAndAttributes
@@ -555,14 +555,14 @@ func (h *winACHandle) Precheck(ctx context.Context) error {
 	h.mu.Unlock()
 	defer h.wg.Done()
 	home, _ := os.UserHomeDir()
-	// ①fs 探针：写 home=必拒（受限档 DenyWrite=home 契约面）
+	// (1)fs 探针：写 home=必拒（受限档 DenyWrite=home 契约面）
 	probePath := filepath.Join(home, "goalos-winac-precheck.txt")
 	code, out := h.execInContainer(ctx, probeSelfExe(), []string{"__goalos-probe", "write", probePath})
 	_ = os.Remove(probePath)
 	if code == 0 || !strings.Contains(out, "PROBE-ERRNO=") || strings.Contains(out, "PROBE-ERRNO=0") {
 		return fmt.Errorf("runtime: Precheck fs 探针未被拒（写 home 成功=AC 边界失效）——out=%q", out)
 	}
-	// ②网络探针：出站必拒（零 capability——ERRNO=WSAEACCES 族）
+	// (2)网络探针：出站必拒（零 capability——ERRNO=WSAEACCES 族）
 	code, out = h.execInContainer(ctx, probeSelfExe(), []string{"__goalos-probe", "dial", "192.0.2.1:80"})
 	if code == 0 || strings.Contains(out, "PROBE-ERRNO=0") {
 		return fmt.Errorf("runtime: Precheck 网络探针未被拒（出站成功=零 capability 失效=边界失效）——out=%q", out)

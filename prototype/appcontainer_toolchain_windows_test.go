@@ -1,13 +1,13 @@
 //go:build prototype && windows
 
-// appcontainer_toolchain_windows_test.go——顾问疑虑①（DLL/依赖加载断层）+
-// 疑虑②（Loopback 硬阻断）实机裁决（2026-08-31，PM 指令：真机实测）。
+// appcontainer_toolchain_windows_test.go——顾问疑虑(1)（DLL/依赖加载断层）+
+// 疑虑(2)（Loopback 硬阻断）实机裁决（2026-08-31，PM 指令：真机实测）。
 //
-// 疑虑①裁决设计：真实解释器双靶——python（用户目录驻留，依赖同目录
+// 疑虑(1)裁决设计：真实解释器双靶——python（用户目录驻留，依赖同目录
 // python3xx.dll+Lib 树=运行期读面）与 node（Program Files 驻留），
 // 各测「未授予/授予」两态——把「exe 能启动」与「工具链能跑通业务」分开钉。
 //
-// 疑虑②裁决设计：loopback 探针四场景——同进程自拨/同 AC 跨进程互连/
+// 疑虑(2)裁决设计：loopback 探针四场景——同进程自拨/同 AC 跨进程互连/
 // 宿主听 AC 拨/AC 听宿主拨——全矩阵出数，不预设结论。
 package prototype
 
@@ -100,7 +100,7 @@ func main() {
 }
 `
 
-// TestAppContainer_DependencyLoad 疑虑①裁决——真实解释器依赖加载面。
+// TestAppContainer_DependencyLoad 疑虑(1)裁决——真实解释器依赖加载面。
 func TestAppContainer_DependencyLoad(t *testing.T) {
 	const profile = "GoalOS-Spike-AC-Dep"
 	deleteAppContainer(profile)
@@ -145,7 +145,7 @@ func TestAppContainer_DependencyLoad(t *testing.T) {
 	}
 }
 
-// TestAppContainer_Loopback 疑虑②裁决——回环四场景矩阵。
+// TestAppContainer_Loopback 疑虑(2)裁决——回环四场景矩阵。
 func TestAppContainer_Loopback(t *testing.T) {
 	const profile = "GoalOS-Spike-AC-Loop"
 	deleteAppContainer(profile)

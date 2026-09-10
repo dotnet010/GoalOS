@@ -1,9 +1,9 @@
 // zone.go——网域分类器（D-2 蓝图落地——R-1643 会议 #258 适配裁定）。
 // 网域二维治理模型：网络出口策略=治理面问题（非隔离边界类型——R-1506 同构）。
-// 三值语义（Kees 安全修正——R-1643②）：免除 data_sharing 审查=仅 loopback；
+// 三值语义（Kees 安全修正——R-1643-2）：免除 data_sharing 审查=仅 loopback；
 // RFC1918 LAN 默认仍审查（trust_lan=true 显式免除——信任=管理员显式登记哲学）。
 // 实证边界：SBPL 无 CIDR/裸 IP 粒度（仅端口形态可用）——网域粒度=用户态本分类器收口，
-// OS 层=端口级放行——三层各司其职（会议 #258 裁决④）。
+// OS 层=端口级放行——三层各司其职（会议 #258 裁决(4)）。
 package network
 
 import "net/netip"
@@ -38,9 +38,9 @@ var (
 )
 
 // ClassifyIP 网域分类（MUST 契约）：
-// ①输入必须合法 netip.Addr（调用方解析——域名解析归底层）；
-// ②先 Unmap（IPv4-mapped IPv6 脏数据清洗——::ffff:192.168.1.1 绕过阻断）；
-// ③loopback→ZoneLoopback；LAN 族→ZoneLAN；其余→ZonePublic。
+// (1)输入必须合法 netip.Addr（调用方解析——域名解析归底层）；
+// (2)先 Unmap（IPv4-mapped IPv6 脏数据清洗——::ffff:192.168.1.1 绕过阻断）；
+// (3)loopback→ZoneLoopback；LAN 族→ZoneLAN；其余→ZonePublic。
 func ClassifyIP(ip netip.Addr) Zone {
 	ip = ip.Unmap() // [MUST] 阻断 IPv4-mapped IPv6 绕过
 	for _, cidr := range loopbackCIDRs {
@@ -65,7 +65,7 @@ func ClassifyIPString(s string) Zone {
 	return ClassifyIP(ip)
 }
 
-// ExemptFromDataSharing data_sharing 审查免除判定（Kees 修正——R-1643②）：
+// ExemptFromDataSharing data_sharing 审查免除判定（Kees 修正——R-1643-2）：
 // loopback=恒免除；LAN=仅 trustLAN=true 免除；公网=恒不免除。
 func ExemptFromDataSharing(z Zone, trustLAN bool) bool {
 	switch z {
@@ -79,7 +79,7 @@ func ExemptFromDataSharing(z Zone, trustLAN bool) bool {
 }
 
 // ZoneForDecision 决策表分流输入（行 3L/3P——三值最细粒度：免除判定需要 loopback/LAN 区分
-// ——Kees 修正 R-1643②）。档位语义：三者皆不提升 I 级（废除涉网硬绑 I3）。
+// ——Kees 修正 R-1643-2）。档位语义：三者皆不提升 I 级（废除涉网硬绑 I3）。
 func ZoneForDecision(z Zone) string {
 	switch z {
 	case ZoneLoopback:
@@ -117,12 +117,12 @@ func (c *Classifier) Classify(ip netip.Addr) Zone {
 	return ClassifyIP(ip)
 }
 
-// IsTailnetExempt tailnet 免除谓词（R-1650 v3④ Jobs 直批「确认属于用户自己
-// tailnet 的连接免审批」+顾问二轮① MagicDNS 例外收窄版）：
+// IsTailnetExempt tailnet 免除谓词（R-1650 v3(4) Jobs 直批「确认属于用户自己
+// tailnet 的连接免审批」+顾问二轮(1) MagicDNS 例外收窄版）：
 //   - peer 实锤（任意端口）→免除；
 //   - Quad100:53（UDP/TCP 由调用方语义保证——端口判别在本层）且 tailscaled 在线
 //     （Alive 锚——不在线则 Quad100 只是普通 CGNAT 地址）→基础设施 DNS 例外
-//     （防 MagicDNS 主机上基础解析被推入审批流卡死——顾问①雪崩面）；
+//     （防 MagicDNS 主机上基础解析被推入审批流卡死——顾问(1)雪崩面）；
 //   - 其余=不免除（走正常 data_sharing 审查）。
 func (c *Classifier) IsTailnetExempt(ip netip.Addr, port int) bool {
 	if c == nil || c.Peers == nil {

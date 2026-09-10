@@ -35,7 +35,7 @@ import (
 )
 
 // goalNeedsReviewEventType 是 GoalNeedsReview 的 wire 值（07 事件注册表 core 层注册，
-// R-1219 S-24②/R-1376——NeedsReview 唯一入口事件）。
+// R-1219 S-24(2)/R-1376——NeedsReview 唯一入口事件）。
 // pkg/events 尚未导出对应常量——转绿任务 1.27 应注册 events.TypeGoalNeedsReview 且
 // 保持 wire 值不变；本测试以 wire 值字面量断言行为，不依赖常量是否存在。
 const goalNeedsReviewEventType = "GoalNeedsReview"

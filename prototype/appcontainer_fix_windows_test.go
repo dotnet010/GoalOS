@@ -1,16 +1,16 @@
 //go:build prototype && windows
 
-// appcontainer_fix_windows_test.go——顾问复审隐藏问题①②的修复机制机器裁决
+// appcontainer_fix_windows_test.go——顾问复审隐藏问题(1)(2)的修复机制机器裁决
 // （2026-08-31）：
 //
-//  ①稳定 capability SID 共享授予：工具链只读授权不随 session——授予一次稳定
+//  (1)稳定 capability SID 共享授予：工具链只读授权不随 session——授予一次稳定
 //    SID 长期有效；session 容器通过 SECURITY_CAPABILITIES.Capabilities[] 携带
 //    该稳定 SID=被授予面生效。裁决：能力 SID 是否真的被 AC token 访问检查承认
 //    （连带对照：无能力 SID 时同路径=拒——授予是因不是巧合）。
 //
-//  ②沙箱内回环转发链：AC 内监听器（S1/S2 已证同 AC loopback 通）→ 命名管道
+//  (2)沙箱内回环转发链：AC 内监听器（S1/S2 已证同 AC loopback 通）→ 命名管道
 //    （FD3 已证 AC 可连宿主管道）→ 宿主中继 → 宿主服务——Ollama 场景的透明
-//    承接形态全链实证（消灭「直连静默丢包=秒级超时」延迟坑——隐藏问题②）。
+//    承接形态全链实证（消灭「直连静默丢包=秒级超时」延迟坑——隐藏问题(2)）。
 package prototype
 
 import (
@@ -90,7 +90,7 @@ func runInAppContainerCaps(t *testing.T, sid *windows.SID, caps []windows.SIDAnd
 	return int(code), readSpawnOut(outFile)
 }
 
-// TestAppContainer_SharedCapabilityGrant 隐藏问题①修复机制裁决。
+// TestAppContainer_SharedCapabilityGrant 隐藏问题(1)修复机制裁决。
 // 关键实机发现（v1 先红）：SECURITY_CAPABILITIES.Capabilities[] 拒收 S-1-15-2-*
 // 包 SID（87 参数错）——能力 SID 必须用 DeriveCapabilitySidsFromName 派生的
 // S-1-15-3-* 族。附带红利：能力 SID 纯名称派生，无 profile 实体=零残留面
@@ -268,7 +268,7 @@ func deriveCapabilitySID(t *testing.T, capName string) *windows.SID {
 	return copied
 }
 
-// TestAppContainer_LoopbackForwarder 隐藏问题②解法裁决——全链：
+// TestAppContainer_LoopbackForwarder 隐藏问题(2)解法裁决——全链：
 // AC 客户端→AC 转发器（loopback）→命名管道→宿主中继→宿主 echo 服务→原路返回。
 func TestAppContainer_LoopbackForwarder(t *testing.T) {
 	const profile = "GoalOS-Spike-AC-Fwd"

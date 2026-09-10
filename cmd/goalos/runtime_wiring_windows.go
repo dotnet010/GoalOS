@@ -22,7 +22,7 @@ import (
 func registerPlatformProvider(rb *runtimeBoundary, home string, fd3dial *llm.ZoneDialer) {
 	var opts []goalosruntime.WinACOption
 	if fd3dial != nil {
-		// FD3 broker 拨号面=zone dialer 同源（R-1650 v2④——网域分类留痕不旁路）
+		// FD3 broker 拨号面=zone dialer 同源（R-1650 v2(4)——网域分类留痕不旁路）
 		opts = append(opts, goalosruntime.WithDialFunc(fd3dial.DialContext))
 	}
 	p := goalosruntime.NewWinACProvider(filepath.Join(home, "Goals"), filepath.Join(os.TempDir(), "goalos"), nil, opts...)

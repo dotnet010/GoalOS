@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-// tailnetFreshTTL 缓存新鲜度上限（顾问②③落点：超龄=fail-closed——TOCTOU 窗口
+// tailnetFreshTTL 缓存新鲜度上限（顾问(2)(3)落点：超龄=fail-closed——TOCTOU 窗口
 // 收窄至秒级；事件驱动失效通知=后续优化面，首版轮询纪律）。
 const tailnetFreshTTL = 5 * time.Second
 
@@ -37,11 +37,11 @@ type TailnetQuerier func(ctx context.Context) ([]netip.Addr, error)
 
 // TailnetPeerCache tailnet peer 缓存（后台刷新+超龄 fail-closed+事件失效接缝）。
 //
-// 事件驱动面（会议 #280——顾问二轮③落地方向收窄实证）：CLI 路线（Jobs 裁决
+// 事件驱动面（会议 #280——顾问二轮(3)落地方向收窄实证）：CLI 路线（Jobs 裁决
 // 零依赖主路）无事件流——tailscale CLI 无长轮询订阅面；真事件源=LocalAPI
 // ipn.Notify 长轮询=重依赖路线（与本裁决冲突）。诚实折中=**接缝化**：轮询
-// 仍是载体（3s/5s TTL 不变），但 ①peer 集变更检测（哈希比对）触发版本递增
-// =消费方可观测变更事件；②Invalidate() 主动失效口=外部事件源（未来 OS 网络
+// 仍是载体（3s/5s TTL 不变），但 (1)peer 集变更检测（哈希比对）触发版本递增
+// =消费方可观测变更事件；(2)Invalidate() 主动失效口=外部事件源（未来 OS 网络
 // 变化监听/LocalAPI watcher 接入点）零改造插拔。
 type TailnetPeerCache struct {
 	mu        sync.RWMutex

@@ -17,7 +17,7 @@ import (
 
 // TestExecutorDarwin_SeatbeltProfileValid：构造的 profile 必须被 sandbox-exec 接受
 // （/usr/bin/true 在边界内 exit 0）；非法 filter 必须被拒绝（探针有牙——负向对照）。
-// 转绿（R-1641③ 收敛落地——2026-08-29）：executor profile=internal/sandbox 单源
+// 转绿（R-1641-3 收敛落地——2026-08-29）：executor profile=internal/sandbox 单源
 // （Option B 语义），生产插件沙箱路径自此真实生效。
 func TestExecutorDarwin_SeatbeltProfileValid(t *testing.T) {
 	if _, err := exec.LookPath("sandbox-exec"); err != nil {

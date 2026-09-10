@@ -181,8 +181,8 @@ func (e *Engine) Start() {
 
 // handleRequirementAdded RequirementAdded 消费链（任务 5.8——R-1597/R-1613；
 // 07 §4 R-1362 payload={goal_id, requirement_text, source, added_at}）：
-// ①版本链修订（继承锚点全携+新验收条款追加）；②CompletionContractRecorded 落账
-// （载荷=criteria 现行+契约元数据——R-1613）；③重规划触发（PlanRequested 既有链路——
+// (1)版本链修订（继承锚点全携+新验收条款追加）；(2)CompletionContractRecorded 落账
+// （载荷=criteria 现行+契约元数据——R-1613）；(3)重规划触发（PlanRequested 既有链路——
 // 确认门槛：Revised 含新验收条款→用户确认复用 R-1248 confirm 链，风险级变化→重新审批，
 // 归既有治理链不改）。
 // 无首版契约=以需求文本为 SuccessDefinition 建首版（首次需求注入=契约创建入口之一）。
@@ -217,7 +217,7 @@ func (e *Engine) handleRequirementAdded(evt events.Event) error {
 			return fmt.Errorf("missionengine: 契约版本链修订失败: %w", err)
 		}
 	}
-	// ②落账事件（07 §4 R-1414——Validate 失败=不发布，R-770）
+	// (2)落账事件（07 §4 R-1414——Validate 失败=不发布，R-770）
 	payload := contractVersionPayload(v)
 	if err := payload.Validate(); err != nil {
 		return fmt.Errorf("missionengine: CompletionContractRecorded 载荷非法: %w", err)
@@ -234,7 +234,7 @@ func (e *Engine) handleRequirementAdded(evt events.Event) error {
 			"frozen_anchors": payload.FrozenAnchors,
 		},
 	})
-	// ③重规划触发（既有 PlanRequested 链路——reason 透传 R-1400）
+	// (3)重规划触发（既有 PlanRequested 链路——reason 透传 R-1400）
 	e.bus.Publish(events.Event{
 		Type:    events.TypePlanRequested,
 		GoalID:  goalID,

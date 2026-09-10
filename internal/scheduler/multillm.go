@@ -61,12 +61,12 @@ type Verdict struct {
 // 票值枚举=PASS/WARN/FAIL/TIMEOUT（TIMEOUT=独立票值——采集层超时重试 1 次退避 5s 后的
 // 最终票，非 FAIL；R-1595 修订 R-659/R-1331「超时记 FAIL」旧语义）。
 // 有效票=非 TIMEOUT 票；quorum=2（有效票下限）。
-// ①有效票<quorum→QuorumUnmet=true（→verification_quorum_unmet——Kees 加固：不静默吞票）
-// ②全 FAIL→FAIL
-// ③含 FAIL 非全 FAIL→DIVERGENCE（分歧→人工裁定——04 review 三命令链接收）
-// ④含 WARN 无 FAIL→WARN
-// ⑤全 PASS→PASS（含 TIMEOUT 票则 Degraded=true——覆盖降低诚实呈现，04 §14 依据行）
-// 输入契约（R-1640⑥——会议 #255 P6，Meyer 边界裁决）：票值归一化=采集层责任
+// (1)有效票<quorum→QuorumUnmet=true（→verification_quorum_unmet——Kees 加固：不静默吞票）
+// (2)全 FAIL→FAIL
+// (3)含 FAIL 非全 FAIL→DIVERGENCE（分歧→人工裁定——04 review 三命令链接收）
+// (4)含 WARN 无 FAIL→WARN
+// (5)全 PASS→PASS（含 TIMEOUT 票则 Degraded=true——覆盖降低诚实呈现，04 §14 依据行）
+// 输入契约（R-1640-6——会议 #255 P6，Meyer 边界裁决）：票值归一化=采集层责任
 // （multillm_verifier.go 两处调用点把空票转为 TIMEOUT）；Combine 信任已归一化输入，
 // 不重复防御——跨层重复校验=语义分叉风险源。
 func (vc *VerdictCombiner) Combine(votes []ProviderVote) *Verdict {
@@ -90,13 +90,13 @@ func (vc *VerdictCombiner) Combine(votes []ProviderVote) *Verdict {
 	v.Divergent = vc.isDivergent(valid)
 	v.WeightedScore = vc.weightedScore(valid) // 遗留展示字段（persona/events 消费）——不参与 Result 合成；废弃归专项 E-05A-04
 
-	// 规则①quorum
+	// 规则(1)quorum
 	if len(valid) < 2 {
 		v.Result = "WARN" // 占位——QuorumUnmet 承载语义（路由=verification_quorum_unmet）
 		v.QuorumUnmet = true
 		return v
 	}
-	// 规则②全 FAIL
+	// 规则(2)全 FAIL
 	allFail := true
 	hasFail, hasWarn := false, false
 	for _, vote := range valid {
@@ -112,13 +112,13 @@ func (vc *VerdictCombiner) Combine(votes []ProviderVote) *Verdict {
 	}
 	switch {
 	case allFail:
-		v.Result = "FAIL" // 规则②
+		v.Result = "FAIL" // 规则(2)
 	case hasFail:
-		v.Result = "DIVERGENCE" // 规则③
+		v.Result = "DIVERGENCE" // 规则(3)
 	case hasWarn:
-		v.Result = "WARN" // 规则④
+		v.Result = "WARN" // 规则(4)
 	default:
-		v.Result = "PASS" // 规则⑤
+		v.Result = "PASS" // 规则(5)
 		if timeoutCount > 0 {
 			v.Degraded = true // 全 PASS 但含 TIMEOUT 票=降级通过（覆盖降低诚实呈现）
 		}

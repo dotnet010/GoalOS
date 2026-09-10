@@ -1,8 +1,8 @@
 // refine_escape.go — refine 物理故障逃逸+Guard/Drift 决策序列实现（任务 5.16——
 // R-1097/R-1101 会议 #195）。
 //
-// 契约：①refine 物理故障逃逸——max_iterations+watchdog 超时→Failed(physical_guard)+
-// 升级审批+审计事件（不无限循环）②Guard/Drift/Canary 信号→唯一产品状态映射+冲突
+// 契约：(1)refine 物理故障逃逸——max_iterations+watchdog 超时→Failed(physical_guard)+
+// 升级审批+审计事件（不无限循环）(2)Guard/Drift/Canary 信号→唯一产品状态映射+冲突
 // 决策序列（确定性算法：执行中触发优先于执行前 ALLOW——Guard ALLOW 不豁免执行中触发）。
 package governance
 
