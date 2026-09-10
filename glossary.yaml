@@ -1,5 +1,5 @@
 # GoalOS 00统一术语表 — 机器可读 YAML（从 ../开发文档/00统一术语表.md 自动生成）
-# 生成时间: 2026-09-09T16:34:10Z
+# 生成时间: 2026-09-10T03:03:46Z
 # 真相来源: ../开发文档/00统一术语表.md — 本文件是其派生文件。不一致时以 Markdown 为准。
 
 terms:
@@ -56,8 +56,8 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'ReviewReport'
-    description: 'v0.2.0 新增（R-846）。Multi-LLM 审查的结构化报告。含 verdict / vote_distribution / provider_opinions（每个 Provider 的完整 reasoning）/ user_decision。持久化至 bbolt 桶（~/.goalos/state.db 投影——R-1175 载体单一化；per-goal 目录布局废弃，R-1328）。用户通过 CLI `goalos review` 查看（审查交互唯一呈现=CLI——R-1333）。**Invariant**: Provider 原始意见完整保留——不截断、不翻译、不美化'
-    has_schema: 0
+    description: 'v0.2.0 新增（R-846）。Multi-LLM 审查的结构化报告。含 verdict / vote_distribution / provider_opinions（每个 Provider 的完整 reasoning）/ user_decision。持久化=事件流投影（R-1685——载体=JSONL 定稿；原 bbolt 桶表述=幽灵承诺已清扫）。用户通过 CLI `goalos review` 查看（审查交互唯一呈现=CLI——R-1333）。**Invariant**: Provider 原始意见完整保留——不截断、不翻译、不美化'
+    has_schema: 1
     defined_in: '05软件架构文档.md'
   - name: 'MultiLLMUserDecided'
     description: 'v0.2.0 新增（R-850）。用户对 Multi-LLM 审查结果做出决策的事件。decision 取值：accept（接受结果，tainted_review=true）/ refine（修改需求→Agent.Replan）（两值定稿 R-1332——retry 决策已删除，retry 唯一恢复原语=goalos retry 端点；R-1606/B-2 会议 #248 清算三值残留）。layer: core。**Invariant**: 同一 Action 最多发布一次。决策不可撤销'
@@ -67,9 +67,13 @@ terms:
     description: 'HTTP Server | daemon HTTP API 的本地交付通道（R-1580 对齐 R-1123/R-1378）：**=goalos CLI 的后端接口，非用户直接入口**（新原型交付前 CLI 唯一软件入口——R-1123）。监听 UDS `~/.goalos/run/daemon.sock`；TCP `localhost:18920` 仅留 `/metrics`（R-1378）。实现细节。对标 Cups/VS Code Server'
     has_schema: 0
     defined_in: '05软件架构文档.md'
+  - name: 'Zero Structured Storage'
+    description: '不引入独立数据库服务（无外部 DBMS 进程/无网络存储协议/无专门运维角色——R-1611 会议 #249 定义重写：File-Native≠No Embedded Storage Engine）。**载体定稿（R-1685——会议 #283）**：JSONL 文件族（events.jsonl WAL+JSON 快照投影）=File-Native 原则的兑现形态；bbolt 选型已废弃（幽灵架构裁决——承诺从未兑现且零依赖第一性相压）'
+    has_schema: 1
+    defined_in: '05软件架构文档.md'
   - name: 'JSONL Event Store'
-    description: 'events.jsonl。append-only。Source of Truth。**WAL 先行协议（R-1175）**：写入顺序=WAL append→fsync→bbolt tx 投影（WAL 为唯一串行化提交点，追加互斥）；bbolt 失败→按 WAL 回滚重放；恢复源=WAL（bbolt 可重建）。单一全局 WAL 文件（per-goal 目录布局废弃）'
-    has_schema: 0
+    description: 'events.jsonl。append-only。Source of Truth。**WAL 先行协议（R-1175+R-1685 定稿）**：写入顺序=WAL append→fsync（WAL 为唯一串行化提交点，追加互斥）；投影=JSON 快照（statestore 包内 mutex 串行写），失败→按 WAL 回滚重放；恢复源=WAL（投影可重建）。目录布局=per-goal 在役（R-1685 写实；「单一全局 WAL」=登记目标不承诺时点）'
+    has_schema: 1
     defined_in: '05软件架构文档.md'
   - name: 'goalos (CLI)'
     description: '脚本集成。HTTP (localhost)。Goal 模式：`goalos "<目标>"`。Run 模式：`goalos run [--profile] [--mcp] -- <cmd>`。迁移工具：`goalos migrate`。**新原型交付前唯一软件入口（R-1123）**'
@@ -200,7 +204,7 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: '快照族术语（R-1116 六义六名——R-1495 收编第六义）'
-    description: '六义六名对照：**StateSnapshot**=StateStore 投影快照（R-545，冷启动 O(1) 加速）；**FileSnapshot**=statefs 快照（Snapshot 方法名保留，R-1035/R-1065——文件版本 vN 机制已删，R-1366，语义见 statefs 词条）；**环境快照（EnvSnapshot）**=Observer 采集物（只读，采集不裁决）；**Checkpoint**=状态快照子集+token 撤销锚点+定期增量边界（R-772/R-1093）；**MVCC 读视图**=bbolt ReadTx（R-1109，禁称快照）；**VMSnapshot（热池镜像，R-1495）**=T2 热池实例的虚拟机状态快照（归还时快照暂停/获取时恢复——恢复前内存清零+卷重新校验）。正文禁用裸"快照"跨义指代'
+    description: '六义六名对照：**StateSnapshot**=StateStore 投影快照（R-545，冷启动 O(1) 加速）；**FileSnapshot**=statefs 快照（Snapshot 方法名保留，R-1035/R-1065——文件版本 vN 机制已删，R-1366，语义见 statefs 词条）；**环境快照（EnvSnapshot）**=Observer 采集物（只读，采集不裁决）；**Checkpoint**=状态快照子集+token 撤销锚点+定期增量边界（R-772/R-1093）；**MVCC 读视图**=已废弃（R-1685——bbolt 选型废弃，ReadTx 概念随之退役）；**VMSnapshot（热池镜像，R-1495）**=T2 热池实例的虚拟机状态快照（归还时快照暂停/获取时恢复——恢复前内存清零+卷重新校验）。正文禁用裸"快照"跨义指代'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'Level 尺度对照（R-1115 三义分离）'
@@ -220,7 +224,7 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'agentbox'
-    description: '**已退役（R-1680——2026-09-09 全量移除；Jobs 非核心免自研裁决 R-1679 路线取代）**。存档：曾为 GoalOS 默认沙箱后端（R-931），Go 原生库（`github.com/zhangyunhao116/agentbox`）零 cgo，编译进二进制。三平台机制：Windows（Restricted Token + Job Object + Low Integrity + ACLs）/ Linux（namespace + Landlock + seccomp BPF）/ macOS（Seatbelt/SBPL）；内置命令分类器规则组（实测 14F/16E/~14A）。退役原因=事故链（R-1678 接线缺失 fail-open+worker 递归爆炸+Go 运行时命名空间底层坑）与「非核心免自研」裁决——模式 C 现成实现 bwrap 替代（R-1679：数千行 C 全球审计零依赖）。现役替代=Windows WinAC（R-1648）/Linux bwrap 双引擎（R-1681）/macOS Seatbelt。库级资产（分类器/规则组）随库移除=规则面自持化（见 exec 分层策略）'
+    description: '**已退役（R-1680——2026-09-09 全量移除；Jobs 非核心免自研裁决 R-1679 路线取代）**。存档：曾为 GoalOS 默认沙箱后端（R-931），Go 原生库（`github.com/zhangyunhao116/agentbox`）零 cgo，编译进二进制。三平台机制：Windows（Restricted Token + Job Object + Low Integrity + ACLs）/ Linux（namespace + Landlock + seccomp BPF）/ macOS（Seatbelt/SBPL）；内置命令分类器规则组（实测 14F/16E/~14A）。退役原因=事故链（R-1678 接线缺失 fail-open+worker 递归爆炸+Go 运行时命名空间底层坑）与「非核心免自研」裁决——bwrap 替代（R-1679：数千行 C 全球审计零依赖；bwrap=双引擎收敛的**模式 A** 位承载引擎，其机制路线=userns+bind 遮蔽+pivot_root——「模式 C」术语退役注记：R-1693——模式 C 从未是独立引擎而是自研机制路线构想，bwrap 集成后该构想以现成实现形态兑现，术语归并模式 A）。现役替代=Windows WinAC（R-1648）/Linux bwrap 双引擎（R-1681）/macOS Seatbelt。库级资产（分类器/规则组）随库移除=规则面自持化（见 exec 分层策略）'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'MXC (Microsoft Execution Container)'
@@ -260,11 +264,19 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: '平台支持三级定义（R-924/R-977）'
-    description: '平台支持成熟度的诚实分级：1 级=编译通过 / 2 级=测试通过 / 3 级=沙箱强制生效。每平台每级如实标注。会议 #170 基线：Windows=1 级，信创=1 级，macOS=3 级，Linux=3 级。v0.3.0 目标：Windows=3 级，macOS=3 级，Linux=3 级，信创=2 级（3 级在 0.3.x 真机窗口收敛）。**2026-09-09 信创 3 级达成**（R-1681——bwrap 承载实机实证，06 信创矩阵麒麟行写实）；Windows 3 级=2026-09-06 R-1675 达成。**尺度互指注记（R-1571）**：本词条"N 级"=**PlatformTier**（平台支持成熟度）——与 IsolationLevel（I0-I5，隔离强度阶梯）不同轴（macOS=PlatformTier 3 级 且 IsolationLevel=I2 唯一值）；对照见"Level 尺度对照"词条。**SandboxLevel 语义（R-977）**：`Result.SandboxLevel`=本次执行**实际生效**的能力级别；3 级=该平台当前配置**可达的最高级**；降级=**能力受限**（如信创无 Landlock），**非不安全**——诚实标注的目的就是让用户知道当前限制，能力仍在 OS 级强制执行（只是少一层）'
-    has_schema: 0
+    description: '平台支持成熟度的诚实分级：1 级=编译通过 / 2 级=测试通过 / 3 级=沙箱强制生效。每平台每级如实标注。会议 #170 基线：Windows=1 级，信创=1 级，macOS=3 级，Linux=3 级。v0.3.0 目标：Windows=3 级，macOS=3 级，Linux=3 级，信创=2 级（3 级在 0.3.x 真机窗口收敛）。**2026-09-09 信创 3 级达成**（R-1681——bwrap 承载实机实证，06 信创矩阵麒麟行写实）；Windows 3 级=2026-09-06 R-1675 达成。**尺度互指注记（R-1571）**：本词条"N 级"=**PlatformTier**（平台支持成熟度）——与 IsolationLevel（I0-I5，隔离强度阶梯）不同轴（macOS=PlatformTier 3 级 且 IsolationLevel=I2 唯一值）；对照见"Level 尺度对照"词条。**SandboxLevel 语义（R-977）**：`Result.SandboxLevel`=本次执行**实际生效**的能力级别（**字段名注记（R-1693）**：05 实现侧该字段已更名 `Result.PlatformTier`——R-1115 尺度三分传播漏网补齐；本词条语义描述不变）；3 级=该平台当前配置**可达的最高级**；降级=**能力受限**（如信创无 Landlock），**非不安全**——诚实标注的目的就是让用户知道当前限制，能力仍在 OS 级强制执行（只是少一层）'
+    has_schema: 1
     defined_in: '05软件架构文档.md'
   - name: 'Sandbox 后端矩阵（R-926）'
     description: '四后端：windows（WinAC：AppContainer+ACE 授予面——R-1648 换血，agentbox 受限令牌族已退役）/ linux（bwrap ns 族模式 A+模式 B landlock+seccomp 双引擎——R-1664 框架，R-1681 正式固定）/ 信创（bwrap 承载——R-1681，替换原 BPF+mount ns 自研路线；内核 4.19+；kysec exectl 白名单制=部署面）/ darwin-seatbelt（sandbox-exec .sb 统一收口）。运行时特性探测选择后端策略，失效 fail-closed'
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'WinAC（Windows AppContainer 承载）'
+    description: 'Windows 受限档生产沙箱（R-1648——会议 #262 裁决，替换 agentbox 受限令牌族）：AppContainer profile（熵化一次性命名 GoalOS-AC-<action>-<64bit 熵>，撞名换名重试×3，derive 兜底全删——R-1667 v2）+SECURITY_CAPABILITIES 注入+能力 SID（S-1-15-3-* 族，Attributes=SE_GROUP_ENABLED）+Job Object KILL_ON_JOB_CLOSE 内核绞杀+生命周期硬化（锁粒度纪律 R-1668；tainted 焊死防 UAF R-1669——宁泄露句柄绝不在存活进程下释放 SID）。隔离语义：「执行≠读」分离（R-1653）+零 capability 出站全拒+AC 回环与宿主同命名空间。实证：契约五面×三环境（Pro 本机/Home 测试机/CI 管理员态）+PlatformTier 3 级达成（R-1675）。代码=internal/runtime/provider_winac_windows.go'
+    has_schema: 0
+    defined_in: '05软件架构文档.md'
+  - name: 'bwrap（Bubblewrap 承载）'
+    description: 'Linux 受限档模式 A 承载引擎（R-1679 Jobs 裁决——非核心免自研；R-1681 正式固定）：Flatpak 核心沙箱执行体（userns+bind-mount 遮蔽+pivot_root，数千行 C 全球审计）。GoalOS 侧仅拼参数调起：`--ro-bind / / --unshare-all --unshare-net --bind ws/tmp --die-with-parent --chdir ws`。依赖=bwrap 二进制（麒麟 V10 SP1 系统自带 0.4.0=kysec 零税；Ubuntu 24.04=apt 0.9.0+goalos-bwrap AppArmor profile——scripts/gen-apparmor-profile.sh --bwrap 生成）。双引擎收敛（R-1664）：模式 A=bwrap/模式 B=免 userns（landlock+seccomp）兜底，双不可用=fail-closed（ErrNoBackend 第三态）。「模式 C」术语退役（R-1693——机制路线构想的术语归并模式 A）。代码=internal/runtime/provider_bwrap_linux.go'
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: '插件协议传输层（R-922）'
@@ -312,8 +324,8 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'Logical Truth / Physical Truth（R-1092）'
-    description: '双真相源主从定义：events.jsonl=**Logical Truth**（唯一权威，状态从事件重放推导）；statefs=**Physical Truth**（加速投影，可丢弃、可从事件重放重建，Checkpoint 从不是权威）。**Commit Point=逻辑 Commit=WAL append+fsync 完成（R-1175 S-06 定稿——WAL 为唯一串行化提交点，追加互斥；bbolt=滞后投影，其失败不回滚 WAL，恢复从 WAL reconcile/bbolt 可重建——R-1614 会议 #249：旧句「Event Commit ∩ StateFS Commit（两者落盘才对外可见）」物理删除，crash 语义唯一现行=本定义）**；Action Commit=Logical+Physical+Audit 三合一。恢复顺序唯一：先 Event 恢复→statefs reconcile；Audit=append-only 证据链不在 reconcile 范围。权威：05 §3.19.2'
-    has_schema: 0
+    description: '双真相源主从定义：events.jsonl=**Logical Truth**（唯一权威，状态从事件重放推导）；statefs=**Physical Truth**（加速投影，可丢弃、可从事件重放重建，Checkpoint 从不是权威）。**Commit Point=逻辑 Commit=WAL append+fsync 完成（R-1175 S-06 定稿——WAL 为唯一串行化提交点，追加互斥；投影=滞后 JSON 快照（R-1685 定稿载体），其失败不回滚 WAL，恢复从 WAL reconcile——R-1614 会议 #249：旧句「Event Commit ∩ StateFS Commit（两者落盘才对外可见）」物理删除，crash 语义唯一现行=本定义）**；Action Commit=Logical+Physical+Audit 三合一。恢复顺序唯一：先 Event 恢复→statefs reconcile；Audit=append-only 证据链不在 reconcile 范围。权威：05 §3.19.2'
+    has_schema: 1
     defined_in: '05软件架构文档.md'
   - name: '状态代数矩阵（R-1095）'
     description: 'Goal 状态机=四维代数 **GoalState×ActionState×PipelineState×ApprovalState**（每维独立终态集合+合法迁移表，交叉合法性穷尽枚举，非法迁移=契约测试拒绝）。Stop/Cancel/Fail 语义分离：**Stopped(user_stopped)**=用户主动停止终态（不伪装 Failed）；Cancelled=治理层撤销；Failed=异常终止。**GoalState=9 态（R-1137，会议 #198）**：Draft/Planned/Running/Paused/NeedsReview/Stopped/Failed/Cancelled/Completed。权威：05 §3.2'
@@ -328,7 +340,7 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'bbolt（R-1109/R-1175）'
-    description: 'statefs 实现选型（钉死）：纯 Go 单文件 MVCC KV——事务原子提交、MVCC 读视图=ReadTx（禁称快照，R-1116）、崩溃安全（B+tree copy-on-write）。**R-1175 物理载体单一化（会议 #198）**：bbolt=statefs 唯一载体，路径=~/.goalos/state.db；桶 schema=meta/events-index/checkpoints/goals/{goal_id}/projections+decision 桶（UserDecisionReceived/ActionApproved/ActionRejected 事件投影）+drift-detector 桶；Checkpoint=bbolt 一致性快照；tx 纪律=tx 内事件索引+投影原子写（投影=纯函数），副作用/下游事件发布一律 tx 提交后执行（不在源事件 tx 内），事件处理器禁止重入 bbolt 写，写锁等待>1s→事件排队退避；单一 store 写者+串行化段=internal/statestore 单 goroutine（append→fsync→global_seq 分配→bbolt tx→tx 提交后出队下游事件再入 append 循环），废弃 AtomicEventStore 拆除；单一全局 WAL 文件 events.jsonl（per-goal 目录布局废弃）+一次性迁移脚本=独立 cmd/ 工具（daemon 检测旧布局拒绝启动并提示迁移；tie-break=(occurred_at, goal_id, per-goal seq)）；写者循环重入不变量（F-05/R-1287）：写者循环内禁止同步调用任何会重新入 store 的路径，发布=fire-and-forget 投递入写者输入通道，handler 不得阻塞写者循环。选型钉死=实现有物理载体，非技术幻觉。权威：05 §3.19.5'
+    description: '**已废弃（R-1685——会议 #283 幽灵架构裁决；与上文简表词条同一退役注记——单点化合并）**。存档：曾为 statefs 实现选型钉死（纯 Go 单文件 MVCC KV，~/.goalos/state.db；桶 schema/tx 纪律/单一写者串行化段等设计详见历史版本）。废弃原因=承诺从未兑现（go.mod/vendor/代码零实现——审计 D-01/H V-1 实锤）+单二进制零依赖第一性相压+JSONL+envelope WAL 实证运行定稿（v0.3.4 发布链全程承载）。现役：statestore=mutex+JSONL（envelope WAL append+fsync=唯一串行化提交点；投影=JSON 快照）；「单一全局 WAL+迁移工具」=登记目标不承诺时点；AtomicEventStore 拆除注记随载体裁决一并写实'
     has_schema: 1
     defined_in: '05软件架构文档.md'
   - name: 'ResumePrimitive（R-1112）'
@@ -360,8 +372,8 @@ terms:
     has_schema: 0
     defined_in: '05软件架构文档.md'
   - name: 'statefs 不可变状态树（R-1035/R-1366）'
-    description: 'workspace 状态级快照机制（05 §3.1）：物理载体=bbolt 唯一（~/.goalos/state.db，R-1109/R-1175）；原版本树机制（`.states/v1..vn` 版本目录+`workspace` 链接+`.current` 指针文件，tmp+rename 原子更新）已删除（R-1366——05 §3.1 同批删除 9 个具名契约测试，改状态级测试集；workspace 文件级回滚不实现，C-PLAT-09 stub 登记，v0.4 评估）。核心操作保留：FileSnapshot=Snapshot（方法名保留）/Commit（原子切换+提交锁，与 Checkpoint R-772+事件流提交点对齐）/Discard（逻辑删除物理保留）。崩溃恢复=指针+事件流双对账（R-1021 统一）。与沙箱正交互补："写不越界"+"写了可回滚"（状态级）。权威：05 §3.1'
-    has_schema: 0
+    description: 'workspace 状态级快照机制（05 §3.1）：物理载体=JSONL 文件族（R-1685 定稿——bbolt 选型已废弃）；原版本树机制（`.states/v1..vn` 版本目录+`workspace` 链接+`.current` 指针文件，tmp+rename 原子更新）已删除（R-1366——05 §3.1 同批删除 9 个具名契约测试，改状态级测试集；workspace 文件级回滚不实现，C-PLAT-09 stub 登记，v0.4 评估）。核心操作保留：FileSnapshot=Snapshot（方法名保留）/Commit（原子切换+提交锁，与 Checkpoint R-772+事件流提交点对齐）/Discard（逻辑删除物理保留）。崩溃恢复=指针+事件流双对账（R-1021 统一）。与沙箱正交互补："写不越界"+"写了可回滚"（状态级）。权威：05 §3.1'
+    has_schema: 1
     defined_in: '05软件架构文档.md'
   - name: '人类锚点（R-1031）'
     description: '验证金字塔**终极裁决（behavioral_tests）的来源底线**：至少 1 条行为测试必须来自人类锚点（`HUMAN_INJECTED`=用户 CompletionContract 确认/修正注入——确认即锚点事件入审计；`GOLDEN_SET`=用户预置回归测试集）。AI 生成测试不得作为终极裁决唯一来源（无锚点→`human_anchor:"WAIVED"` 用户显式确认路径）。权威：05 §3.3 behavioral_tests 来源标注'

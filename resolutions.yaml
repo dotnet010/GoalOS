@@ -2220,12 +2220,12 @@ resolutions:
     files: [会议纪要.md]
 
   R-1029:
-    desc: "G-1 不采纳登记(附证据): 'Windows 隔离机制完全缺失'不属实——06 §1.3 平台矩阵 Windows 行(AppContainer/ACL+进程缓解策略+WFP/AppContainer+Restricted Token+Job, L2+ 目标 3 级)+05 windows-job 后端(agentbox: Restricted Token+Job Object+Low IL+ACL, GLOSSARY R-931/R-926)+R-947 探测; G 的 IExecutorBoundary v2.0 契约重构(IsolationLevel/ExecutionReceipt/IsolationProof/ValidateIsolation)与 R-1008 Sandbox 契约重复+引入新概念层——不采纳; 08 §19.3 补 Windows 隔离机制权威落点注(记录性修正)。disposition: 生效(记录性)"
+    desc: "G-1 不采纳登记(附证据): 'Windows 隔离机制完全缺失'不属实——06 §1.3 平台矩阵 Windows 行(AppContainer/ACL+进程缓解策略+WFP/AppContainer+Restricted Token+Job, L2+ 目标 3 级)+05 windows-job 后端(agentbox: Restricted Token+Job Object+Low IL+ACL, GLOSSARY R-931/R-926)+R-947 探测; G 的 IExecutorBoundary v2.0 契约重构(IsolationLevel/ExecutionReceipt/IsolationProof/ValidateIsolation)与 R-1008 Sandbox 契约重复+引入新概念层——不采纳; 08 §19.3 补 Windows 隔离机制权威落点注(记录性修正)。disposition: 生效(记录性; 门槛词面经 R-1694 ①修订——原 Restricted Token 族随 R-1680 退役, 权威落点=R-1691 写实后的 WinAC)"
     files: [会议纪要.md, 08沙箱隔离与进程通信规范.md]
     verify:
-      - must_exist: "Restricted Token [+] Job Object"
+      - must_exist: "WinAC"
         in_file: 08沙箱隔离与进程通信规范.md
-        reason: "08 §19.3 必须含 Windows 机制权威落点注"
+        reason: "08 §19.3 必须含 Windows 机制权威落点注（R-1691 写实后权威=WinAC）"
 
   R-1030:
     desc: "rollback 物理语义(G-2 部分采纳): goalos rollback=状态机回滚(恢复至上个 Checkpoint R-772)+物理文件不撤销(既有原则显式化)+重做基于当前文件态(不假设干净起点, 残留由确定性验证兜底)+v0.3.0 无文件级快照承诺(无 CoW/快照/Git 自动封装); statefs 不可变状态树拒绝入 v0.3.0——登记 v0.5.0 候选(R-1034); CLI 反馈文案'文件未改动'提示(04); W3-4 任务 3.14。disposition: 生效(注: 第4条'无文件级快照承诺'已由 R-1035 替代——statefs 入 v0.3.0, rollback 升级为文件级版本回滚)"
@@ -4665,12 +4665,12 @@ resolutions:
         in_file: 05软件架构文档.md
         reason: "05 Config 节必须落崩溃语义声明（F-35）"
   R-1318:
-    desc: "迁移工具归属(会议 #201, F-36 采纳): 一次性迁移脚本=独立 cmd/ 工具(daemon 检测旧布局拒绝启动并提示迁移); tie-break=(occurred_at, goal_id, per-goal seq) 显式声明。disposition: 生效"
+    desc: "迁移工具归属(会议 #201, F-36 采纳): 一次性迁移脚本=独立 cmd/ 工具(daemon 检测旧布局拒绝启动并提示迁移); tie-break=(occurred_at, goal_id, per-goal seq) 显式声明。disposition: 失效→R-1685（会议 #283——载体定稿 JSONL 后迁移工具决议随降级为登记目标；门槛词面经 R-1694 ①修订锚定现状）"
     files: [05软件架构文档.md, 10模块实现指南.md]
     verify:
-      - must_exist: "tie-break=[(]occurred_at, goal_id"
+      - must_exist: "迁移工具"
         in_file: 05软件架构文档.md
-        reason: "05 §3.19.5 必须落迁移 tie-break（F-36）"
+        reason: "05 §3.19.5 必须落迁移工具状态（现状=登记目标——R-1685 修订）"
   R-1319:
     desc: "hardlink 样本(会议 #201, F-37 采纳): S'-20 契约测试补 hardlink 样本。disposition: 生效"
     files: [08沙箱隔离与进程通信规范.md]
@@ -4766,15 +4766,15 @@ resolutions:
         reason: "05 信封表必须含 prev_hash 第 13 字段（R-1393）"
 
   R-1328:
-    desc: "WAL 全局轨唯一权威+N=1000（修订 R-1381 迁移契约五缺口：停 daemon 前置/occurred_at 回退/原子提交/幂等续跑/游标重置）。disposition: 生效"
+    desc: "WAL 全局轨唯一权威+N=1000（修订 R-1381 迁移契约五缺口：停 daemon 前置/occurred_at 回退/原子提交/幂等续跑/游标重置）。**修订（R-1685/R-1686——会议 #283）**：载体定稿 JSONL+envelope 后「单一全局 WAL」降级为登记目标（不承诺时点）；Checkpoint N=代码实证值 100（原 1000 系未对齐值）；迁移契约九条随降级。门槛词面经 R-1694 ①修订锚定现状。disposition: 生效（经 R-1685/R-1686 修订）"
     files: [05软件架构文档.md, 07事件注册表.md, 06安全模型文档.md, 04命令行界面设计规范.md]
     verify:
-      - must_exist: "单一全局 WAL"
+      - must_exist: "降级为登记目标"
         in_file: 05软件架构文档.md
-        reason: "05 必须声明全局 WAL 唯一权威（R-1328）"
-      - must_exist: "迁移工具检测 pidfile 存活"
+        reason: "05 必须声明全局 WAL 目标状态（R-1685 修订——原唯一权威声明改登记目标）"
+      - must_exist: "迁移契约"
         in_file: 05软件架构文档.md
-        reason: "05 必须落迁移前置条件（R-1381）"
+        reason: "05 必须落迁移契约状态（R-1328 修订后=随降级——R-1685）"
       - must_exist: "原子提交"
         in_file: 05软件架构文档.md
         reason: "05 必须落迁移原子性契约（R-1381）"
@@ -8432,3 +8432,76 @@ resolutions:
       - must_exist: "senswrite"
         in_file: 会议纪要.md
         reason: "会议纪要必须登记 senswrite（R-1684）"
+  R-1685:
+    desc: "bbolt 幽灵架构=设计修正（会议 #283 议题 1——Jobs 裁决）: JSONL+envelope WAL 为定稿载体，bbolt 不引入（单二进制零依赖第一性+现状实证运行——v0.3.4 发布链全程承载）；05 §3.19.5/10 §7/00/07 幽灵承诺（bbolt tx 纪律/桶 schema/outbox/drift-detector 桶/迁移工具）四处清扫；「单一全局 WAL」降级为登记目标（不承诺时点，需求方出现再立——R-1318 迁移工具决议随载体定稿失效）；per-goal 目录布局维持（H V-5 写实）。证据等级=已实证（go.mod/vendor 零 bbolt grep+JSONL 运行实证）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1685"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1685"
+      - must_exist: "JSONL"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 JSONL WAL 定稿（R-1685）"
+  R-1686:
+    desc: "WAL 读取侧校验必修（会议 #283 议题 1 子决议——Meyer 底线：完整性语义不随载体豁免）: WAL Replay/recoverGoal 读取侧 CRC32+prev_hash 校验=必修安全缺口（H V-6——当前零校验，R-1453/R-1104「CRC 不匹配→fail-closed 停服」承诺不设防）；Checkpoint N=代码实证值 100 写实回 05/06（文档 1000 系未对齐值）。代码修复=stub 追踪清单登记排期。证据等级=已实证（recovery.go:116=100 实锤+Replay 零校验核读）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1686"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1686"
+  R-1687:
+    desc: "事件执行层修复三批（会议 #283 议题 2——A 域 41 项实现偏离）: 批①安全语义断裂立即修=reject 语义错置（api.go 发 ActionCancelled(user_rejected)=非取消枚举，R-1376 出口链断裂）+幽灵枚举值（token_invalid/token_scope_denied 违反 S-43）+ActionRetrying 废除仍上线（会议 #107 已废，scheduler.go:180）；批②L0-L5→R0-R5 wire 重命名=执行 R-1114（无消费者实证=窗口安全）；批③信封三字段（occurred_at/event_id/global_seq——R-1373 局部自增废除未执行）+发布者唯一性+30+ 零发布者链路=专项登记（stub 三-M 节，推迟批准人 Jobs/Meyer，随 v0.4.0 窗口）。证据等级=已实证。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1687"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1687"
+  R-1688:
+    desc: "错误码修复包（会议 #283 议题 3——B 域）: ①goalos error explain=go:embed error-codes-source.yaml 本地渲染（09 §3.3「嵌入二进制渲染」正解——CLI 骨架等 daemon API=设计误读）②decision_conflict 补登记+常量 ③GOV-APX-F-001 走 writeError+常量（api.go:329 硬编码消除）④RTM 族七码接线 spi.go 30+ 返回点+ErrNoBackend 族入 09 ⑤GOAL_MULTIPLE_PENDING=实现 --action 消歧（审批消歧=真实 UX 缺口）⑥failHints 双 map 合一 ⑦退出码 124/125 接线 CLI main；check-error-codes.sh 六绕过面=机检补强登记（不本包修）。代码修复=stub 登记排期。证据等级=已实证。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1688"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1688"
+  R-1689:
+    desc: "治理安全修复包（会议 #283 议题 4——D/H/E 域安全相关偏离）: ①Risk 映射代码对齐 risk-formula.yaml（R-1179 单一权威——payment.initiate L5/R4 族虚低=越权放行面）+check-risk-table.sh 加代码比对段 ②R5→AUTO-REJECT 落地（R-996 fail-closed 底线最高级接线）③TokenClaims.NetworkEndpoints 签发侧填充（fillV2Claims——生产白名单空集=FD3 功能死）④config 六死键修复（trust_lan/trusted_workloads 等——H V-2）+死键回归测试。代码修复=stub 登记排期。证据等级=已实证。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1689"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1689"
+  R-1690:
+    desc: "R-1378 TCP 面裁决（会议 #283 议题 4 子决议）: 现状=全 API 挂 TCP localhost:18920 与 R-1378「TCP 仅 /metrics」冲突+H V-2 token 双闸零实现（R-1246）——裁决=Windows AF_UNIX 可用性实证先行（Go 支持面验证）；可用=UDS 迁移+TCP 仅 /metrics 兑现；不可用=R-1378 修订为「loopback+token 闸」且 token 闸先行接线。CLI default 吞未识别命令当真 Goal 创建（E #2 功能陷阱）+adjust --budget 幽灵端点=同修。代码修复=stub 登记（实证先行）。证据等级=已实证。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1690"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1690"
+  R-1691:
+    desc: "08 沙箱规范重写包（会议 #283 议题 5——设计修正吸纳）: 08 引擎矩阵/§12.1/§19.3/§17.4-17.5/§18/§11 按生产形态写实（WinAC+硬化包 R-1666~R-1669/bwrap 双引擎 R-1664/R-1681/FD3 broker 帧协议+SDDL 生产形态）；幻影章节清扫（自管 mount ns/egressproxy——组件目录零存在/agentbox 引擎选择）；「FD3=唯一控制通道」声明修正=stdin/stdout 协议在役+FD3=网络出口中继面；§11 分类器枚举承诺撤销登记（R-914 枚举对象已随 R-1680 移除——R-1546 纪律：撤销+理由+替代=Risk 引擎自持规则面）；check-windows-ipc-security.sh 承诺=撤销登记（硬化面由契约五面+windows-daily 承载）。证据等级=已实证。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1691"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1691"
+  R-1692:
+    desc: "流程面清理包（会议 #283 议题 6——F 域）: ①11 §15.2 security 双签机检空转=设计修正（团队形态=PM+AI 无双签主体——改 Jobs 批准闸形态）②§15.6 govulncheck/Nightly=排期 v0.4.0 评估（批准人 Jobs/Meyer）③phantom 脚本引用清扫（check-token-format/event-schema/statestore-format/llm-compat——§13.1+验收规范）④zombie 三脚本废弃登记+物理删除（check-warn-branch=vet/staticcheck 覆盖/check-compiledprofile-construction=contract test 覆盖/check-sandbox-import=包边界纪律覆盖）⑤脚本计数统一=13 检查脚本+1 tag 闸（CLAUDE.md/发布规范/开发日志/docker-publish 注释四面同步）⑥GIT-RULES 白名单更新（vendor 依据改外部依赖锁定+output/ 停追踪 git rm --cached）⑦发布规范/验收规范/开发日志同步至 v0.3.4+9 月治理现实。证据等级=已实证。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1692"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1692"
+  R-1693:
+    desc: "传播缺口批量清理+术语收口（会议 #283 议题 7——G 域 59 项）: 05 §X.4 整节+后端矩阵三行/08 残留/01 三处/06 §1.2/§X 章/07 schema 三行（backend 枚举/risk_level 注/rule_matched 例）/10 目录树/12 幽灵名册重建（73 幽灵登记清算——测试名以代码为唯一权威，清单=索引非承诺）/04 CLI 示例/开发就绪检查清单 2.8——全量写实；00 新增 WinAC/bwrap 词条+模式 C 术语退役（从未是独立引擎=机制路线构想；bwrap=模式 A 位承载引擎，机制路线源自模式 C——00:552 与 :171 两义统一）+00:576 Result.SandboxLevel→PlatformTier 字段名同步（R-1115 传播漏网）+06:17 L 前缀/08:280 T2 原型期命名纪律修例；stub 清单 C-EXEC-04/C-PLAT-02/05/06 行清算。证据等级=已实证。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1693"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1693"
+  R-1694:
+    desc: "传播机制补强+追踪清单纪律（会议 #283 议题 8）: ①概念级变更（00 词条退役/更名/机制族换血）决议必须附「传播面清单」（受影响文档枚举），verify.files 必须含全部目标文档（不能只锚纪要——R-1653 落空教训：must_exist 只指纪要=传播义务结构性落空）②概念变更 PR 必须 grep 全库引用面（人工纪律登记）③本会议全部代码修复项入 stub 追踪清单三-M 节（每项=TC/期限/类别/推迟批准人 Jobs/Meyer 会议 #283）。证据等级=已实证（41 处传播缺口=机制实证）。disposition: 生效"
+    files: [会议纪要.md]
+    verify:
+      - must_exist: "R-1694"
+        in_file: 会议纪要.md
+        reason: "会议纪要必须登记 R-1694"
