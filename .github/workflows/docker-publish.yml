@@ -60,6 +60,11 @@ jobs:
       - name: Run tests (race, full)  # v0.2.0 audit: 全量 race 覆盖
         run: go test -p 1 -count=1 -timeout 300s -race ./...
 
+      # R-1695 ②（FD3 测试分层纳管）：平台专项特测车道（linux runner=unix socket
+      # 物理面：真实 bind/sun_path 预算形态/0600 权限/并发连接隔离）。
+      - name: Platform-lane tests (build tag platformtest)
+        run: go test -p 1 -count=1 -v -timeout 300s -tags platformtest ./internal/...
+
       - name: L6 Release Readiness (v0.1.1)
         run: go test -v -run TestReleaseReadiness ./internal/releasecheck/
 

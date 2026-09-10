@@ -20,6 +20,17 @@ import (
 // DialFunc 拨号函数签名（zone dialer 注入面——生产=ZoneDialer.DialContext 适配）。
 type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
+// frameConn 帧面连接抽象（协议核心的传输中立缝——R-1695 ②「FD3 测试分层纳管」）：
+// 协议与帧解包测试=通用单测车道（零 OS 依赖，内存管道直驱本接口，随常规 PR/CI
+// 三平台全量触发）；物理 socket/路径边界测试=平台专项特测车道（build tag
+// platformtest）。两平台 *Conn 形态（unix=单句柄 / windows=双单向句柄对）均隐式
+// 满足本接口——接口只收敛 broker 协议的承载面，不掩盖平台传输差异。
+type frameConn interface {
+	ReadFrame() (Frame, error)
+	WriteFrame(Frame) error
+	Close() error
+}
+
 // Broker daemon 侧 broker（治理中继——契约端点校验+注入拨号+审计留痕）。
 type Broker struct {
 	allowed map[string]bool // 契约声明端点集（"host:port" 精确匹配）
@@ -54,7 +65,9 @@ func (b *Broker) Serve(ln *Listener) {
 }
 
 // handle 单连接全生命周期：OPEN 校验→双向泵→收尾。
-func (b *Broker) handle(c *Conn) {
+// 形参=frameConn（非 *Conn）——协议核心与物理传输解耦的缝：生产路径同为
+// broker.Serve 传入的平台 Conn（隐式满足），测试路径经内存管道直驱（零 OS 依赖）。
+func (b *Broker) handle(c frameConn) {
 	defer c.Close()
 	// 首帧必须 OPEN（协议纪律——fail-closed）
 	f, err := c.ReadFrame()

@@ -1,4 +1,4 @@
-.PHONY: build test lint race deadcode clean install-plugin release ci build-xinchuang
+.PHONY: build test lint race deadcode clean install-plugin release ci build-xinchuang test-platform
 
 # EXE_EXT：Windows 下插件产物带 .exe 后缀（update_plugin_signatures.go 按平台
 # 补 .exe 解析产物——裸名输出=工具找不到=签名跳闸空转，releasecheck 红）。
@@ -22,6 +22,16 @@ race:
 
 lint:
 	go vet ./...
+
+# test-platform：平台专项特测车道（R-1695 ②——FD3 测试分层纳管）。
+# 跑 `-tags platformtest` 的物理传输面测试：真实 socket bind、sun_path 预算、
+# 目录权限、并发连接隔离（internal/fd3 的 F3/F6 + darwin 镜像决算族）。
+# 刻意**不入 make ci / 常规车道**：本车道主体是「各开发机基底路径差异」——
+# 轻量构建/常规 PR 不应被平台路径面误伤（PM 裁定原文）。触发面：
+#   本地=本目标；CI=darwin-nightly（darwin）· windows-daily（windows）·
+#   docker-publish test 作业（linux）。未跑=平台面零实证，不得冒充全绿。
+test-platform:
+	go test -count=1 -v -timeout 120s -tags platformtest ./internal/...
 
 deadcode:
 	@which staticcheck > /dev/null 2>&1 || (echo "install staticcheck: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0  # 钉版本：v0.8.0 起要求 Go >= 1.26" && exit 1)
