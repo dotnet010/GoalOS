@@ -170,19 +170,32 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           name: "GoalOS ${{ github.ref_name }}"
+          # Release 正文纪律（2026-09-10，PM 指令①）：
+          #   ① 只链**已入库**目标——`开发日志.md` 属内部文档（.gitignore 未入库），
+          #      渲染面必 404；原「See 开发日志 for full details」句（指向该未入库
+          #      文件）整句删除，改由本节下载表 + 自动生成 changelog 承载信息。
+          #   ② 信创分发说明**收敛**：不再单列 `### 信创` 特殊节（该节隐含「与通用
+          #      linux/amd64 有差异」的失实暗示——R-1645），并入统一下载表 + 一行
+          #      等价性注记（承载=运行期 bwrap 探测，与构建标签无关）。
           body: |
             ## Changes in ${{ github.ref_name }}
 
-            See [开发日志](开发日志.md) for full details.
+            ### 下载
+
+            | 平台 | 产物 |
+            | --- | --- |
+            | macOS | `goalos-darwin-arm64.tar.gz`、`goalos-darwin-amd64.tar.gz` |
+            | Linux | `goalos-linux-amd64.tar.gz`、`goalos-linux-arm64.tar.gz` |
+            | Windows | `goalos-windows-amd64.zip` |
+            | 麒麟 Kylin V10 SP1（信创） | `goalos-kylin-v10-sp1-amd64.tar.gz` |
+
+            > 信创包 = linux/amd64 加 `-tags xinchuang` 编译，**与通用 linux/amd64 同源同能力**：
+            > 受限档由 daemon 启动期探测系统自带 `bwrap`（麒麟 V10 SP1 自带 0.4.0，零额外依赖）
+            > 运行期注册，与构建标签无关。异名仅为目标平台分发标注，非能力差异。
 
             ### Docker
             ```
             docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-            ```
-
-            ### 信创（麒麟 Kylin V10 SP1）
-            ```
-            goalos-kylin-v10-sp1-amd64.tar.gz   # linux/amd64 + -tags xinchuang
             ```
           files: dist/goalos-*.tar.gz,dist/goalos-*.zip
           generate_release_notes: true
