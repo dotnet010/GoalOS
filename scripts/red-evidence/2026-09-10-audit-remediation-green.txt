@@ -1,0 +1,38 @@
+# 代码↔开发文档全量对齐审计裁决处置——闸口与修复留痕（2026-09-10，会议 #283 / R-1685~R-1694）
+# 提交：32a935f（feat/docs-code-alignment-audit）→ fc58bda（merge main）
+# 环境：开发机 Win11 + w64devkit gcc 14.1.0（race 链路）
+
+== 审计输入（八域 305 项发现——报告族=审计记录/2026-09-10-代码文档对齐审计/）==
+A 事件面 62（一致 12/漂移 5/偏离 41/修正 1）| B 错误码面 16（一致 9 面/漂移 5/偏离 8）
+C 沙箱面 25（一致 7/漂移 8/偏离 3/修正 4）| D 架构面 35（一致 11/漂移 10/偏离 10/修正 4）
+E PRD-CLI-测试面 44（一致 13/漂移 11/偏离 18/修正 1）| F 流程面 31（一致 7/漂移 14/偏离 11）
+G 概念自检 59（3 含义冲突/41 传播缺口/5 术语缺口/10 一致）| H 杂项面 33（一致 10/漂移 11/偏离 12）
+
+== 本轮代码侧修复（真竞态——全量 race 钓出）==
+internal/network/tailnet_test.go：TestTailnet_EventSeam DATA RACE——
+  fakeQuerier.q() 返回共享底层数组 vs 测试主协程 fq.peers = [...] 直改（tailnet_test.go:173）
+  生产 query 无共享状态不受影响（纯夹具缺陷）。
+  修复=①fakeQuerier 加 sync.Mutex ②q() 返回独立快照副本（make+copy）
+      ③新增 setPeers() 写侧方法（锁内写）④测试改调 fq.setPeers(...)
+  验证=go test -count=3 -race ./internal/network/ = ok（13.255s）→ 全量 race 复跑 exit 0
+
+== 本包闸口全绿（fc58bda 合入前实跑）==
+13 检查脚本（无污染 PATH）全 PASS：
+  anti-cheat/naked-map/error-swallow/contract-test-assertion/plugin-protocol/dead-code
+  +error-codes/risk-table/doc-version/deprecated/doc-completeness/senswrite
+staticcheck 三 GOOS（windows/linux/darwin）全绿
+信创构建（CGO_ENABLED=0 GOOS=linux -tags xinchuang）OK
+传播检查全量 PROP_PASS（3405 项 0 失败——首跑 3 失败 R-1029/R-1318/R-1328 门槛词面
+  被写实改写后失效 → 按 R-1694① 重锚现状后复跑绿）
+全量 race（CGO_ENABLED=1 + w64devkit gcc 14.1.0）exit 0
+
+== 结构变更（R-1692④/GIT-RULES R-1692⑦）==
+scripts/check-warn-branch.sh / check-compiledprofile-construction.sh / check-sandbox-import.sh
+  = zombie 三枚（零接线零废弃登记）→ 废弃登记+物理删除
+output/（20+ 演示产物）= git rm --cached 停追踪 + .gitignore 排除
+glossary.yaml 再生（113 terms 与 00 v9.46 逐字节一致）
+
+== 文档面（同一工作区，非 git 追踪——workspace 层）==
+00 v9.46 / 01 v6.25 / 04 v7.30 / 05 v8.65 / 06 v7.40 / 07 v3.31 / 08 v3.41 / 10 v1.20 /
+11 v3.4 / 12 v1.52 / 发布规范 v2.9 / 验收规范 v3.2 / 开发日志（新条目）/ GIT-RULES /
+stub 追踪清单 v1.14（三-N 节 M-01~M-14 + C-EXEC-04/C-PLAT-02/05/06 清算）
