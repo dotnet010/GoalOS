@@ -147,9 +147,17 @@ jobs:
           done
 
           # 信创 / 麒麟 Kylin V10 SP1（PM 指令 2026-09-10——发布文件纳入信创系统）。
-          # 构建面=linux/amd64 + `-tags xinchuang`：沙箱后端切 xinchuang-sandbox
-          # （信创内核基线 4.19——Landlock 不可用族），与通用 linux/amd64 产物
-          # **分列不同产物名**（不互相冒充：同名同物才可互换）。
+          # 承载机制=**运行时**（R-1679/R-1681）：daemon 启动期 Prepare 探测 `bwrap`
+          # 二进制（麒麟 V10 SP1 系统自带 0.4.0=零额外依赖）+实证 spawn，成功即注册
+          # 受限档 T1 Provider——**与构建标签无关**（通用 linux/amd64 同源同能力）。
+          # 构建面=linux/amd64 + `-tags xinchuang`：该标签作用面**仅限** internal/sandbox
+          # 编译面（档位后端 gVisor/Linux ↔ Xinchuang 骨架 + 平台后端声明测试；骨架当前
+          # **零生产引用**——R-1695① 档位注记族 I3/I4/I5=`[议程注记 / 待落地]`），
+          # **不改变生产执行路径**。故异名=分发标注（目标平台声明），非能力差异。
+          # 与通用 linux/amd64 产物**分列不同产物名**（不互相冒充：同名同物才可互换）。
+          # 名实修正（R-1645）：957c87c/68b8943 提交信息与规格 v2.9 原记「沙箱后端切
+          # xinchuang-sandbox（内核基线 4.19——Landlock 不可用）」= 失实表述（该标签
+          # 选中的是零引用骨架，生产承载面两构建相同），本注记为其前向修正。
           echo "Building goalos-daemon for linux/amd64 (xinchuang / Kylin V10 SP1)..."
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags xinchuang -trimpath -buildvcs=false -ldflags="-s -w" -o dist/goalos-daemon-xinchuang ./cmd/goalos/
           echo "Building goalos for linux/amd64 (xinchuang / Kylin V10 SP1)..."
