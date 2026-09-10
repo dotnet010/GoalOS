@@ -99,6 +99,12 @@ func TestFT1_CoreTestSuitePass(t *testing.T) {
 // ─── 发布闸口 FT-2: 产物验证 ─────────────────────────────────
 
 func TestFT2_ArtifactValidation(t *testing.T) {
+	// 夹具守卫（会议 #283 后处置——PM 裁定「显式 t.Skip 挂起，杜绝物理删除」）：
+	// 本闸口验证 ../output 下的 HTML 产物（夹具状态依赖，非源码依赖）——产物缺席时
+	// 显式跳过；产物就绪（发布链已产出）时置 GOALOS_RUBIKS_E2E_READY=1 恢复闸口。
+	if os.Getenv("GOALOS_RUBIKS_E2E_READY") == "" {
+		t.Skip("SKIP: requires Rubiks E2E environment fixture")
+	}
 	// 验证 output 目录存在并有产物
 	outputDir := filepath.Join("..", "output")
 	entries, err := os.ReadDir(outputDir)
