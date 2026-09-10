@@ -1,0 +1,44 @@
+# 2026-09-10 FD3 darwin 实机首跑 RED 存证（会议 #278 登记缺口=「darwin 实机=待 mac 窗口」兑现窗口）
+
+- 日期：2026-09-10
+- commit：a0f6f65（main，工作树干净）
+- 机器：macOS（darwin/arm64，物理机），go1.26.4
+- 命令：`go test ./internal/fd3/ -v -count=1`
+- 结果：**EXIT=1——6/6 测试全 FAIL**（fd3_broker 4 + fd3_contract 2）
+
+## 根因（数字实锤）
+
+darwin `sockaddr_un.sun_path`=104 字节（含 NUL，可用 103）；macOS `t.TempDir()` 基底
+（/var/folders/<2>/<30>/T/<TestName><rand>/001）已 ~95 字节，拼接 socket 名
+（goalos-fd3-<label>-<16hex>.sock ≈46 字节）后全长 ~142 字节 > 103 → bind(2) EINVAL。
+Linux sun_path=108 且 /tmp 基底短（同形态 ~91 字节）故 CI/实机均绿——纯 darwin 平台约束，
+编译/vet/staticcheck 三平台绿无法暴露（又一例「物理机验证不可替代」）。
+
+## 关键输出摘录（逐字）
+
+```
+=== RUN   TestFD3Broker_DenyUndeclared
+    fd3_broker_test.go:77: fd3: unix 监听 /var/folders/lp/40zv96md37v762d00fyyqfn40000gp/T/TestFD3Broker_DenyUndeclared371266227/001/goalos-fd3-FD3-Broker-F2-3b336f1766f4749b.sock: listen unix ...: bind: invalid argument
+--- FAIL: TestFD3Broker_DenyUndeclared (0.00s)
+--- FAIL: TestFD3Broker_RelayDeclared (0.00s)
+--- FAIL: TestFD3Broker_ProtocolDiscipline (0.00s)
+--- FAIL: TestFD3Broker_ZoneDialerInjection (0.00s)
+--- FAIL: TestFD3_ConcurrentAttribution (0.00s)
+--- FAIL: TestFD3_NameEntropy (0.00s)
+FAIL
+FAIL	github.com/goalos/goalos/internal/fd3	1.442s
+```
+
+## 影响面
+
+- 测试面：internal/fd3 全部 6 测试（tag=windows||linux||darwin，设计预期「真 mac 即跑」）。
+- 生产面同构风险：provider_darwin bringUpFD3 以 tmpDir 落 broker socket——用户态深路径
+  tmpDir 同样可超 103 字节预算（非仅测试夹具问题）。
+- 下游真值链不受形态影响：bringUpFD3 以 ln.Name() 为唯一真值源（goalos-fd3-map.txt 的
+  sock= + -D FD3_SOCK_PATH 注入[EvalSymlinks 规范化]均消费 Name()）。
+
+## 处置
+
+修复分支 fix/fd3-darwin-sunpath-mirror：fd3.Listen darwin 面=路径超预算时落短镜像目录
+（/tmp 下 0700 随机目录，Close 连带清理；Name() 恒为真实路径——透明性经既有真值链保持）；
+linux 面不动（108 预算+Landlock 授写目录语义，保持 fail-loud）。转绿证据=同专项 green 档。
